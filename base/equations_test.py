@@ -144,43 +144,6 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
         initial_momentum + expected_change, final_momentum, atol=momentum_atol)
 
 
-class EulerMethodTest(test_util.TestCase):
-
-  @parameterized.named_parameters(
-      dict(testcase_name='sinusoidal_velocity',
-           velocity=sinusoidal_field,
-           shape=(100, 100),
-           step=(1., 1.),
-           viscosity=1e-4,
-           dt=1e-3,
-           time_steps=100,
-           grad_atol=1e-4),
-      dict(testcase_name='gaussian_velocity',
-           velocity=gaussian_field,
-           shape=(100,),
-           step=(1.,),
-           viscosity=1e-4,
-           dt=1e-3,
-           time_steps=100,
-           grad_atol=1e-4)
-  )
-  def test_differentiation(
-      self, velocity, shape, step, viscosity, dt, time_steps, grad_atol):
-    grid = grids.Grid(shape, step)
-    burgers = equations.burgers(viscosity, grid)
-    euler_steps = equations.euler_method(burgers, dt)
-    trajectory = funcutils.trajectory(euler_steps, time_steps)
-    def final_momentum(v):
-      final, _ = trajectory(v)
-      return momentum(final, 1., grid)
-    grad_momentum = jax.grad(final_momentum)
-
-    v_initial = velocity(grid)
-    dp_dv = grad_momentum(v_initial)
-    for dp_du in dp_dv:
-      self.assertAllClose(dp_du.data, 1., atol=grad_atol)
-
-
 if __name__ == '__main__':
   jax.config.update('jax_enable_x64', True)
   absltest.main()

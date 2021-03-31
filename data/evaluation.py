@@ -20,6 +20,10 @@ from jax_cfd.data import xarray_utils as xr_utils
 import numpy as np
 import xarray
 
+# pytype complains about valid operations with xarray (e.g., see b/153704639),
+# so it isn't worth the trouble of running it.
+# pytype: skip-file
+
 
 def absolute_error(
     array: xarray.DataArray,

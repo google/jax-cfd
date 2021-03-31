@@ -150,6 +150,17 @@ def linear_forcing(coefficient: float) -> ForcingFunction:
   return forcing
 
 
+def no_forcing(grid):
+  """Zero-valued forcing field for unforced simulations."""
+  offsets = grid.cell_faces
+
+  def forcing(v, grid):
+    del grid  # unused
+    return (grids.AlignedArray(jnp.zeros_like(u.data), o)
+            for u, o in zip(v, offsets))
+  return forcing
+
+
 def sum_forcings(*forcings: ForcingFunction) -> ForcingFunction:
   """Sum multiple forcing functions."""
   def forcing(v, grid):

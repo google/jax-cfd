@@ -33,6 +33,12 @@ import numpy as np
 Array = Union[np.ndarray, jnp.DeviceArray]
 IntOrSequence = Union[int, Sequence[int]]
 
+# There is currently no good way to indicate a jax "pytree" with arrays at its
+# leaves. See https://jax.readthedocs.io/en/latest/jax.tree_util.html for more
+# information about PyTrees and https://github.com/google/jax/issues/3340 for
+# discussion of this issue.
+PyTree = Any
+
 
 @dataclasses.dataclass
 class AlignedArray(np.lib.mixins.NDArrayOperatorsMixin):
@@ -275,6 +281,16 @@ class Grid:
     d = self.ndim
     offsets = (np.eye(d) + np.ones([d, d])) / 2.
     return tuple(tuple(float(o) for o in offset) for offset in offsets)
+
+  def stagger(self, v: Tuple[Array, ...]) -> Tuple[AlignedArray, ...]:
+    """Places the velocity components of `v` on the `Grid`'s cell faces."""
+    offsets = self.cell_faces
+    return tuple(AlignedArray(u, o) for u, o in zip(v, offsets))
+
+  def center(self, v: PyTree) -> PyTree:
+    """Places all arrays in the pytree `v` at the `Grid`'s cell center."""
+    offset = self.cell_center
+    return jax.tree_map(lambda u: AlignedArray(u, offset), v)
 
   def axes(self, offset: Optional[Sequence[float]] = None) -> Tuple[Array, ...]:
     """Returns a tuple of arrays containing the grid points along each axis.

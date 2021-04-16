@@ -244,32 +244,33 @@ def advect_van_leer(
   for axis, (u, h) in enumerate(zip(aligned_v, grid.step)):
     c_center = c.data
     c_left = grid.shift(c, -1, axis=axis).data
-    c_right = grid.shift(c, 1, axis=axis).data
-    upwind_flux = grids.applied(jnp.where)(u > 0., u * c_center, u * c_right)
+    c_right = grid.shift(c, +1, axis=axis).data
+    upwind_flux = grids.applied(jnp.where)(u > 0, u * c_center, u * c_right)
 
     # Van-Leer Flux correction is computed in steps to avoid `nan`s.
     # Formula for the flux correction df for advection with positive velocity is
     # df_{i} = 0.5 * (1-gamma) * dc_{i}
     # dc_{i} = 2(c_{i+1} - c_{i})(c_{i} - c_{i-1})/(c_{i+1}-c_{i})
     # gamma is the courant number = u * dt / h
-    diffs_prod = 2. * (c_right - c_center) * (c_center - c_left)
+    diffs_prod = 2 * (c_right - c_center) * (c_center - c_left)
     neighbor_diff = c_right - c_left
+    safe = diffs_prod > 0
+    # https://jax.readthedocs.io/en/latest/faq.html#gradients-contain-nan-where-using-where
     forward_correction = jnp.where(
-        diffs_prod > 0.,
-        diffs_prod / neighbor_diff, jnp.zeros_like(diffs_prod)
+        safe, diffs_prod / jnp.where(safe, neighbor_diff, 1), 0
     )
     # for negative velocity we simply need to shift the correction along v axis.
     forward_correction_array = grids.AlignedArray(forward_correction, u.offset)
-    backward_correction_array = grid.shift(forward_correction_array, 1, axis)
+    backward_correction_array = grid.shift(forward_correction_array, +1, axis)
     backward_correction = backward_correction_array.data
     abs_velocity = abs(u)
     courant_numbers = (dt / h) * abs_velocity
-    pre_factor = 0.5 * (1. - courant_numbers) * abs_velocity
+    pre_factor = 0.5 * (1 - courant_numbers) * abs_velocity
     flux_correction = pre_factor * grids.applied(jnp.where)(
-        u > 0., forward_correction, backward_correction)
+        u > 0, forward_correction, backward_correction)
     flux = upwind_flux + flux_correction
     fluxes.append(flux)
-  advection = -1. * fd.divergence(fluxes, grid)
+  advection = -fd.divergence(fluxes, grid)
   return advection
 
 

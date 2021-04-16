@@ -21,6 +21,7 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import advection as adv
+from jax_cfd.base import funcutils
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
 import numpy as np
@@ -116,6 +117,18 @@ class AdvectionTest(test_util.TestCase):
            num_steps=100,
            cfl_number=0.5,
            atol=2e-2),
+      dict(testcase_name='van_leer_using_limiters_1D',
+           shape=(101,),
+           method=_euler_step(adv.advect_van_leer_using_limiters),
+           num_steps=100,
+           cfl_number=0.5,
+           atol=2e-2),
+      dict(testcase_name='van_leer_using_limiters_3D',
+           shape=(101, 101, 101),
+           method=_euler_step(adv.advect_van_leer_using_limiters),
+           num_steps=100,
+           cfl_number=0.5,
+           atol=2e-2),
       dict(testcase_name='semilagrangian_1D',
            shape=(101,),
            method=adv.advect_step_semilagrangian,
@@ -129,7 +142,7 @@ class AdvectionTest(test_util.TestCase):
            cfl_number=0.5,
            atol=7e-2),
   )
-  def test_advection(
+  def test_advection_analytical(
       self, shape, method, num_steps, cfl_number, atol, v_sign=1):
     """Tests advection of a Gaussian concentration on a periodic grid."""
     step = tuple(1. / s for s in shape)
@@ -139,15 +152,90 @@ class AdvectionTest(test_util.TestCase):
     c = _gaussian_concentration(grid)
 
     dt = cfl_number * min(step)
-    advect = jax.jit(functools.partial(method, v=v, grid=grid, dt=dt))
-
-    ct = c
-    for _ in range(num_steps):
-      ct = advect(ct)
+    advect = functools.partial(method, v=v, grid=grid, dt=dt)
+    evolve = jax.jit(funcutils.repeated(advect, num_steps))
+    ct = evolve(c)
 
     expected_shift = int(round(-cfl_number * num_steps * v_sign))
-    expected = grid.shift(c, expected_shift, axis=0)
-    self.assertAllClose(expected.data, ct.data, atol=atol)
+    expected = grid.shift(c, expected_shift, axis=0).data
+    self.assertAllClose(expected, ct.data, atol=atol)
+
+  @parameterized.named_parameters(
+      dict(testcase_name='linear_1D',
+           shape=(101,),
+           method=_euler_step(adv.advect_linear),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='linear_3D',
+           shape=(101, 101, 101),
+           method=_euler_step(adv.advect_linear),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='upwind_1D',
+           shape=(101,),
+           method=_euler_step(adv.advect_upwind),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='upwind_3D',
+           shape=(101, 101, 101),
+           method=_euler_step(adv.advect_upwind),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='van_leer_1D',
+           shape=(101,),
+           method=_euler_step(adv.advect_van_leer),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='van_leer_1D_negative_v',
+           shape=(101,),
+           method=_euler_step(adv.advect_van_leer),
+           atol=1e-2,
+           rtol=1e-2,
+           v_sign=-1.),
+      dict(testcase_name='van_leer_3D',
+           shape=(101, 101, 101),
+           method=_euler_step(adv.advect_van_leer),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='van_leer_using_limiters_1D',
+           shape=(101,),
+           method=_euler_step(adv.advect_van_leer_using_limiters),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='van_leer_using_limiters_3D',
+           shape=(101, 101, 101),
+           method=_euler_step(adv.advect_van_leer_using_limiters),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='semilagrangian_1D',
+           shape=(101,),
+           method=adv.advect_step_semilagrangian,
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='semilagrangian_3D',
+           shape=(101, 101, 101),
+           method=adv.advect_step_semilagrangian,
+           atol=1e-2,
+           rtol=1e-2),
+  )
+  def test_advection_gradients(
+      self, shape, method, atol, rtol, cfl_number=0.5, v_sign=1,
+  ):
+    step = tuple(1. / s for s in shape)
+    grid = grids.Grid(shape, step)
+
+    v = _unit_velocity(grid, v_sign)
+    c_init = _gaussian_concentration(grid)
+
+    dt = cfl_number * min(step)
+    advect = jax.remat(functools.partial(method, v=v, grid=grid, dt=dt))
+    evolve = jax.jit(funcutils.repeated(advect, steps=10))
+
+    def objective(c_init):
+      return 0.5 * jnp.sum(evolve(c_init).data ** 2)
+
+    gradient = jax.jit(jax.grad(objective))(c_init)
+    self.assertAllClose(c_init, gradient, atol=atol, rtol=rtol)
 
   @parameterized.named_parameters(
       dict(testcase_name='_linear_1D',
@@ -159,7 +247,9 @@ class AdvectionTest(test_util.TestCase):
            advection_method=adv.advect_linear,
            convection_method=adv.convect_linear)
   )
-  def test_convection(self, shape, advection_method, convection_method):
+  def test_convection_vs_advection(
+      self, shape, advection_method, convection_method,
+  ):
     """Exercises self-advection, check equality with advection on components."""
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)

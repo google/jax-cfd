@@ -252,7 +252,7 @@ def psuedoinverse(
     cutoff = 10 * jnp.finfo(dtype).eps
 
   def func(v):
-    with np.errstate(divide='ignore'):
+    with np.errstate(divide='ignore', invalid='ignore'):
       return np.where(abs(v) > cutoff, 1 / v, 0)
 
   return transform(func, operators, dtype, hermitian=hermitian,

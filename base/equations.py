@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Examples of defining equations."""
-from typing import Callable, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -76,7 +76,8 @@ def semi_implicit_navier_stokes(
 
   if convect is None:
     def convect(v, grid):  # pylint: disable=function-redefined
-      return tuple(advection.advect_van_leer(u, v, grid, dt) for u in v)
+      return tuple(
+          advection.advect_van_leer_using_limiters(u, v, grid, dt) for u in v)
 
   convect = jax.named_call(convect, name='convection')
   diffuse = jax.named_call(diffuse, name='diffusion')
@@ -84,6 +85,7 @@ def semi_implicit_navier_stokes(
 
   # TODO(jamieas): Consider a scheme where pressure calculations and
   # advection/diffusion are staggered in time.
+  @jax.named_call
   def navier_stokes_step(v: AlignedField) -> AlignedField:
     """Computes state at time `t + dt` using first order time integration."""
     convection = convect(v, grid)
@@ -116,12 +118,14 @@ def implicit_diffusion_navier_stokes(
 
   if convect is None:
     def convect(v, grid):  # pylint: disable=function-redefined
-      return tuple(advection.advect_van_leer(u, v, grid, dt) for u in v)
+      return tuple(
+          advection.advect_van_leer_using_limiters(u, v, grid, dt) for u in v)
 
   convect = jax.named_call(convect, name='convection')
   pressure_projection = jax.named_call(pressure.projection, name='pressure')
   diffusion_solve = jax.named_call(diffusion_solve, name='diffusion')
 
+  @jax.named_call
   def navier_stokes_step(v: AlignedField) -> AlignedField:
     """Computes state at time `t + dt` using first order time integration."""
     convection = convect(v, grid)

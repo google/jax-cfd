@@ -1,0 +1,18 @@
+# Physics configuration file Navier-Stokes system with Kolmogorov forcing.
+import jax_cfd.ml.forcings
+import jax_cfd.ml.physics_specifications
+
+
+FORCING_MODULE = @forcings.kolmogorov_forcing
+
+forcings.kolmogorov_forcing.scale = 1.0
+forcings.kolmogorov_forcing.wavenumber = 4
+forcings.kolmogorov_forcing.linear_coefficient = -0.1
+
+DENSITY = 1.
+VISCOSITY = 0.001
+physics_specifications.NavierStokesPhysicsSpecs.density = %DENSITY
+physics_specifications.NavierStokesPhysicsSpecs.viscosity = %VISCOSITY
+physics_specifications.NavierStokesPhysicsSpecs.forcing_module = %FORCING_MODULE
+
+physics_specifications.get_physics_specs.physics_specs_cls = @NavierStokesPhysicsSpecs

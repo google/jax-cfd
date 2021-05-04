@@ -1,0 +1,5 @@
+# Physics configuration file for kuramoto sivashinsky equation.
+import jax_cfd.ml.physics_specifications
+
+physics_specifications.KsPhysicsSpecs.forcing_module = None
+physics_specifications.get_physics_specs.physics_specs_cls = @KsPhysicsSpecs

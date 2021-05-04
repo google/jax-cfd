@@ -1,0 +1,51 @@
+# Implicit diffusion direct numerical simulation (DNS) configuration file.
+#
+# Can be used as base configuration for other models.
+# For an example of LES model see `smagorinsky_config.gin`.
+
+# Imports of modules to get access to their configurables.
+import jax_cfd.ml.advections
+import jax_cfd.ml.decoders
+import jax_cfd.ml.diffusions
+import jax_cfd.ml.encoders
+import jax_cfd.ml.equations
+import jax_cfd.ml.forcings
+import jax_cfd.ml.interpolations
+import jax_cfd.ml.model_builder
+import jax_cfd.ml.model_utils
+import jax_cfd.ml.optimizer_modules
+import jax_cfd.ml.pressures
+import jax_cfd.ml.towers
+import jax_cfd.ml.viscosities
+
+
+# Interpolations  (lax_wendroff + TVD suitable for 2nd order advection scheme)
+C_INTERPOLATION_MODULE = @interpolations.transformed
+U_INTERPOLATION_MODULE = @interpolations.linear
+transformed.base_interpolation_module = @interpolations.lax_wendroff
+transformed.transformation = @interpolations.tvd_limiter_transformation
+
+# Advection (advection is solved explicitly)
+CONVECTION_MODULE = @advections.self_advection
+advections.self_advection.advection_module = @advections.modular_advection
+modular_advection.c_interpolation_module = %C_INTERPOLATION_MODULE
+modular_advection.u_interpolation_module = %U_INTERPOLATION_MODULE
+
+# Pressure
+PRESSURE_MODULE = @pressures.fast_diagonalization
+
+# Diffusion (diffusion is solved implicitly)
+DIFFUSION_MODULE = @diffusions.solve_fast_diag
+
+# Model (note the implicit diffusion)
+NS_MODULE = @equations.modular_navier_stokes_model
+modular_navier_stokes_model.convection_module = %CONVECTION_MODULE
+modular_navier_stokes_model.pressure_module = %PRESSURE_MODULE
+modular_navier_stokes_model.equation_solver = @equations.implicit_diffusion_navier_stokes
+implicit_diffusion_navier_stokes.diffusion_module = %DIFFUSION_MODULE
+
+# Model specifications
+ModularStepModel.advance_module = %NS_MODULE
+ModularStepModel.encoder_module = @encoders.aligned_array_encoder
+ModularStepModel.decoder_module = @decoders.aligned_array_decoder
+model_builder.get_model_cls.model_cls = @ModularStepModel

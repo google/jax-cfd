@@ -1,0 +1,15 @@
+# Configuration file specifying Smagorinsky LES model.
+
+include 'third_party/py/jax_cfd/ml/models_configs/implicit_diffusion_dns_config.gin'
+
+# Smagorinsky model is equivalent to an implicit diffusion DNS solver with an
+# addition of a closure term. We solve it implicitly, together with diffusion.
+SMAGORINSKY_CONSTANT = 0.2
+
+DIFFUSION_MODULE = @diffusions.implicit_evm_solve_with_diffusion
+implicit_evm_solve_with_diffusion.viscosity_module = @viscosities.eddy_viscosity_model
+eddy_viscosity_model.viscosity_model = @viscosities.smagorinsky_viscosity
+smagorinsky_viscosity.cs = %SMAGORINSKY_CONSTANT
+
+# Model
+equations.implicit_diffusion_navier_stokes.diffusion_module = %DIFFUSION_MODULE

@@ -180,3 +180,23 @@ def learned_corrector(
     return jax.tree_multimap(lambda x, y: x + y, next_state, corrections)
 
   return hk.to_module(step_fn)()
+
+
+@gin.configurable
+def learned_corrector_v2(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    base_solver_module: Callable,
+    corrector_module: Callable,
+):
+  """Like learned_corrector, but based on the input rather than output state."""
+  base_solver = base_solver_module(grid, dt, physics_specs)
+  corrector = corrector_module(grid, dt, physics_specs)
+
+  def step_fn(state):
+    next_state = base_solver(state)
+    corrections = corrector(state)
+    return jax.tree_multimap(lambda x, y: x + dt * y, next_state, corrections)
+
+  return hk.to_module(step_fn)()

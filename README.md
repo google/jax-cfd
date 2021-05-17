@@ -2,9 +2,10 @@
 
 Authors: Dmitrii Kochkov, Jamie A. Smith, Stephan Hoyer
 
-JAX-CFD is a research project for exploring the potential of machine learning,
-automatic differentiation and hardware accelerators (GPU/TPU) for computational
-fluid dynamics. It is implemented in [JAX](https://github.com/google/jax).
+JAX-CFD is an experimental research project for exploring the potential of
+machine learning, automatic differentiation and hardware accelerators (GPU/TPU)
+for computational fluid dynamics. It is implemented in
+[JAX](https://github.com/google/jax).
 
 To learn more about our general approach, read our paper [Machine learning accelerated computational fluid dynamics](https://arxiv.org/abs/2102.01010).
 
@@ -13,7 +14,11 @@ To learn more about our general approach, read our paper [Machine learning accel
 Take a look at "demo" notebook in the "notebooks" directory for an example of
 how to use JAX-CFD for simulate a 2D turbulent flow.
 
-TODO: add an example notebook using our pre-trained turbulence models.
+We are currently preparing more example notebooks, inculding:
+
+- Reusing our training data and/or evaluation setup (without running JAX-CFD)
+- Simulations using our pre-trained turbulence models.
+- Training a simple hybrid ML + CFD model from scratch
 
 ## Organization
 

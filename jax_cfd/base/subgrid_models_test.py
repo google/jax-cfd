@@ -96,9 +96,9 @@ class SubgridModelsTest(test_util.TestCase):
           convect=_convect_upwind,
           pressure_solve=pressure.solve_cg,
           dt=1e-3,
-          time_steps=1000,
-          divergence_atol=1e-3,
-          momentum_atol=1e-3),
+          time_steps=100,
+          divergence_atol=1e-4,
+          momentum_atol=1e-4),
       dict(
           testcase_name='sinusoidal_velocity_with_subgrid_model',
           cs=0.12,

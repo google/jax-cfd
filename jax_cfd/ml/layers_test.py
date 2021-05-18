@@ -451,10 +451,10 @@ class SpatialDerivativeTest(test_util.TestCase):
 
   @parameterized.named_parameters([
       ('interpolation', (128, 128), (0, 0),
-       lambda x, y: np.sin(2 * x + y), lambda x, y: np.sin(2 * x + y), 1e-1),
+       lambda x, y: np.sin(2 * x + y), lambda x, y: np.sin(2 * x + y), 0.2),
       ('first_derivative_x', (128, 128), (1, 0),
        lambda x, y: np.cos(2 * x + y), lambda x, y: -2 * np.sin(2 * x + y),
-       1e-1),
+       0.1),
   ])
   def test_2d(self, grid_shape, derivative, initial_fn, expected_fn, atol):
     """Tests SpatialDerivative module in 2d."""
@@ -465,24 +465,25 @@ class SpatialDerivativeTest(test_util.TestCase):
         _tower_factory, ndims=ndims, conv_block=layers.PeriodicConv2D)
 
     for extract_patches_method in ('conv', 'roll'):
-      def module_forward(inputs):
-        net = layers.SpatialDerivative(
-            stencil_sizes, grid.cell_center, grid.cell_center, derivative,
-            tower_factory, grid.step, extract_patches_method)  # pylint: disable=cell-var-from-loop
-        return net(inputs)
+      with self.subTest(f'method_{extract_patches_method}'):
+        def module_forward(inputs):
+          net = layers.SpatialDerivative(
+              stencil_sizes, grid.cell_center, grid.cell_center, derivative,
+              tower_factory, grid.step, extract_patches_method)  # pylint: disable=cell-var-from-loop
+          return net(inputs)
 
-      rng = jax.random.PRNGKey(14)
-      spatial_derivative_model = hk.without_apply_rng(
-          hk.transform(module_forward))
+        rng = jax.random.PRNGKey(14)
+        spatial_derivative_model = hk.without_apply_rng(
+            hk.transform(module_forward))
 
-      x, y = grid.mesh()
-      inputs = np.expand_dims(initial_fn(x, y), -1)  # add channel dimension
-      params = spatial_derivative_model.init(rng, inputs)
-      outputs = spatial_derivative_model.apply(params, inputs)
-      expected_outputs = np.expand_dims(expected_fn(x, y), -1)
-      np.testing.assert_allclose(
-          expected_outputs, outputs, atol=atol, rtol=0,
-          err_msg=f'Failed for method "{extract_patches_method}"')
+        x, y = grid.mesh()
+        inputs = np.expand_dims(initial_fn(x, y), -1)  # add channel dimension
+        params = spatial_derivative_model.init(rng, inputs)
+        outputs = spatial_derivative_model.apply(params, inputs)
+        expected_outputs = np.expand_dims(expected_fn(x, y), -1)
+        np.testing.assert_allclose(
+            expected_outputs, outputs, atol=atol, rtol=0,
+            err_msg=f'Failed for method "{extract_patches_method}"')
 
   def test_auxiliary_inputs(self):
     """Tests that auxiliary inputs don't change shape of the output."""

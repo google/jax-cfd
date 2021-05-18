@@ -83,7 +83,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            dt=1e-3,
            time_steps=1000,
            divergence_atol=1e-3,
-           momentum_atol=1e-3),
+           momentum_atol=2e-3),
       dict(testcase_name='gaussian_force_upwind',
            velocity=zero_field,
            forcing=lambda v, g: gaussian_field(g),
@@ -94,9 +94,9 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            convect=_convect_upwind,
            pressure_solve=pressure.solve_cg,
            dt=1e-3,
-           time_steps=1000,
-           divergence_atol=1e-3,
-           momentum_atol=1e-3),
+           time_steps=100,
+           divergence_atol=1e-4,
+           momentum_atol=1e-4),
       dict(testcase_name='sinusoidal_velocity_fast_diag',
            velocity=sinusoidal_field,
            forcing=None,
@@ -145,5 +145,4 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
 
 
 if __name__ == '__main__':
-  jax.config.update('jax_enable_x64', True)
   absltest.main()

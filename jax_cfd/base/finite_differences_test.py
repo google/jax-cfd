@@ -220,7 +220,7 @@ class FiniteDifferenceTest(test_util.TestCase):
           g=lambda x, y, z: np.array([[y - 1., jnp.zeros_like(x), z],
                                       [x, z - 2., jnp.zeros_like(x)],
                                       [jnp.zeros_like(x), y, x - 3.]]),
-          atol=1e-6),
+          atol=4e-6),
   )
   # pylint: enable=g-long-lambda
   def test_cell_centered_gradient(self, shape, f, g, atol):

@@ -15,14 +15,10 @@
 
 import os.path
 
-from absl import flags
 from absl.testing import absltest
 from jax_cfd.base import test_util
 from jax_cfd.data import visualization
 import numpy as np
-
-
-FLAGS = flags.FLAGS
 
 
 class VisualizationTest(test_util.TestCase):
@@ -54,7 +50,7 @@ class VisualizationTest(test_util.TestCase):
 
   def test_save_movie_local(self):
     """Tests that save_movie write gif to a file."""
-    temp_dir = FLAGS.test_tmpdir
+    temp_dir = self.create_tempdir()
     temp_filename = os.path.join(temp_dir, 'tmp_file.gif')
     input_trajectory = np.random.uniform(size=(25, 32, 32))
     images = visualization.trajectory_to_images(input_trajectory)

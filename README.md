@@ -25,12 +25,16 @@ We are currently preparing more example notebooks, inculding:
 JAX-CFD is organized around sub-modules:
 
 - `jax_cfd.base`: core numerical methods for CFD, written in JAX.
-- `jax_cfd.ml` (not yet released): machine learning augmented models for CFD,
+- `jax_cfd.ml`: machine learning augmented models for CFD,
   written in JAX and [Haiku](https://dm-haiku.readthedocs.io/en/latest/).
 - `jax_cfd.data`: data processing utilities for preparing, evaluating and
   post-processing data created with JAX-CFD, written in
   [Xarray](http://xarray.pydata.org/) and
   [Pillow](https://pillow.readthedocs.io/).
+
+A base install with `pip install jax-cfd` only requires NumPy, SciPy and JAX.
+To install dependencies for the other submodules, use `pip install jax-cfd[ml]`,
+`pip install jax-cfd[data]` or `pip install jax-cfd[complete]`.
 
 ## Numerics
 
@@ -92,4 +96,19 @@ Did we miss something? Please let us know!
       archivePrefix={arXiv},
       primaryClass={physics.flu-dyn}
 }
+```
+
+## Local development
+
+To locally install for development:
+```
+git clone https://github.com/google/jax-cfd.git
+cd jax-cfd
+pip install jaxlib
+pip install -e ".[complete]"
+```
+
+Then to manually run the test suite:
+```
+pytest -n auto jax_cfd --dist=loadfile --ignore=jax_cfd/base/validation_test.py
 ```

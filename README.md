@@ -7,7 +7,8 @@ machine learning, automatic differentiation and hardware accelerators (GPU/TPU)
 for computational fluid dynamics. It is implemented in
 [JAX](https://github.com/google/jax).
 
-To learn more about our general approach, read our paper [Machine learning accelerated computational fluid dynamics](https://arxiv.org/abs/2102.01010).
+To learn more about our general approach, read our paper [Machine learning accelerated computational fluid dynamics](https://www.pnas.org/content/118/21/e2101784118)
+(PNAS 2021).
 
 ## Getting started
 
@@ -88,14 +89,21 @@ Did we miss something? Please let us know!
 ## Citation
 
 ```
-@misc{kochkov2021machine,
-      title={Machine learning accelerated computational fluid dynamics},
-      author={Dmitrii Kochkov and Jamie A. Smith and Ayya Alieva and Qing Wang and Michael P. Brenner and Stephan Hoyer},
-      year={2021},
-      eprint={2102.01010},
-      archivePrefix={arXiv},
-      primaryClass={physics.flu-dyn}
+@article{Kochkov2021-ML-CFD,
+  author = {Kochkov, Dmitrii and Smith, Jamie A. and Alieva, Ayya and Wang, Qing and Brenner, Michael P. and Hoyer, Stephan},
+  title = {Machine learning{\textendash}accelerated computational fluid dynamics},
+  volume = {118},
+  number = {21},
+  elocation-id = {e2101784118},
+  year = {2021},
+  doi = {10.1073/pnas.2101784118},
+  publisher = {National Academy of Sciences},
+  issn = {0027-8424},
+  URL = {https://www.pnas.org/content/118/21/e2101784118},
+  eprint = {https://www.pnas.org/content/118/21/e2101784118.full.pdf},
+  journal = {Proceedings of the National Academy of Sciences}
 }
+
 ```
 
 ## Local development

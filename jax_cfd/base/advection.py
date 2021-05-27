@@ -75,7 +75,7 @@ def advect_general(
     grid: grids.Grid,
     u_interpolation_fn: Callable[..., AlignedArray],
     c_interpolation_fn: Callable[..., AlignedArray],
-    dt: float = None
+    dt: Optional[float] = None
 ):
   """Computes advection of a scalar quantity `c` by the velocity field `v`.
 

@@ -35,7 +35,7 @@ def smagorinsky_viscosity(
     s_ij: grids.Tensor,
     v: AlignedField,
     grid: grids.Grid,
-    dt: float = None,
+    dt: Optional[float] = None,
     cs: float = 0.2,
     interpolate_fn: InterpolationFn = interpolation.linear
 ) -> AlignedField:

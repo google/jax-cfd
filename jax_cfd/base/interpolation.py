@@ -14,7 +14,7 @@
 
 """Functions for interpolating `AlignedArray`s."""
 
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 import jax.numpy as jnp
 from jax_cfd.base import grids
@@ -62,8 +62,8 @@ def linear(
     c: grids.AlignedArray,
     offset: Tuple[float, ...],
     grid: grids.Grid,
-    v: Tuple[grids.AlignedArray, ...] = None,
-    dt: float = None
+    v: Optional[Tuple[grids.AlignedArray, ...]] = None,
+    dt: Optional[float] = None
 ) -> grids.AlignedArray:
   """Multi-linear interpolation of `c` to `offset`.
 
@@ -94,7 +94,7 @@ def upwind(
     offset: Tuple[float, ...],
     grid: grids.Grid,
     v: Tuple[grids.AlignedArray, ...],
-    dt: float = None
+    dt: Optional[float] = None
 ) -> grids.AlignedArray:
   """Upwind interpolation of `c` to `offset` based on velocity field `v`.
 
@@ -150,8 +150,8 @@ def lax_wendroff(
     c: grids.AlignedArray,
     offset: Tuple[float, ...],
     grid: grids.Grid,
-    v: Tuple[grids.AlignedArray, ...] = None,
-    dt: float = None
+    v: Optional[Tuple[grids.AlignedArray, ...]] = None,
+    dt: Optional[float] = None
 ) -> grids.AlignedArray:
   """Lax_Wendroff interpolation of `c` to `offset` based on velocity field `v`.
 

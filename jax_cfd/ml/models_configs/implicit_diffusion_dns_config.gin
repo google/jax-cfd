@@ -49,3 +49,4 @@ ModularStepModel.advance_module = %NS_MODULE
 ModularStepModel.encoder_module = @encoders.aligned_array_encoder
 ModularStepModel.decoder_module = @decoders.aligned_array_decoder
 model_builder.get_model_cls.model_cls = @ModularStepModel
+

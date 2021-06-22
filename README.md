@@ -71,6 +71,10 @@ relevant for related research, e.g.,
 We would welcome collaboration on any of these! Please reach out (either on
 GitHub or by email) to coordinate before starting significant work.
 
+## Projects using JAX-CFD
+
+- [Variational Data Assimilation with a Learned Inverse Observation Operator](https://github.com/googleinterns/invobs-data-assimilation)
+
 ## Other awesome projects
 
 Other differentiable CFD codes compatible with deep learning:

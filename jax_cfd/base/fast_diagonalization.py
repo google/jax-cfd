@@ -19,7 +19,6 @@ from typing import Callable, Optional, Sequence, Union
 import jax
 from jax import lax
 import jax.numpy as jnp
-from jax_cfd.base import fft
 import numpy as np
 
 
@@ -185,7 +184,7 @@ def _circulant_fft_transform(
   def apply(rhs: Array) -> Array:
     if rhs.shape != shape:
       raise ValueError(f'rhs.shape={rhs.shape} does not match shape={shape}')
-    return fft.ifftn(diagonals * fft.fftn(rhs)).astype(dtype)
+    return jnp.fft.ifftn(diagonals * jnp.fft.fftn(rhs)).astype(dtype)
 
   return apply
 
@@ -214,7 +213,7 @@ def _circulant_rfft_transform(
   def apply(rhs: Array) -> Array:
     if rhs.dtype != dtype:
       raise ValueError(f'rhs.dtype={rhs.dtype} does not match dtype={dtype}')
-    return fft.irfftn(diagonals * fft.rfftn(rhs)).astype(dtype)
+    return jnp.fft.irfftn(diagonals * jnp.fft.rfftn(rhs)).astype(dtype)
 
   return apply
 

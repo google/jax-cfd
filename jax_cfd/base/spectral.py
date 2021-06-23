@@ -17,7 +17,6 @@
 from typing import Callable, Union
 
 import jax.numpy as jnp
-from jax_cfd.base import fft
 from jax_cfd.base import grids
 import numpy as np
 
@@ -43,4 +42,4 @@ def filter(  # pylint: disable=redefined-builtin
   filters = jnp.where(k > 0, spectral_density(k), 0.0)
   # The output signal can safely be assumed to be real if our input signal was
   # real, because our spectral density only depends on norm(k).
-  return fft.ifftn(fft.fftn(array) * filters).real
+  return jnp.fft.ifftn(jnp.fft.fftn(array) * filters).real

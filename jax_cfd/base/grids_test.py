@@ -257,6 +257,24 @@ class GridTest(test_util.TestCase):
     expected = {(0, 1), (1, 2), (3, 4), (4, 5)}
     self.assertEqual(actual, expected)
 
+  def test_spectral_axes(self):
+    L = 42.
+    shape = (64,)
+    grid = grids.Grid(shape, domain=((0, L),))
+
+    xs, = grid.axes()
+    fft_xs, = grid.fft_axes()
+    fft_xs *= 2 * jnp.pi  # convert ordinal to angular frequencies
+
+    # compare the derivative of the sine function (i.e. cosine) with its
+    # derivative computed in frequency-space. Note that this derivative involves
+    # the computed frequencies so it can serve as a test.
+    angular_freq = 2 * jnp.pi / L
+    ys = jnp.sin(angular_freq * xs)
+    expected = angular_freq * jnp.cos(angular_freq * xs)
+    actual = jnp.fft.ifft(1j * fft_xs * jnp.fft.fft(ys))
+    self.assertAllClose(expected, actual, atol=1e-4)
+
 
 class AlignedArrayTest(test_util.TestCase):
 

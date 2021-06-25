@@ -11,9 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""Grid classes that contain discretization information and boundary conditions.
-"""
+"""Grid classes that contain discretization information and boundary conditions."""
 
 import numbers
 import operator
@@ -26,7 +24,6 @@ from jax import tree_util
 from jax.lib import xla_bridge
 import jax.numpy as jnp
 import numpy as np
-
 
 # TODO(jamieas): consider moving common types to a separate module.
 # TODO(shoyer): consider adding jnp.ndarray?
@@ -98,9 +95,12 @@ class AlignedArray(np.lib.mixins.NDArrayOperatorsMixin):
 
 def applied(func):
   """Convert an unaligned function into one defined on aligned arrays."""
+
   def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
-    offset = aligned_offset(*[arg for arg in args + tuple(kwargs.values())
-                              if isinstance(arg, AlignedArray)])
+    offset = aligned_offset(*[
+        arg for arg in args + tuple(kwargs.values())
+        if isinstance(arg, AlignedArray)
+    ])
     raw_args = [
         arg.data if isinstance(arg, AlignedArray) else arg for arg in args
     ]
@@ -110,6 +110,7 @@ def applied(func):
     }
     data = func(*raw_args, **raw_kwargs)
     return AlignedArray(data, offset)
+
   return wrapper
 
 
@@ -141,8 +142,10 @@ def averaged_offset(*arrays: AlignedArray) -> Tuple[float, ...]:
 
 def control_volume_offsets(c: AlignedArray) -> Tuple[Tuple[float, ...], ...]:
   """Returns offsets for the faces of the control volume centered at `c`."""
-  return tuple(tuple(o + .5 if i == j else o for i, o in enumerate(c.offset))
-               for j in range(len(c.offset)))
+  return tuple(
+      tuple(o + .5 if i == j else o
+            for i, o in enumerate(c.offset))
+      for j in range(len(c.offset)))
 
 
 class Tensor(np.ndarray):
@@ -163,12 +166,12 @@ class Tensor(np.ndarray):
   def __new__(cls, arrays):
     return np.asarray(arrays).view(cls)
 
+
 jax.tree_util.register_pytree_node(
     Tensor,
     lambda tensor: (tensor.ravel().tolist(), tensor.shape),
     lambda shape, arrays: Tensor(np.asarray(arrays).reshape(shape)),
 )
-
 
 PERIODIC = 'periodic'
 DIRICHLET = 'dirichlet'
@@ -238,14 +241,16 @@ class Grid:
 
     object.__setattr__(self, 'domain', domain)
 
-    step = tuple((upper - lower) / size
-                 for (lower, upper), size in zip(domain, shape))
+    step = tuple(
+        (upper - lower) / size for (lower, upper), size in zip(domain, shape))
     object.__setattr__(self, 'step', step)
 
     if isinstance(boundaries, str):
       boundaries = (boundaries,) * self.ndim
-    invalid_boundaries = [boundary for boundary in boundaries
-                          if boundary not in {PERIODIC, DIRICHLET}]
+    invalid_boundaries = [
+        boundary for boundary in boundaries
+        if boundary not in {PERIODIC, DIRICHLET}
+    ]
     if invalid_boundaries:
       raise ValueError(f'invalid boundaries: {invalid_boundaries}')
     object.__setattr__(self, 'boundaries', tuple(boundaries))
@@ -296,8 +301,8 @@ class Grid:
     """Returns a tuple of arrays containing the grid points along each axis.
 
     Args:
-      offset: an optional sequence of length `ndim`. The grid will be shifted
-        by `offset * self.step`.
+      offset: an optional sequence of length `ndim`. The grid will be shifted by
+        `offset * self.step`.
 
     Returns:
       An tuple of `self.ndim` arrays. The jth return value has shape
@@ -309,15 +314,29 @@ class Grid:
       raise ValueError(f'unexpected offset length: {len(offset)} vs '
                        f'{self.ndim}')
     return tuple(lower + (jnp.arange(length) + offset_i) * step
-                 for (lower, _), offset_i, length, step
-                 in zip(self.domain, offset, self.shape, self.step))
+                 for (lower, _), offset_i, length, step in zip(
+                     self.domain, offset, self.shape, self.step))
+
+  def fft_axes(self) -> Tuple[Array, ...]:
+    """Returns the ordinal frequencies corresponding to the axes.
+
+    Transforms each axis into the *ordinal* frequencies for the Fast Fourier
+    Transform (FFT). Multiply by `2 * jnp.pi` to get angular frequencies.
+
+    Returns:
+      A tuple of `self.ndim` arrays. The jth return value has shape
+      `[self.shape[j]]`.
+    """
+    freq_axes = tuple(
+        jnp.fft.fftfreq(n, d=s) for (n, s) in zip(self.shape, self.step))
+    return freq_axes
 
   def mesh(self, offset: Optional[Sequence[float]] = None) -> Tuple[Array, ...]:
     """Returns an tuple of arrays containing positions in each grid cell.
 
     Args:
-      offset: an optional sequence of length `ndim`. The grid will be shifted
-        by `offset * self.step`.
+      offset: an optional sequence of length `ndim`. The grid will be shifted by
+        `offset * self.step`.
 
     Returns:
       An tuple of `self.ndim` arrays, each of shape `self.shape`. In 3
@@ -403,7 +422,10 @@ class Grid:
     return AlignedArray(data, tuple(offset))
 
   def trim(
-      self, u: AlignedArray, padding: Tuple[int, int], axis: int,
+      self,
+      u: AlignedArray,
+      padding: Tuple[int, int],
+      axis: int,
   ) -> AlignedArray:
     """Trim padding from an AlignedArray.
 

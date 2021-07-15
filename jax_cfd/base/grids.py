@@ -331,6 +331,23 @@ class Grid:
         jnp.fft.fftfreq(n, d=s) for (n, s) in zip(self.shape, self.step))
     return freq_axes
 
+  def rfft_axes(self) -> Tuple[Array, ...]:
+    """Returns the ordinal frequencies corresponding to the axes.
+
+    Transforms each axis into the *ordinal* frequencies for the Fast Fourier
+    Transform (FFT). Most useful for doing computations for real-valued (not
+    complex valued) signals.
+
+    Multiply by `2 * jnp.pi` to get angular frequencies.
+
+    Returns:
+      A tuple of `self.ndim` arrays. The jth return value has shape
+      `[self.shape[j]]`.
+    """
+    freq_axes = tuple(
+        jnp.fft.rfftfreq(n, d=s) for (n, s) in zip(self.shape, self.step))
+    return freq_axes
+
   def mesh(self, offset: Optional[Sequence[float]] = None) -> Tuple[Array, ...]:
     """Returns an tuple of arrays containing positions in each grid cell.
 

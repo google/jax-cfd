@@ -87,6 +87,7 @@ JAX for science:
 - [JAX-MD](https://github.com/google/jax-md)
 - [JAX-DFT](https://github.com/google-research/google-research/tree/master/jax_dft)
 - [jax-cosmo](https://github.com/DifferentiableUniverseInitiative/jax_cosmo)
+- [Veros](https://github.com/team-ocean/veros)
 
 Did we miss something? Please let us know!
 

@@ -258,9 +258,9 @@ class GridTest(test_util.TestCase):
     self.assertEqual(actual, expected)
 
   def test_spectral_axes(self):
-    L = 42.
+    length = 42.
     shape = (64,)
-    grid = grids.Grid(shape, domain=((0, L),))
+    grid = grids.Grid(shape, domain=((0, length),))
 
     xs, = grid.axes()
     fft_xs, = grid.fft_axes()
@@ -269,16 +269,16 @@ class GridTest(test_util.TestCase):
     # compare the derivative of the sine function (i.e. cosine) with its
     # derivative computed in frequency-space. Note that this derivative involves
     # the computed frequencies so it can serve as a test.
-    angular_freq = 2 * jnp.pi / L
+    angular_freq = 2 * jnp.pi / length
     ys = jnp.sin(angular_freq * xs)
     expected = angular_freq * jnp.cos(angular_freq * xs)
     actual = jnp.fft.ifft(1j * fft_xs * jnp.fft.fft(ys))
     self.assertAllClose(expected, actual, atol=1e-4)
 
-  def test_real_spectral_axes(self):
-    L = 42.
+  def test_real_spectral_axes_1d(self):
+    length = 42.
     shape = (64,)
-    grid = grids.Grid(shape, domain=((0, L),))
+    grid = grids.Grid(shape, domain=((0, length),))
 
     xs, = grid.axes()
     fft_xs, = grid.rfft_axes()
@@ -287,11 +287,22 @@ class GridTest(test_util.TestCase):
     # compare the derivative of the sine function (i.e. cosine) with its
     # derivative computed in frequency-space. Note that this derivative involves
     # the computed frequencies so it can serve as a test.
-    angular_freq = 2 * jnp.pi / L
+    angular_freq = 2 * jnp.pi / length
     ys = jnp.sin(angular_freq * xs)
     expected = angular_freq * jnp.cos(angular_freq * xs)
     actual = jnp.fft.irfft(1j * fft_xs * jnp.fft.rfft(ys))
     self.assertAllClose(expected, actual, atol=1e-4)
+
+  def test_real_spectral_axes_nd_shape(self):
+    dim = 3
+    grid_size = 64
+    shape = (grid_size,) * dim
+    domain = ((0, 2 * jnp.pi),) * dim
+    grid = grids.Grid(shape, domain=(domain))
+
+    xs1, xs2, xs3 = grid.rfft_axes()
+    assert grid_size == len(xs1) == len(xs2)
+    assert grid_size // 2 + 1 == len(xs3)
 
 
 class AlignedArrayTest(test_util.TestCase):

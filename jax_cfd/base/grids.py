@@ -341,12 +341,17 @@ class Grid:
     Multiply by `2 * jnp.pi` to get angular frequencies.
 
     Returns:
-      A tuple of `self.ndim` arrays. The jth return value has shape
-      `[self.shape[j]]`.
+      A tuple of `self.ndim` arrays. The shape of each array matches the result
+      of rfftfreqs. Specifically, rfft is applied to the last dimension
+      resulting in an array of length `self.shape[-1] // 2`. Complex `fft` is
+      applied to the other dimensions resulting in shapes of size
+      `self.shape[j]`.
     """
-    freq_axes = tuple(
-        jnp.fft.rfftfreq(n, d=s) for (n, s) in zip(self.shape, self.step))
-    return freq_axes
+    fft_axes = tuple(
+        jnp.fft.fftfreq(n, d=s)
+        for (n, s) in zip(self.shape[:-1], self.step[:-1]))
+    rfft_axis = (jnp.fft.rfftfreq(self.shape[-1], d=self.step[-1]),)
+    return fft_axes + rfft_axis
 
   def mesh(self, offset: Optional[Sequence[float]] = None) -> Tuple[Array, ...]:
     """Returns an tuple of arrays containing positions in each grid cell.
@@ -362,6 +367,11 @@ class Grid:
     """
     axes = self.axes(offset)
     return tuple(jnp.meshgrid(*axes, indexing='ij'))
+
+  def rfft_mesh(self) -> Tuple[Array, ...]:
+    """Returns a tuple of arrays containing positions in rfft space."""
+    rfft_axes = self.rfft_axes()
+    return tuple(jnp.meshgrid(*rfft_axes, indexing='ij'))
 
   def shift(
       self,

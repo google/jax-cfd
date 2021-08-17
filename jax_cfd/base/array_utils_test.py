@@ -34,6 +34,9 @@ class ArrayUtilsTest(test_util.TestCase):
       dict(array=np.random.RandomState(1234).randn(12, 24, 36),
            block_size=(6, 6, 6),
            f=jnp.max),
+      dict(array=np.random.RandomState(1234).randn(12, 24, 36),
+           block_size=(3, 4, 6),
+           f=jnp.min),
   )
   def test_block_reduce(self, array, block_size, f):
     """Test `block_reduce` is equivalent to `skimage.measure.block_reduce`."""

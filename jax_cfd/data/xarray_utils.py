@@ -36,12 +36,12 @@ import xarray
 # so it isn't worth the trouble of running it.
 # pytype: skip-file
 
-
 #
 # xarray `Dataset` names for coordinates and attributes.
 #
 
 XR_VELOCITY_NAMES = ('u', 'v', 'w')
+XR_SCALAR_NAMES = ('c')
 XR_SPATIAL_DIMS = ('x', 'y', 'z')
 XR_WAVENUMBER_DIMS = ('kx', 'ky', 'kz')
 XR_SAMPLE_NAME = 'sample'
@@ -64,6 +64,8 @@ def velocity_trajectory_to_xarray(
 ) -> xarray.Dataset:
   """Convert a trajectory of velocities to an xarray `Dataset`."""
   dimension = len(trajectory)
+  if grid is not None:
+    dimension = grid.ndim
   dims = (((XR_SAMPLE_NAME,) if samples else ())
           + (XR_TIME_NAME,)
           + XR_SPATIAL_DIMS[:dimension])
@@ -77,6 +79,15 @@ def velocity_trajectory_to_xarray(
     var_attrs = {}
     if grid is not None:
       var_attrs[XR_OFFSET_NAME] = grid.cell_faces[component]
+    data_vars[prefix_name + name] = xarray.Variable(dims, data, var_attrs)
+
+  for component in range(dimension, len(trajectory)):
+    name = XR_SCALAR_NAMES[component - dimension]
+    data = trajectory[component]
+    var_attrs = {}
+    if isinstance(data, grids.AlignedArray):
+      var_attrs[XR_OFFSET_NAME] = data.offset
+      data = data.data
     data_vars[prefix_name + name] = xarray.Variable(dims, data, var_attrs)
 
   if samples:

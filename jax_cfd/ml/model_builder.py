@@ -52,16 +52,18 @@ class DynamicalSystem(hk.Module):
   def trajectory(
       self,
       x,
-      steps: int,
-      repeated_length: int = 1,
+      outer_steps: int,
+      inner_steps: int = 1,
       *,
       start_with_input: bool = False,
       post_process_fn: Callable = _identity,
   ):
-    """Returns a final model state and trajectory for `steps` steps."""
+    """Returns a final model state and trajectory."""
     return trajectory_from_step(
-        self.advance, steps, repeated_length, start_with_input=start_with_input,
-        post_process_fn=post_process_fn)(x)
+        self.advance, outer_steps, inner_steps,
+        start_with_input=start_with_input,
+        post_process_fn=post_process_fn
+    )(x)
 
 
 @gin.configurable
@@ -112,8 +114,8 @@ def repeated(fn: Callable, steps: int) -> Callable:
 @gin.configurable(allowlist=("set_checkpoint",))
 def trajectory_from_step(
     step_fn: Callable,
-    steps: int,
-    repeated_length: int,
+    outer_steps: int,
+    inner_steps: int,
     *,
     start_with_input: bool,
     post_process_fn: Callable,
@@ -121,10 +123,13 @@ def trajectory_from_step(
 ):
   """Returns a function that accumulates repeated applications of `step_fn`.
 
+  Compute a trajectory by repeatedly calling `step_fn()`
+  `outer_steps * inner_steps` times.
+
   Args:
     step_fn: function that takes a state and returns state after one time step.
-    steps: number of steps to take when generating the trajectory.
-    repeated_length: number of steps to take between output slices.
+    outer_steps: number of steps to save in the generated trajectory.
+    inner_steps: number of repeated calls to step_fn() between saved steps.
     start_with_input: if True, output the trajectory at steps [0, ..., steps-1]
       instead of steps [1, ..., steps].
     post_process_fn: function to apply to trajectory outputs.
@@ -133,12 +138,13 @@ def trajectory_from_step(
   Returns:
     A function that takes an initial state and returns a tuple consisting of:
       (1) the final frame of the trajectory.
-      (2) trajectory of length `steps` representing time evolution.
+      (2) trajectory of length `outer_steps` representing time evolution.
   """
   if set_checkpoint:
     step_fn = hk.remat(step_fn)
-  if repeated_length != 1:
-    step_fn = repeated(step_fn, repeated_length)
+
+  if inner_steps != 1:
+    step_fn = repeated(step_fn, inner_steps)
 
   def step(carry_in, _):
     carry_out = step_fn(carry_in)
@@ -146,6 +152,6 @@ def trajectory_from_step(
     return carry_out, post_process_fn(frame)
 
   def multistep(x):
-    return hk.scan(step, x, xs=None, length=steps)
+    return hk.scan(step, x, xs=None, length=outer_steps)
 
   return multistep

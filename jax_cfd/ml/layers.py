@@ -565,6 +565,7 @@ T = TypeVar('T')
 def fuse_spatial_derivative_layers(
     derivatives: Dict[T, SpatialDerivativeFromLogits],
     all_logits: jnp.ndarray,
+    *,
     constrain_with_conv: bool = False,
     fuse_patches: bool = False,
 ) -> Dict[T, Callable[[jnp.ndarray], jnp.ndarray]]:
@@ -593,7 +594,9 @@ def fuse_spatial_derivative_layers(
   tile_layout, = {deriv.tile_layout for deriv in derivatives.values()}
 
   if constrain_with_conv:
-    kernel = joint_nullspace[np.newaxis, np.newaxis, :, :].astype(np.float32)
+    ndim = len(tile_layout)
+    kernel = jnp.expand_dims(
+        joint_nullspace.astype(np.float32), axis=tuple(range(ndim)))
     all_coefficients = joint_bias + layers_util.periodic_convolution(
         all_logits, kernel, tile_layout=tile_layout, precision=precision)
   else:

@@ -71,7 +71,7 @@ def decoded_trajectory_with_inputs(model, num_init_frames):
     Trajectory function that operates on physics space trajectories and returns
     unrolls in physics space.
   """
-  def _trajectory_fn(x, steps, repeated_length=1):
+  def _trajectory_fn(x, outer_steps, inner_steps=1):
     trajectory_fn = functools.partial(
         model.trajectory, post_process_fn=model.decode)
     # add preprocessing to convert data to model state.
@@ -80,6 +80,9 @@ def decoded_trajectory_with_inputs(model, num_init_frames):
     trajectory_fn = with_input_included(trajectory_fn)
     # make trajectories operate on full examples by splitting the init.
     trajectory_fn = with_split_input(trajectory_fn, num_init_frames)
-    return trajectory_fn(x, steps, repeated_length)
+    return trajectory_fn(x, outer_steps, inner_steps)
 
   return _trajectory_fn
+
+
+

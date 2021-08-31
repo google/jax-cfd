@@ -49,8 +49,7 @@ def modular_self_advection(
     grid: grids.Grid,
     dt: float,
     physics_specs: physics_specifications.NavierStokesPhysicsSpecs,
-    interpolation_module: InterpolationModule = (
-        interpolations.FusedLearnedInterpolation),
+    interpolation_module: InterpolationModule,
     **kwargs
 ) -> AdvectFn:
   """Modular self advection using a single interpolation module."""

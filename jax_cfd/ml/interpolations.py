@@ -2,7 +2,7 @@
 
 import collections
 import functools
-from typing import Callable, Tuple
+from typing import Any, Callable, Tuple, Union
 
 import gin
 import jax.numpy as jnp
@@ -21,6 +21,10 @@ InterpolationFn = interpolation.InterpolationFn
 InterpolationModule = Callable[..., InterpolationFn]
 InterpolationTransform = Callable[..., InterpolationFn]
 FluxLimiter = interpolation.FluxLimiter
+
+
+StencilSizeFn = Callable[
+    [Tuple[int, ...], Tuple[int, ...], Any], Tuple[int, ...]]
 
 
 @gin.configurable
@@ -43,27 +47,32 @@ class FusedLearnedInterpolation:
       physics_specs: physics_specifications.BasePhysicsSpecs,
       v,
       tags=(None,),
-      stencil_size=4,
+      stencil_size: Union[int, StencilSizeFn] = 4,
       tower_factory=towers.forward_tower_factory,
       name='fused_learned_interpolation',
       extract_patch_method='roll',
       fuse_constraints=False,
       fuse_patches=False,
+      constrain_with_conv=False,
       tile_layout=None,
   ):
-    """Constructs object and performed necessary pre-computate."""
+    """Constructs object and performs necessary pre-computate."""
     del dt, physics_specs  # unused.
 
-    stencil_sizes = (stencil_size,) * grid.ndim
     derivative_orders = (0,) * grid.ndim
     derivatives = collections.OrderedDict()
+
+    if isinstance(stencil_size, int):
+      stencil_size_fn = lambda *_: (stencil_size,) * grid.ndim
+    else:
+      stencil_size_fn = stencil_size
 
     for u in v:
       for target_offset in grids.control_volume_offsets(u):
         for tag in tags:
           key = (u.offset, target_offset, tag)
           derivatives[key] = layers.SpatialDerivativeFromLogits(
-              stencil_sizes,
+              stencil_size_fn(*key),
               u.offset,
               target_offset,
               derivative_orders=derivative_orders,
@@ -78,7 +87,8 @@ class FusedLearnedInterpolation:
 
     if fuse_constraints:
       self._interpolators = layers.fuse_spatial_derivative_layers(
-          derivatives, all_logits, fuse_patches)
+          derivatives, all_logits, fuse_patches=fuse_patches,
+          constrain_with_conv=constrain_with_conv)
     else:
       split_logits = jnp.split(all_logits, np.cumsum(output_sizes), axis=-1)
       self._interpolators = {
@@ -97,7 +107,29 @@ class FusedLearnedInterpolation:
     if interpolator is None:
       raise KeyError(f'No interpolator for key {key}. '
                      f'Available keys: {list(self._interpolators.keys())}')
-    return grids.AlignedArray(interpolator(c.data)[..., 0], offset)
+    result = jnp.squeeze(interpolator(c.data), axis=-1)
+    return grids.AlignedArray(result, offset)
+
+
+def _nearest_neighhbor_stencil_size_fn(
+    source_offset, target_offset, tag, stencil_size,
+):
+  del tag  # unused
+  return tuple(
+      1 if s == t else stencil_size
+      for s, t in zip(source_offset, target_offset)
+  )
+
+
+@gin.configurable
+def anisotropic_learned_interpolation(*args, stencil_size=2, **kwargs):
+  """Like FusedLearnedInterpolation, but with anisotropic stencil."""
+  stencil_size_fn = functools.partial(
+      _nearest_neighhbor_stencil_size_fn, stencil_size=stencil_size,
+  )
+  return FusedLearnedInterpolation(
+      *args, stencil_size=stencil_size_fn, **kwargs
+  )
 
 
 @gin.configurable

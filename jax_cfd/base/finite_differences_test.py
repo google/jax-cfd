@@ -25,7 +25,11 @@ import numpy as np
 
 
 def _trim_boundary(array):
-  return array[(slice(1, -1),) * array.ndim]
+  if isinstance(array, grids.AlignedArray):
+    data = jax.numpy.asarray(array.data)[(slice(1, -1),) * array.ndim]
+    return grids.AlignedArray(data, array.offset)
+  else:
+    return jax.numpy.asarray(array)[(slice(1, -1),) * array.ndim]
 
 
 class FiniteDifferenceTest(test_util.TestCase):

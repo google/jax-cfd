@@ -13,11 +13,11 @@
 # limitations under the License.
 """Grid classes that contain discretization information and boundary conditions."""
 
+import dataclasses
 import numbers
 import operator
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union
 
-import dataclasses
 import jax
 from jax import lax
 from jax import tree_util
@@ -88,9 +88,6 @@ class AlignedArray(np.lib.mixins.NDArrayOperatorsMixin):
       return tuple(AlignedArray(r, offset) for r in result)
     else:
       return AlignedArray(result, offset)
-
-  def __getitem__(self, key):
-    return applied(operator.getitem)(self, key)
 
 
 def applied(func):

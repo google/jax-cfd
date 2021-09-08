@@ -390,12 +390,6 @@ class AlignedArrayTest(test_util.TestCase):
     actual = grids.applied(jnp.negative)(u)
     self.assertAllClose(expected, actual)
 
-  def test_indexing(self):
-    u = grids.AlignedArray(jnp.arange(10), (.5,))
-    expected = grids.AlignedArray(jnp.arange(5), (.5,))
-    actual = u[:5]
-    self.assertArrayEqual(expected, actual)
-
 
 if __name__ == '__main__':
   absltest.main()

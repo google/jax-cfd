@@ -15,15 +15,10 @@
 """Tests for jax_cfd.grids."""
 
 # TODO(jamieas): Consider updating these tests using the `hypothesis` framework.
-import functools
-import unittest
-from unittest import mock
-
 from absl.testing import absltest
 from absl.testing import parameterized
 
 import jax
-from jax.lib import xla_bridge
 import jax.numpy as jnp
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
@@ -65,19 +60,6 @@ class GridTest(test_util.TestCase):
       grids.Grid((2, 3), step=(1.0,))
     with self.assertRaisesRegex(ValueError, 'invalid boundaries'):
       grids.Grid((2, 3), boundaries='not_valid')
-
-  @mock.patch.object(xla_bridge, 'device_count', new=lambda: 8)
-  def test_constructor_device_layout(self):
-    shape = (100, 100, 100)
-    grid = grids.Grid(shape, device_layout=(1, 2, 4))
-    self.assertEqual(grid.device_layout, (1, 2, 4))
-
-    with self.assertRaisesRegex(ValueError, 'length of device_layout'):
-      grids.Grid(shape, device_layout=(2, 4))
-    with self.assertRaisesRegex(ValueError, 'does not match device_count'):
-      grids.Grid(shape, device_layout=(2, 2, 1))
-    with self.assertRaisesRegex(ValueError, 'does not divide'):
-      grids.Grid(shape, device_layout=(1, 1, 8))
 
   @parameterized.parameters(
       dict(backend=np,
@@ -200,62 +182,6 @@ class GridTest(test_util.TestCase):
     grid = grids.Grid(inputs.data.shape)
     actual = grid.trim(inputs, padding, axis=0)
     self.assertArrayEqual(actual, expected)
-
-  def test_pad_with_devices(self):
-    raise unittest.SkipTest("won't pass on CPU until b/144248774 is fixed")
-    # TODO(shoyer): add a TPU test
-
-    # pylint: disable=unreachable
-    data = grids.AlignedArray(jnp.array([[1, 2, 3]]), offset=(0,))
-
-    grid = grids.Grid((3,), boundaries='periodic', device_layout=(1,))
-    expected = grids.AlignedArray(jnp.array([[3, 1, 2, 3, 1]]), offset=(-1,))
-    actual = jax.pmap(
-        functools.partial(grid.pad, padding=(1, 1), axis=0), axis_name=0)(data)
-    self.assertArrayEqual(actual, expected)
-
-    grid = grids.Grid((3,), boundaries='dirichlet', device_layout=(1,))
-    expected = grids.AlignedArray(jnp.array([[0, 1, 2, 3, 0]]), offset=(-1,))
-    actual = jax.pmap(
-        functools.partial(grid.pad, padding=(1, 1), axis=0), axis_name=0)(data)
-    self.assertArrayEqual(actual, expected)
-
-  def test_device_permutation(self):
-    actual = set(grids._device_permutation([0, 1, 2], shift=+1, axis=0))
-    expected = {(0, 1), (1, 2), (2, 0)}
-    self.assertEqual(actual, expected)
-
-    actual = set(grids._device_permutation([0, 1, 2], shift=-1, axis=0))
-    expected = {(1, 0), (2, 1), (0, 2)}
-    self.assertEqual(actual, expected)
-
-    actual = set(grids._device_permutation([0, 1, 2], shift=+1, axis=0,
-                                           boundary='dirichlet'))
-    expected = {(0, 1), (1, 2)}
-    self.assertEqual(actual, expected)
-
-    actual = set(grids._device_permutation([0, 1, 2], shift=-1, axis=0,
-                                           boundary='dirichlet'))
-    expected = {(1, 0), (2, 1)}
-    self.assertEqual(actual, expected)
-
-    actual = set(grids._device_permutation([[0, 1, 2]], shift=0, axis=0))
-    expected = {(0, 0), (1, 1), (2, 2)}
-    self.assertEqual(actual, expected)
-
-    actual = set(grids._device_permutation([[0, 1, 2]], shift=+1, axis=0))
-    expected = {(0, 0), (1, 1), (2, 2)}
-    self.assertEqual(actual, expected)
-
-    actual = set(grids._device_permutation([[0, 1, 2]], shift=+1, axis=0,
-                                           boundary='dirichlet'))
-    expected = set()
-    self.assertEqual(actual, expected)
-
-    actual = set(grids._device_permutation([[0, 1, 2], [3, 4, 5]], shift=+1,
-                                           axis=1, boundary='dirichlet'))
-    expected = {(0, 1), (1, 2), (3, 4), (4, 5)}
-    self.assertEqual(actual, expected)
 
   def test_spectral_axes(self):
     length = 42.

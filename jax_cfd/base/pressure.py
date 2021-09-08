@@ -74,9 +74,6 @@ def solve_fast_diag(v: Sequence[AlignedArray],
                     implementation: Optional[str] = None) -> AlignedArray:
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
-  if grid.device_layout is not None:
-    raise NotImplementedError(
-        "distributed fast diagonalization not implemented yet.")
   rhs = fd.divergence(v, grid)
   laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))
   pinv = fast_diagonalization.psuedoinverse(

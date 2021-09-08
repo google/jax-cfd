@@ -16,12 +16,11 @@
 import dataclasses
 import numbers
 import operator
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 from jax import lax
 from jax import tree_util
-from jax.lib import xla_bridge
 import jax.numpy as jnp
 import numpy as np
 
@@ -190,8 +189,6 @@ class Grid:
     boundaries. The identity `upper - lower = step[i] * shape[i]` is enforced.
   - `boundaries[i]` gives the boundary conditions in this direction, either
     periodic or dirichlet.
-  - `device_layout[i]` gives the integer number of devices this dimension is
-    parallelized across.
 
   NOTE: only periodic boundary conditions work correctly in the rest of the
   JAX-CFD code.
@@ -200,7 +197,6 @@ class Grid:
   step: Tuple[float, ...]
   domain: Tuple[Tuple[float, float], ...]
   boundaries: Tuple[str, ...]
-  device_layout: Optional[Tuple[int, ...]]
 
   def __init__(
       self,
@@ -208,7 +204,6 @@ class Grid:
       step: Optional[Union[float, Sequence[float]]] = None,
       domain: Optional[Sequence[Tuple[float, float]]] = None,
       boundaries: Union[str, Sequence[str]] = 'periodic',
-      device_layout: Optional[Sequence[int]] = None,
   ):
     """Construct a grid object."""
     shape = tuple(operator.index(s) for s in shape)
@@ -251,21 +246,6 @@ class Grid:
     if invalid_boundaries:
       raise ValueError(f'invalid boundaries: {invalid_boundaries}')
     object.__setattr__(self, 'boundaries', tuple(boundaries))
-
-    if device_layout is not None:
-      device_layout = tuple(operator.index(s) for s in device_layout)
-      if len(device_layout) != self.ndim:
-        raise ValueError('length of device_layout does not match ndim: '
-                         f'len({device_layout}) != {self.ndim}')
-      device_count = xla_bridge.device_count()
-      if np.prod(device_layout) != device_count:
-        raise ValueError(f'device_layout={device_layout} does not match '
-                         f'device_count={device_count}')
-      if any(size % num_devices
-             for size, num_devices in zip(self.shape, device_layout)):
-        raise ValueError(f'device_layout={device_layout} does not divide '
-                         f'shape={self.shape}')
-    object.__setattr__(self, 'device_layout', device_layout)
 
   @property
   def ndim(self) -> int:
@@ -424,25 +404,12 @@ class Grid:
       else:
         assert self.boundaries[axis] == DIRICHLET
         pad_kwargs = dict(mode='constant')
-    elif self.device_layout is not None:
-      raise ValueError('only default pad_kwargs supported if device_layout set')
 
     offset = list(u.offset)
     offset[axis] -= padding[0]
-
-    if self.device_layout is not None:
-      left = self.device_shift(u.data, shift=+1, axis=axis)
-      right = self.device_shift(u.data, shift=-1, axis=axis)
-      left_start = u.data.shape[axis] - padding[0]
-      data = jnp.concatenate([
-          lax.dynamic_slice_in_dim(left, left_start, padding[0], axis),
-          u.data,
-          lax.dynamic_slice_in_dim(right, 0, padding[1], axis),
-      ], axis=axis)
-    else:
-      full_padding = [(0, 0)] * u.data.ndim
-      full_padding[axis] = padding
-      data = jnp.pad(u.data, full_padding, **pad_kwargs)
+    full_padding = [(0, 0)] * u.data.ndim
+    full_padding[axis] = padding
+    data = jnp.pad(u.data, full_padding, **pad_kwargs)
     return AlignedArray(data, tuple(offset))
 
   def trim(
@@ -466,38 +433,6 @@ class Grid:
     offset = list(u.offset)
     offset[axis] += padding[0]
     return AlignedArray(data, tuple(offset))
-
-  def device_shift(self, array: Array, shift: int, axis: int) -> Array:
-    """Shift an array between devices."""
-    if self.device_layout is None:
-      raise ValueError('must specify device_layout to use device_shift')
-    # TODO(shoyer): extract IDs matching actual device topology, i.e., from
-    # metadata in jax.devices().
-    ids = np.arange(np.prod(self.device_layout)).reshape(self.device_layout)
-    perm = _device_permutation(ids, shift, axis, self.boundaries[axis])
-    permuted = lax.ppermute(array, 'space', perm)
-    return permuted
-
-
-def _device_permutation(
-    ids: np.ndarray,
-    shift: int,
-    axis: int,
-    boundary: str = 'periodic',
-) -> List[Tuple[Any, Any]]:
-  """Determine the appropriate device ID permutation for the given shift."""
-  ids = np.asarray(ids)
-  shifted = np.roll(ids, -shift, axis)
-
-  if boundary == DIRICHLET:
-    index = [slice(None)] * ids.ndim
-    index[axis] = slice(None, -shift) if shift >= 0 else slice(-shift, None)
-    ids = ids[tuple(index)]
-    shifted = shifted[tuple(index)]
-  elif boundary != PERIODIC:
-    raise ValueError(f'invalid boundary: {boundary}')
-
-  return list(zip(ids.ravel().tolist(), shifted.ravel().tolist()))
 
 
 # Aliases for often used `grids.applied` functions.

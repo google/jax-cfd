@@ -80,9 +80,6 @@ def solve_fast_diag(v: Sequence[AlignedArray],
                     grid: grids.Grid,
                     implementation: Optional[str] = None) -> AlignedField:
   """Solve for diffusion using the fast diagonalization approach."""
-  if grid.device_layout is not None:
-    raise NotImplementedError(
-        "distributed fast diagonalization not implemented yet.")
   # We reuse eigenvectors from the Laplacian and transform the eigenvalues
   # because this is better conditioned than directly diagonalizing 1 - ν Δt ∇²
   # when ν Δt is small.

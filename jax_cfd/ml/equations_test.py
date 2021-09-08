@@ -163,14 +163,14 @@ class NavierStokesModulesTest(test_util.TestCase):
     ]
     _, outputs2 = self._generate_inputs_and_outputs(config2, grid)
     for out1, out2 in zip(outputs1, outputs2):
-      self.assertAllClose(out1, out2)
+      self.assertAllClose(out1, out2, rtol=1e-6)
 
     config2 = config + [
         'FusedLearnedInterpolation.fuse_constraints = True',
     ]
     _, outputs2 = self._generate_inputs_and_outputs(config2, grid)
     for out1, out2 in zip(outputs1, outputs2):
-      self.assertAllClose(out1, out2)
+      self.assertAllClose(out1, out2, rtol=1e-6)
 
     config2 = config + [
         'FusedLearnedInterpolation.fuse_constraints = True',
@@ -178,7 +178,7 @@ class NavierStokesModulesTest(test_util.TestCase):
     ]
     _, outputs2 = self._generate_inputs_and_outputs(config2, grid)
     for out1, out2 in zip(outputs1, outputs2):
-      self.assertAllClose(out1, out2)
+      self.assertAllClose(out1, out2, rtol=1e-6)
 
     config2 = config + [
         'FusedLearnedInterpolation.extract_patch_method = "conv"',
@@ -187,7 +187,7 @@ class NavierStokesModulesTest(test_util.TestCase):
     ]
     _, outputs2 = self._generate_inputs_and_outputs(config2, grid)
     for out1, out2 in zip(outputs1, outputs2):
-      self.assertAllClose(out1, out2)
+      self.assertAllClose(out1, out2, rtol=1e-6)
 
 
 if __name__ == '__main__':

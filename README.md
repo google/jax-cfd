@@ -15,7 +15,7 @@ To learn more about our general approach, read our paper [Machine learning accel
 Take a look at "demo" notebook in the "notebooks" directory for an example of
 how to use JAX-CFD for simulate a 2D turbulent flow.
 
-We are currently preparing more example notebooks, inculding:
+We are currently preparing more example notebooks, including:
 
 - Reusing our training data and/or evaluation setup (without running JAX-CFD)
 - Simulations using our pre-trained turbulence models.

@@ -17,6 +17,7 @@
 from absl.testing import absltest
 from absl.testing import parameterized
 
+from jax_cfd.base import grids
 from jax_cfd.base import resize
 from jax_cfd.base import test_util
 import numpy as np
@@ -46,8 +47,35 @@ class ResizeTest(test_util.TestCase):
     """Test `downsample_array` produces the expected results."""
     actual = resize.downsample_staggered_velocity_component(
         u, direction, factor)
-    self.assertAllClose(expected, actual, atol=1e-6)
+    self.assertAllClose(expected, actual)
 
+  def testDownsampleVelocity(self):
+    source_grid = grids.Grid((4, 4), domain=[(0, 1), (0, 1)])
+    destination_grid = grids.Grid((2, 2), domain=[(0, 1), (0, 1)])
+    u = np.array([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+        [12, 13, 14, 15],
+    ])
+    expected = (np.array([[4.5, 6.5],
+                          [12.5, 14.5]]), np.array([[3., 5.], [11., 13.]]))
+
+    with self.subTest('ArrayField'):
+      velocity = (u, u)
+      actual = resize.downsample_staggered_velocity(source_grid,
+                                                    destination_grid, velocity)
+      self.assertAllClose(expected, actual)
+
+    with self.subTest('AlignedField'):
+      velocity = (grids.AlignedArray(u, offset=(1, 0)),
+                  grids.AlignedArray(u, offset=(0, 1)))
+      actual = resize.downsample_staggered_velocity(source_grid,
+                                                    destination_grid, velocity)
+      expected_aligned = (grids.AlignedArray(expected[0], offset=(1, 0)),
+                          grids.AlignedArray(expected[1], offset=(0, 1)))
+      self.assertAllClose(expected_aligned[0], actual[0])
+      self.assertAllClose(expected_aligned[1], actual[1])
 
 if __name__ == '__main__':
   absltest.main()

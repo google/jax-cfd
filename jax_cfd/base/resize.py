@@ -13,12 +13,20 @@
 # limitations under the License.
 
 """Resize velocity fields to a different resolution grid."""
+from typing import Tuple, Union
+
 import jax.numpy as jnp
 from jax_cfd.base import array_utils as arr_utils
 from jax_cfd.base import grids
 
+Array = grids.Array
+ArrayField = Tuple[Array, ...]
+AlignedArray = grids.AlignedArray
+AlignedField = Tuple[AlignedArray, ...]
 
-def downsample_staggered_velocity_component(u, direction, factor):
+
+def downsample_staggered_velocity_component(u: Array, direction: int,
+                                            factor: int):
   """Downsamples `u`, an array of velocities in the given `direction`.
 
   Downsampling consists of the following steps:
@@ -60,9 +68,9 @@ def downsample_staggered_velocity_component(u, direction, factor):
 
 
 def downsample_staggered_velocity(
-    source_grid,
-    destination_grid,
-    velocity,
+    source_grid: grids.Grid,
+    destination_grid: grids.Grid,
+    velocity: Union[ArrayField, AlignedField],
 ):
   """Downsamples each component of `v` by `factor`."""
   factor = destination_grid.step[0] / source_grid.step[0]

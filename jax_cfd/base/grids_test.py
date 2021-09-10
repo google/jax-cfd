@@ -27,28 +27,53 @@ import numpy as np
 
 class GridTest(test_util.TestCase):
 
-  def test_constructor(self):
-    grid = grids.Grid((10,))
-    self.assertEqual(grid.shape, (10,))
-    self.assertEqual(grid.step, (1.0,))
-    self.assertEqual(grid.domain, ((0, 10.0),))
-    self.assertEqual(grid.boundaries, ('periodic',))
-    axis, = grid.axes()
-    self.assertAllClose(axis, 0.5 + np.arange(10))
+  def test_constructor_and_attributes(self):
+    with self.subTest('1d'):
+      grid = grids.Grid((10,))
+      self.assertEqual(grid.shape, (10,))
+      self.assertEqual(grid.step, (1.0,))
+      self.assertEqual(grid.domain, ((0, 10.),))
+      self.assertEqual(grid.boundaries, ('periodic',))
+      self.assertEqual(grid.ndim, 1)
+      self.assertEqual(grid.cell_center, (0.5,))
+      self.assertEqual(grid.cell_faces, ((1.0,),))
 
-    grid = grids.Grid((10,), step=0.1, boundaries='periodic')
-    self.assertEqual(grid.step, (0.1,))
-    self.assertEqual(grid.domain, ((0, 1.0),))
-    self.assertEqual(grid.boundaries, ('periodic',))
-    axis, = grid.axes(offset=(0,))
-    self.assertAllClose(axis, 0.1 * np.arange(10))
+    with self.subTest('2d'):
+      grid = grids.Grid((10, 10), step=0.1,)
+      self.assertEqual(grid.step, (0.1, 0.1))
+      self.assertEqual(grid.domain, ((0, 1.0), (0, 1.0)))
+      self.assertEqual(grid.boundaries, ('periodic', 'periodic'))
+      self.assertEqual(grid.ndim, 2)
+      self.assertEqual(grid.cell_center, (0.5, 0.5))
+      self.assertEqual(grid.cell_faces, ((1.0, 0.5), (0.5, 1.0)))
 
-    grid = grids.Grid((10,), domain=[(-2, 2)], boundaries='dirichlet')
-    self.assertEqual(grid.step, (2/5,))
-    self.assertEqual(grid.domain, ((-2, 2),))
-    self.assertEqual(grid.boundaries, ('dirichlet',))
-    axis, = grid.axes()
-    self.assertAllClose(axis, np.linspace(-2 + 1/5, 2 - 1/5, num=10), atol=1e-6)
+    with self.subTest('3d'):
+      grid = grids.Grid((10, 10, 10), step=(0.1, 0.2, 0.5))
+      self.assertEqual(grid.step, (0.1, 0.2, 0.5))
+      self.assertEqual(grid.domain, ((0, 1.0), (0, 2.0), (0, 5.0)))
+      self.assertEqual(grid.boundaries, ('periodic', 'periodic', 'periodic'))
+      self.assertEqual(grid.ndim, 3)
+      self.assertEqual(grid.cell_center, (0.5, 0.5, 0.5))
+      self.assertEqual(grid.cell_faces,
+                       ((1.0, 0.5, 0.5), (0.5, 1.0, 0.5), (0.5, 0.5, 1.0)))
+
+    with self.subTest('1d domain'):
+      grid = grids.Grid((10,), domain=[(-2, 2)], boundaries='dirichlet')
+      self.assertEqual(grid.step, (2/5,))
+      self.assertEqual(grid.domain, ((-2., 2.),))
+      self.assertEqual(grid.boundaries, ('dirichlet',))
+      self.assertEqual(grid.ndim, 1)
+      self.assertEqual(grid.cell_center, (0.5,))
+      self.assertEqual(grid.cell_faces, ((1.0,),))
+
+    with self.subTest('2d domain'):
+      grid = grids.Grid((10, 20), domain=[(-2, 2), (0, 3)])
+      self.assertEqual(grid.step, (4/10, 3/20))
+      self.assertEqual(grid.domain, ((-2., 2.), (0., 3.)))
+      self.assertEqual(grid.boundaries, ('periodic', 'periodic'))
+      self.assertEqual(grid.ndim, 2)
+      self.assertEqual(grid.cell_center, (0.5, 0.5))
+      self.assertEqual(grid.cell_faces, ((1.0, 0.5), (0.5, 1.0)))
 
     with self.assertRaisesRegex(TypeError, 'cannot provide both'):
       grids.Grid((2,), step=(1.0,), domain=[(0, 2.0)])
@@ -60,6 +85,89 @@ class GridTest(test_util.TestCase):
       grids.Grid((2, 3), step=(1.0,))
     with self.assertRaisesRegex(ValueError, 'invalid boundaries'):
       grids.Grid((2, 3), boundaries='not_valid')
+
+  def test_stagger(self):
+    grid = grids.Grid((10, 10))
+    array_1 = jnp.zeros((10, 10))
+    array_2 = jnp.ones((10, 10))
+    u, v = grid.stagger((array_1, array_2))
+    self.assertEqual(u.offset, (1.0, 0.5))
+    self.assertEqual(v.offset, (0.5, 1.0))
+
+  def test_center(self):
+    grid = grids.Grid((10, 10))
+
+    with self.subTest('array ndim same as grid'):
+      array_1 = jnp.zeros((10, 10))
+      array_2 = jnp.zeros((20, 30))
+      v = (array_1, array_2)  # tuple is a simple pytree
+      v_centered = grid.center(v)
+      self.assertLen(v_centered, 2)
+      self.assertIsInstance(v_centered[0], grids.AlignedArray)
+      self.assertIsInstance(v_centered[1], grids.AlignedArray)
+      self.assertEqual(v_centered[0].shape, (10, 10))
+      self.assertEqual(v_centered[1].shape, (20, 30))
+      self.assertEqual(v_centered[0].offset, (0.5, 0.5))
+      self.assertEqual(v_centered[1].offset, (0.5, 0.5))
+
+    with self.subTest('array ndim different than grid'):
+      # Assigns offset dimension based on grid.ndim
+      array_1 = jnp.zeros((10,))
+      array_2 = jnp.ones((10, 10, 10))
+      v = (array_1, array_2)  # tuple is a simple pytree
+      v_centered = grid.center(v)
+      self.assertLen(v_centered, 2)
+      self.assertIsInstance(v_centered[0], grids.AlignedArray)
+      self.assertIsInstance(v_centered[1], grids.AlignedArray)
+      self.assertEqual(v_centered[0].shape, (10,))
+      self.assertEqual(v_centered[1].shape, (10, 10, 10))
+      self.assertEqual(v_centered[0].offset, (0.5, 0.5))
+      self.assertEqual(v_centered[1].offset, (0.5, 0.5))
+
+  def test_axes_and_mesh(self):
+    with self.subTest('1d'):
+      grid = grids.Grid((5,), step=0.1)
+      axes = grid.axes()
+      self.assertLen(axes, 1)
+      self.assertAllClose(axes[0], [0.05, 0.15, 0.25, 0.35, 0.45])
+      mesh = grid.mesh()
+      self.assertLen(mesh, 1)
+      self.assertAllClose(axes[0], mesh[0])  # in 1d, mesh matches array
+
+    with self.subTest('1d with offset'):
+      grid = grids.Grid((5,), step=0.1)
+      axes = grid.axes(offset=(0,))
+      self.assertLen(axes, 1)
+      self.assertAllClose(axes[0], [0.0, 0.1, 0.2, 0.3, 0.4])
+      mesh = grid.mesh(offset=(0,))
+      self.assertLen(mesh, 1)
+      self.assertAllClose(axes[0], mesh[0])  # in 1d, mesh matches array
+
+    with self.subTest('2d'):
+      grid = grids.Grid((4, 6), domain=[(-2, 2), (0, 3)])
+      axes = grid.axes()
+      self.assertLen(axes, 2)
+      self.assertAllClose(axes[0], [-1.5, -0.5, 0.5, 1.5])
+      self.assertAllClose(axes[1], [0.25, 0.75, 1.25, 1.75, 2.25, 2.75])
+      mesh = grid.mesh()
+      self.assertLen(mesh, 2)
+      self.assertEqual(mesh[0].shape, (4, 6))
+      self.assertEqual(mesh[1].shape, (4, 6))
+      self.assertAllClose(mesh[0][:, 0], axes[0])
+      self.assertAllClose(mesh[1][0, :], axes[1])
+
+    with self.subTest('2d with offset'):
+      grid = grids.Grid((4, 6), domain=[(-2, 2), (0, 3)])
+      axes = grid.axes(offset=(0, 1))
+      self.assertLen(axes, 2)
+      self.assertAllClose(axes[0], [-2.0, -1.0, 0.0, 1.0])
+      self.assertAllClose(axes[1], [0.5, 1.0, 1.5, 2.0, 2.5, 3.0])
+      mesh = grid.mesh(offset=(0, 1))
+      self.assertLen(mesh, 2)
+      self.assertEqual(mesh[0].shape, (4, 6))
+      self.assertEqual(mesh[1].shape, (4, 6))
+      self.assertAllClose(mesh[0][:, 0], axes[0])
+      self.assertAllClose(mesh[1][0, :], axes[1])
 
   @parameterized.parameters(
       dict(backend=np,

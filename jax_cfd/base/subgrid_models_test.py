@@ -150,7 +150,7 @@ class SubgridModelsTest(test_util.TestCase):
 
     # TODO(dkochkov) consider adding more thorough tests for these models.
     with self.subTest('divergence free'):
-      divergence = fd.divergence(v_final, grid)
+      divergence = fd.divergence(v_final)
       self.assertLess(jnp.max(divergence.data), divergence_atol)
 
     with self.subTest('conservation of momentum'):

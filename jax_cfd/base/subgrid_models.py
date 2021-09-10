@@ -97,13 +97,13 @@ def evm_model(
     acceleration of the velocity field `v`.
   """
   s_ij = grids.Tensor([
-      [0.5 * (finite_differences.forward_difference(v[i], grid, j) +  # pylint: disable=g-complex-comprehension
-              finite_differences.forward_difference(v[j], grid, i))
+      [0.5 * (finite_differences.forward_difference(v[i], j) +  # pylint: disable=g-complex-comprehension
+              finite_differences.forward_difference(v[j], i))
        for j in range(grid.ndim)]
       for i in range(grid.ndim)])
   viscosity = viscosity_fn(s_ij, v, grid)
   tau = jax.tree_multimap(lambda x, y: -2. * x * y, viscosity, s_ij)
-  return tuple(-finite_differences.divergence(tau[i, :], grid)
+  return tuple(-finite_differences.divergence(tau[i, :])
                for i in range(grid.ndim))
 
 
@@ -138,8 +138,7 @@ def implicit_evm_solve_with_diffusion(
   cg_kwargs.setdefault('tol', 1e-6)
   cg_kwargs.setdefault('atol', 1e-6)
 
-  vector_laplacian = np.vectorize(
-      functools.partial(finite_differences.laplacian, grid=grid))
+  vector_laplacian = np.vectorize(finite_differences.laplacian)
 
   def linear_op(v):
     acceleration = configured_evm_model(v, grid)

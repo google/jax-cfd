@@ -128,7 +128,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
     v_initial = velocity(grid)
     v_final = funcutils.repeated(navier_stokes, time_steps)(v_initial)
 
-    divergence = fd.divergence(v_final, grid)
+    divergence = fd.divergence(v_final)
     self.assertLess(jnp.max(divergence.data), divergence_atol)
 
     initial_momentum = momentum(v_initial, density, grid)

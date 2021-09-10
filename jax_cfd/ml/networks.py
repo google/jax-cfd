@@ -24,13 +24,13 @@ def split_to_aligned_field(
     physics_specs: physics_specifications.BasePhysicsSpecs,
     data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
 ):
-  """Returns module that splits inputs along last axis into AlignedField."""
+  """Returns module that splits inputs along last axis into GridField."""
   del dt, physics_specs  # unused.
   data_offsets = data_offsets or grid.cell_faces
 
   def process(inputs):
     split_inputs = array_utils.split_axis(inputs, -1)
-    return tuple(grids.AlignedArray(x, offset)
+    return tuple(grids.GridArray(x, offset, grid)
                  for x, offset in zip(split_inputs, data_offsets))
 
   return hk.to_module(process)()
@@ -42,7 +42,7 @@ def aligned_field_from_split_divergence(
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
 ):
-  """Returns module that splits inputs along last axis into AlignedField."""
+  """Returns module that splits inputs along last axis into GridField."""
   del dt, physics_specs  # unused.
 
   def _shift_offset(offset, axis):
@@ -55,7 +55,7 @@ def aligned_field_from_split_divergence(
 
   def process(inputs):
     split_inputs = array_utils.split_axis(inputs, -1)
-    split_inputs = tuple(grids.AlignedArray(x, o)
+    split_inputs = tuple(grids.GridArray(x, o, grid)
                          for x, o in zip(split_inputs, flux_offsets))
     # below we combine `grid.ndim`-sized sequences of arrays into a tuples.
     # we do that by iterating over a `grid.ndim`-sized zip of the same iterator.
@@ -76,7 +76,7 @@ def stack_aligned_field(
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
 ):
-  """Returns a module that stacks AlignedField along the last axis."""
+  """Returns a module that stacks GridField along the last axis."""
   del grid, dt, physics_specs  # unused.
 
   def process(inputs):

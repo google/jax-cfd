@@ -40,7 +40,7 @@ class LinearInterpolationTest(test_util.TestCase):
   def testRaisesForInvalidOffset(self, shape, step, offset):
     """Test that incompatible offsets raise an exception."""
     grid = grids.Grid(shape, step)
-    u = grids.AlignedArray(jnp.ones(shape), jnp.zeros(shape))
+    u = grids.GridArray(jnp.ones(shape), jnp.zeros(shape), grid)
     with self.assertRaises(ValueError):
       interpolation.linear(u, offset, grid)
 
@@ -71,7 +71,7 @@ class LinearInterpolationTest(test_util.TestCase):
 
     initial_mesh = grid.mesh(offset=initial_offset)
     initial_axes = grid.axes(offset=initial_offset)
-    initial_u = grids.AlignedArray(f(initial_mesh), initial_offset)
+    initial_u = grids.GridArray(f(initial_mesh), initial_offset, grid)
 
     final_mesh = grid.mesh(offset=final_offset)
     final_u = interpolation.linear(initial_u, final_offset, grid)
@@ -108,8 +108,8 @@ class UpwindInterpolationTest(test_util.TestCase):
       self, grid_shape, grid_step, c_offset, u_offset):
     """Test that incompatible offsets raise an exception."""
     grid = grids.Grid(grid_shape, grid_step)
-    c = grids.AlignedArray(jnp.ones(grid_shape), offset=c_offset)
-    with self.assertRaises(grids.AlignmentError):
+    c = grids.GridArray(jnp.ones(grid_shape), offset=c_offset, grid=grid)
+    with self.assertRaises(grids.InconsistentOffsetError):
       interpolation.upwind(c, u_offset, grid, None)
 
   @parameterized.named_parameters(
@@ -146,8 +146,8 @@ class UpwindInterpolationTest(test_util.TestCase):
   def testCorrectness(self, grid_shape, grid_step, c_data, c_offset, u_data,
                       u_offset, u_axis, expected_data):
     grid = grids.Grid(grid_shape, grid_step)
-    initial_c = grids.AlignedArray(c_data(), c_offset)
-    u = grids.AlignedArray(u_data(), u_offset)
+    initial_c = grids.GridArray(c_data(), c_offset, grid)
+    u = grids.GridArray(u_data(), u_offset, grid)
     v = tuple(
         u if axis == u_axis else None for axis, _ in enumerate(u_offset)
     )

@@ -26,19 +26,19 @@ from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 
 Array = grids.Array
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 
 # Specifying the full signatures of Callable would get somewhat onerous
 # pylint: disable=g-bare-generic
 
 
-def solve_cg(v: Sequence[AlignedArray],
+def solve_cg(v: Sequence[GridArray],
              grid: grids.Grid,
-             q0: Optional[AlignedArray] = None,
+             q0: Optional[GridArray] = None,
              rtol: float = 1e-6,
              atol: float = 1e-6,
-             maxiter: Optional[int] = None) -> AlignedArray:
+             maxiter: Optional[int] = None) -> GridArray:
   """Conjugate gradient solve for the pressure such that continuity is enforced.
 
   Returns a pressure correction `q` such that `div(v - grad(q)) == 0`.
@@ -68,10 +68,10 @@ def solve_cg(v: Sequence[AlignedArray],
   return q
 
 
-def solve_fast_diag(v: Sequence[AlignedArray],
+def solve_fast_diag(v: Sequence[GridArray],
                     grid: grids.Grid,
-                    q0: Optional[AlignedArray] = None,
-                    implementation: Optional[str] = None) -> AlignedArray:
+                    q0: Optional[GridArray] = None,
+                    implementation: Optional[str] = None) -> GridArray:
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
   rhs = fd.divergence(v, grid)
@@ -83,10 +83,10 @@ def solve_fast_diag(v: Sequence[AlignedArray],
 
 
 def projection(
-    v: AlignedField,
+    v: GridField,
     grid: grids.Grid,
     solve: Callable = solve_fast_diag,
-) -> AlignedField:
+) -> GridField:
   """Apply pressure projection to make a velocity field divergence free."""
   q = solve(v, grid)
   q_grad = fd.forward_difference(q, grid)

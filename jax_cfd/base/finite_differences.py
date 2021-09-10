@@ -20,11 +20,11 @@ from jax_cfd.base import grids
 from jax_cfd.base import interpolation
 import numpy as np
 
-AlignedArray = grids.AlignedArray
+GridArray = grids.GridArray
 Tensor = grids.Tensor
 
 
-def stencil_sum(*arrays: AlignedArray) -> AlignedArray:
+def stencil_sum(*arrays: GridArray) -> GridArray:
   """Sum arrays across a stencil, with an averaged offset."""
   # pylint: disable=line-too-long
   offset = grids.averaged_offset(*arrays)
@@ -33,7 +33,8 @@ def stencil_sum(*arrays: AlignedArray) -> AlignedArray:
   #          Expected: (iterable: Iterable[complex])
   #   Actually passed: (iterable: Generator[Union[jax.interpreters.xla.DeviceArray, numpy.ndarray], Any, None])
   result = sum(array.data for array in arrays)  # type: ignore
-  return grids.AlignedArray(result, offset)
+  grid = grids.consistent_grid(*arrays)
+  return grids.GridArray(result, offset, grid)
 
 
 # incompatible with typing.overload
@@ -44,15 +45,15 @@ def stencil_sum(*arrays: AlignedArray) -> AlignedArray:
 
 @typing.overload
 def central_difference(
-    u: AlignedArray, grid: grids.Grid, axis: int
-) -> AlignedArray:
+    u: GridArray, grid: grids.Grid, axis: int
+) -> GridArray:
   ...
 
 
 @typing.overload
 def central_difference(
-    u: AlignedArray, grid: grids.Grid, axis: Optional[Tuple[int, ...]]
-) -> Tuple[AlignedArray, ...]:
+    u: GridArray, grid: grids.Grid, axis: Optional[Tuple[int, ...]]
+) -> Tuple[GridArray, ...]:
   ...
 
 
@@ -68,15 +69,15 @@ def central_difference(u, grid, axis=None):
 
 @typing.overload
 def backward_difference(
-    u: AlignedArray, grid: grids.Grid, axis: int
-) -> AlignedArray:
+    u: GridArray, grid: grids.Grid, axis: int
+) -> GridArray:
   ...
 
 
 @typing.overload
 def backward_difference(
-    u: AlignedArray, grid: grids.Grid, axis: Optional[Tuple[int, ...]]
-) -> Tuple[AlignedArray, ...]:
+    u: GridArray, grid: grids.Grid, axis: Optional[Tuple[int, ...]]
+) -> Tuple[GridArray, ...]:
   ...
 
 
@@ -92,15 +93,15 @@ def backward_difference(u, grid, axis=None):
 
 @typing.overload
 def forward_difference(
-    u: AlignedArray, grid: grids.Grid, axis: int
-) -> AlignedArray:
+    u: GridArray, grid: grids.Grid, axis: int
+) -> GridArray:
   ...
 
 
 @typing.overload
 def forward_difference(
-    u: AlignedArray, grid: grids.Grid, axis: Optional[Tuple[int, ...]] = ...
-) -> Tuple[AlignedArray, ...]:
+    u: GridArray, grid: grids.Grid, axis: Optional[Tuple[int, ...]] = ...
+) -> Tuple[GridArray, ...]:
   ...
 
 
@@ -114,7 +115,7 @@ def forward_difference(u, grid, axis=None):
   return diff / grid.step[axis]
 
 
-def laplacian(u: AlignedArray, grid: grids.Grid) -> AlignedArray:
+def laplacian(u: GridArray, grid: grids.Grid) -> GridArray:
   """Approximates the Laplacian of `u`."""
   scales = np.square(1 / np.array(grid.step))
   result = -2 * u * np.sum(scales)
@@ -124,7 +125,7 @@ def laplacian(u: AlignedArray, grid: grids.Grid) -> AlignedArray:
   return result
 
 
-def divergence(v: Sequence[AlignedArray], grid: grids.Grid) -> AlignedArray:
+def divergence(v: Sequence[GridArray], grid: grids.Grid) -> GridArray:
   """Approximates the divergence of `v` using backward differences."""
   if len(v) != grid.ndim:
     raise ValueError('The length of `v` must be equal to `grid.ndim`.'
@@ -134,18 +135,18 @@ def divergence(v: Sequence[AlignedArray], grid: grids.Grid) -> AlignedArray:
 
 
 @typing.overload
-def gradient_tensor(v: AlignedArray, grid: grids.Grid) -> Tensor:
+def gradient_tensor(v: GridArray, grid: grids.Grid) -> Tensor:
   ...
 
 
 @typing.overload
-def gradient_tensor(v: Sequence[AlignedArray], grid: grids.Grid) -> Tensor:
+def gradient_tensor(v: Sequence[GridArray], grid: grids.Grid) -> Tensor:
   ...
 
 
 def gradient_tensor(v, grid):
   """Approximates the cell-centered gradient of `v`."""
-  if not isinstance(v, AlignedArray):
+  if not isinstance(v, GridArray):
     return Tensor(np.stack([gradient_tensor(u, grid) for u in v], axis=-1))
 
   grad = []
@@ -163,7 +164,7 @@ def gradient_tensor(v, grid):
   return Tensor(grad)
 
 
-def curl_2d(v: Sequence[AlignedArray], grid: grids.Grid) -> AlignedArray:
+def curl_2d(v: Sequence[GridArray], grid: grids.Grid) -> GridArray:
   """Approximates the curl of `v` in 2D using forward differences."""
   if len(v) != 2:
     raise ValueError(f'Length of `v` is not 2: {len(v)}')
@@ -174,8 +175,8 @@ def curl_2d(v: Sequence[AlignedArray], grid: grids.Grid) -> AlignedArray:
 
 
 def curl_3d(
-    v: Sequence[AlignedArray], grid: grids.Grid,
-) -> Tuple[AlignedArray, AlignedArray, AlignedArray]:
+    v: Sequence[GridArray], grid: grids.Grid,
+) -> Tuple[GridArray, GridArray, GridArray]:
   """Approximates the curl of `v` in 2D using forward differences."""
   if len(v) != 3:
     raise ValueError(f'Length of `v` is not 3: {len(v)}')

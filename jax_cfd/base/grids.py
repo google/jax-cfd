@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Grid classes that contain discretization information and boundary conditions."""
+from __future__ import annotations
 
 import dataclasses
 import numbers
@@ -20,10 +21,11 @@ from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 from jax import lax
-from jax import tree_util
 import jax.numpy as jnp
+from jax.tree_util import register_pytree_node_class
 import numpy as np
 
+# TODO(pnorgaard): refactor shift(), pad(), trim() out of Grid.
 # TODO(jamieas): consider moving common types to a separate module.
 # TODO(shoyer): consider adding jnp.ndarray?
 Array = Union[np.ndarray, jnp.DeviceArray]
@@ -36,9 +38,10 @@ IntOrSequence = Union[int, Sequence[int]]
 PyTree = Any
 
 
+@register_pytree_node_class
 @dataclasses.dataclass
-class AlignedArray(np.lib.mixins.NDArrayOperatorsMixin):
-  """Data with an aligned offset on a grid.
+class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
+  """Data with an alignment offset and an associated grid.
 
   Offset values in the range [0, 1] fall within a single grid cell.
 
@@ -46,32 +49,113 @@ class AlignedArray(np.lib.mixins.NDArrayOperatorsMixin):
     offset=(0, 0) means that each point is at the bottom-left corner.
     offset=(0.5, 0.5) is at the grid center.
     offset=(1, 0.5) is centered on the right-side edge.
+
+  Attributes:
+    data: array values.
+    offset: alignment location of the data with respect to the grid.
+    grid: the Grid associated with the array data.
+    dtype: type of the array data.
+    shape: lengths of the array dimensions.
+    ndim: number of array dimensions.
   """
   # Don't (yet) enforce any explicit consistency requirements between data.ndim
   # and len(offset), e.g., so we can feel to add extra time/batch/channel
   # dimensions. But in most cases they should probably match.
+  # Also don't enforce explicit consistency between data.shape and grid.shape,
+  # but similarly they should probably match.
   data: Array
   offset: Tuple[float, ...]
+  grid: Grid
+
+  def tree_flatten(self):
+    """Returns flattening recipe for GridArray JAX pytree."""
+    children = (self.data,)
+    aux_data = (self.offset, self.grid)
+    return children, aux_data
+
+  @classmethod
+  def tree_unflatten(cls, aux_data, children):
+    """Returns unflattening recipe for GridArray JAX pytree."""
+    return cls(*children, *aux_data)
 
   @property
   def dtype(self):
     return self.data.dtype
 
   @property
-  def shape(self):
+  def shape(self) -> Tuple[int, ...]:
     return self.data.shape
 
   @property
-  def ndim(self):
+  def ndim(self) -> int:
     return self.data.ndim
+
+  def shift(
+      self,
+      offset: int,
+      axis: int,
+      pad_kwargs: Optional[Mapping[str, Any]] = None,
+  ) -> GridArray:
+    """Shift this GridArray by `offset`.
+
+    Args:
+      offset: positive or negative integer offset to shift.
+      axis: axis to shift along.
+      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
+        default, uses appropriate padding for the Grid's boundary conditions
+        (`mode='wrap'` for periodic, `mode='constant` with a fill value of
+        zero for dirichlet).
+
+    Returns:
+      A copy of this GridArray, shifted by `offset`. The returned `GridArray`
+      has offset `u.offset + offset`.
+    """
+    return self.grid.shift(self, offset, axis, pad_kwargs)
+
+  def pad(
+      self,
+      padding: Tuple[int, int],
+      axis: int,
+      pad_kwargs: Optional[Mapping[str, Any]] = None,
+  ) -> GridArray:
+    """Pad this GridArray by `padding`.
+
+    Args:
+      padding: left and right padding along this axis.
+      axis: axis to pad along.
+      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
+        default, uses appropriate padding for the Grid's boundary conditions
+        (`mode='wrap'` for periodic, `mode='constant'` with a fill value of zero
+        for dirichlet).
+
+    Returns:
+      Padded GridArray, elongated along the indicated axis.
+    """
+    return self.grid.pad(self, padding, axis, pad_kwargs)
+
+  def trim(
+      self,
+      padding: Tuple[int, int],
+      axis: int,
+  ) -> GridArray:
+    """Trim padding from this GridArray.
+
+    Args:
+      padding: left and right padding along this axis.
+      axis: axis to trim along.
+
+    Returns:
+      Trimmed GridArray, shrunk along the indicated axis.
+    """
+    return self.grid.trim(self, padding, axis)
 
   _HANDLED_TYPES = (numbers.Number, np.ndarray, jnp.DeviceArray,
                     jax.ShapedArray, jax.core.Tracer)
 
   def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-    """Define arithmetic on AlignedArrays using NumPy's mixin."""
+    """Define arithmetic on GridArrays using NumPy's mixin."""
     for x in inputs:
-      if not isinstance(x, self._HANDLED_TYPES + (AlignedArray,)):
+      if not isinstance(x, self._HANDLED_TYPES + (GridArray,)):
         return NotImplemented
     if method != '__call__':
       return NotImplemented
@@ -80,63 +164,71 @@ class AlignedArray(np.lib.mixins.NDArrayOperatorsMixin):
       func = getattr(jnp, ufunc.__name__)
     except AttributeError:
       return NotImplemented
-    arrays = [x.data if isinstance(x, AlignedArray) else x for x in inputs]
+    arrays = [x.data if isinstance(x, GridArray) else x for x in inputs]
     result = func(*arrays)
-    offset = aligned_offset(*[x for x in inputs if isinstance(x, AlignedArray)])
+    offset = consistent_offset(*[x for x in inputs if isinstance(x, GridArray)])
+    grid = consistent_grid(*[x for x in inputs if isinstance(x, GridArray)])
     if isinstance(result, tuple):
-      return tuple(AlignedArray(r, offset) for r in result)
+      return tuple(GridArray(r, offset, grid) for r in result)
     else:
-      return AlignedArray(result, offset)
+      return GridArray(result, offset, grid)
 
 
 def applied(func):
-  """Convert an unaligned function into one defined on aligned arrays."""
+  """Convert an array function into one defined on GridArrays.
 
+  Since `func` can only act on `data` attribute of GridArray, it implicitly
+  enforces that `func` cannot modify the other attributes such as offset.
+
+  Args:
+    func: function being wrapped.
+
+  Returns:
+    A wrapped version of `func` that takes GridArray instead of Array args.
+  """
   def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
-    offset = aligned_offset(*[
+    offset = consistent_offset(*[
         arg for arg in args + tuple(kwargs.values())
-        if isinstance(arg, AlignedArray)
+        if isinstance(arg, GridArray)
+    ])
+    grid = consistent_grid(*[
+        arg for arg in args + tuple(kwargs.values())
+        if isinstance(arg, GridArray)
     ])
     raw_args = [
-        arg.data if isinstance(arg, AlignedArray) else arg for arg in args
+        arg.data if isinstance(arg, GridArray) else arg for arg in args
     ]
     raw_kwargs = {
-        k: v.data if isinstance(v, AlignedArray) else v
+        k: v.data if isinstance(v, GridArray) else v
         for k, v in kwargs.items()
     }
     data = func(*raw_args, **raw_kwargs)
-    return AlignedArray(data, offset)
+    return GridArray(data, offset, grid)
 
   return wrapper
 
 
-tree_util.register_pytree_node(
-    AlignedArray,
-    lambda aligned: ((aligned.data,), aligned.offset),
-    lambda offset, data: AlignedArray(data[0], offset),
-)
+class InconsistentOffsetError(Exception):
+  """Raised for cases of inconsistent offset in GridArrays."""
 
 
-class AlignmentError(Exception):
-  """Raised for cases of inconsistent alignement."""
-
-
-def aligned_offset(*arrays: AlignedArray) -> Tuple[float, ...]:
-  """Returns the single matching offset, or raises AlignmentError."""
+def consistent_offset(*arrays: GridArray) -> Tuple[float, ...]:
+  """Returns the single unique offset, or raises InconsistentOffsetError."""
   offsets = {array.offset for array in arrays}
   if len(offsets) != 1:
-    raise AlignmentError(f'arrays do not have a unique offset: {offsets}')
+    raise InconsistentOffsetError(
+        f'arrays do not have a unique offset: {offsets}')
   offset, = offsets
   return offset
 
 
-def averaged_offset(*arrays: AlignedArray) -> Tuple[float, ...]:
+def averaged_offset(*arrays: GridArray) -> Tuple[float, ...]:
   """Returns the averaged offset of the given arrays."""
   offset = np.mean([array.offset for array in arrays], axis=0)
   return tuple(offset.tolist())
 
 
-def control_volume_offsets(c: AlignedArray) -> Tuple[Tuple[float, ...], ...]:
+def control_volume_offsets(c: GridArray) -> Tuple[Tuple[float, ...], ...]:
   """Returns offsets for the faces of the control volume centered at `c`."""
   return tuple(
       tuple(o + .5 if i == j else o
@@ -144,8 +236,24 @@ def control_volume_offsets(c: AlignedArray) -> Tuple[Tuple[float, ...], ...]:
       for j in range(len(c.offset)))
 
 
+class InconsistentGridError(Exception):
+  """Raised for cases of inconsistent grids between GridArrays."""
+
+
+def consistent_grid(*arrays: GridArray) -> Grid:
+  """Returns the single unique grid, or raises InconsistentGridError."""
+  grids = {array.grid for array in arrays}
+  if len(grids) != 1:
+    raise InconsistentGridError(f'arrays do not have a unique grid: {grids}')
+  grid, = grids
+  return grid
+
+
+GridField = Tuple[GridArray, ...]
+
+
 class Tensor(np.ndarray):
-  """A numpy array of AlignedArrays, representing a physical tensor field.
+  """A numpy array of GridArrays, representing a physical tensor field.
 
   Packing tensor coordinates into a numpy array of dtype object is useful
   because pointwise matrix operations like trace, transpose, and matrix
@@ -168,6 +276,11 @@ jax.tree_util.register_pytree_node(
     lambda tensor: (tensor.ravel().tolist(), tensor.shape),
     lambda shape, arrays: Tensor(np.asarray(arrays).reshape(shape)),
 )
+
+
+# Aliases for often used `grids.applied` functions.
+where = applied(jnp.where)
+
 
 PERIODIC = 'periodic'
 DIRICHLET = 'dirichlet'
@@ -241,7 +354,7 @@ class Grid:
       boundaries = (boundaries,) * self.ndim
     invalid_boundaries = [
         boundary for boundary in boundaries
-        if boundary not in {PERIODIC, DIRICHLET}
+        if boundary not in VALID_BOUNDARIES
     ]
     if invalid_boundaries:
       raise ValueError(f'invalid boundaries: {invalid_boundaries}')
@@ -264,15 +377,15 @@ class Grid:
     offsets = (np.eye(d) + np.ones([d, d])) / 2.
     return tuple(tuple(float(o) for o in offset) for offset in offsets)
 
-  def stagger(self, v: Tuple[Array, ...]) -> Tuple[AlignedArray, ...]:
+  def stagger(self, v: Tuple[Array, ...]) -> Tuple[GridArray, ...]:
     """Places the velocity components of `v` on the `Grid`'s cell faces."""
     offsets = self.cell_faces
-    return tuple(AlignedArray(u, o) for u, o in zip(v, offsets))
+    return tuple(GridArray(u, o, self) for u, o in zip(v, offsets))
 
   def center(self, v: PyTree) -> PyTree:
     """Places all arrays in the pytree `v` at the `Grid`'s cell center."""
     offset = self.cell_center
-    return jax.tree_map(lambda u: AlignedArray(u, offset), v)
+    return jax.tree_map(lambda u: GridArray(u, offset, self), v)
 
   def axes(self, offset: Optional[Sequence[float]] = None) -> Tuple[Array, ...]:
     """Returns a tuple of arrays containing the grid points along each axis.
@@ -352,15 +465,15 @@ class Grid:
 
   def shift(
       self,
-      u: AlignedArray,
+      u: GridArray,
       offset: int,
       axis: int,
       pad_kwargs: Optional[Mapping[str, Any]] = None,
-  ) -> AlignedArray:
-    """Shift an AlignedArray by `offset`.
+  ) -> GridArray:
+    """Shift an GridArray by `offset`.
 
     Args:
-      u: an `AlignedArray` object.
+      u: an `GridArray` object.
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
       pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
@@ -369,7 +482,7 @@ class Grid:
         for dirichlet).
 
     Returns:
-      A copy of `u`, shifted by `offset`. The returned `AlignedArray` has offset
+      A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
       `u.offset + offset`.
     """
     padding = (-offset, 0) if offset < 0 else (0, offset)
@@ -379,15 +492,15 @@ class Grid:
 
   def pad(
       self,
-      u: AlignedArray,
+      u: GridArray,
       padding: Tuple[int, int],
       axis: int,
       pad_kwargs: Optional[Mapping[str, Any]] = None,
-  ) -> AlignedArray:
-    """Pad an AlignedArray by `padding`.
+  ) -> GridArray:
+    """Pad an GridArray by `padding`.
 
     Args:
-      u: an `AlignedArray` object.
+      u: an `GridArray` object.
       padding: left and right padding along this axis.
       axis: axis to pad along.
       pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
@@ -410,18 +523,18 @@ class Grid:
     full_padding = [(0, 0)] * u.data.ndim
     full_padding[axis] = padding
     data = jnp.pad(u.data, full_padding, **pad_kwargs)
-    return AlignedArray(data, tuple(offset))
+    return GridArray(data, tuple(offset), self)
 
   def trim(
       self,
-      u: AlignedArray,
+      u: GridArray,
       padding: Tuple[int, int],
       axis: int,
-  ) -> AlignedArray:
-    """Trim padding from an AlignedArray.
+  ) -> GridArray:
+    """Trim padding from an GridArray.
 
     Args:
-      u: an `AlignedArray` object.
+      u: an `GridArray` object.
       padding: left and right padding along this axis.
       axis: axis to trim along.
 
@@ -432,8 +545,5 @@ class Grid:
     data = lax.dynamic_slice_in_dim(u.data, padding[0], slice_size, axis)
     offset = list(u.offset)
     offset[axis] += padding[0]
-    return AlignedArray(data, tuple(offset))
+    return GridArray(data, tuple(offset), self)
 
-
-# Aliases for often used `grids.applied` functions.
-where = applied(jnp.where)

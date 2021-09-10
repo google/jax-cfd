@@ -15,10 +15,10 @@ from jax_cfd.ml import towers
 import numpy as np
 
 Array = Union[np.ndarray, jnp.DeviceArray]
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 InterpolationModule = interpolations.InterpolationModule
-ViscosityFn = Callable[[grids.Tensor, AlignedField, grids.Grid], grids.Tensor]
+ViscosityFn = Callable[[grids.Tensor, GridField, grids.Grid], grids.Tensor]
 ViscosityModule = Callable[..., ViscosityFn]
 
 
@@ -54,7 +54,7 @@ def learned_scalar_viscosity(
 
   def viscosity_fn(
       s_ij: grids.Tensor,
-      v: AlignedField,
+      v: GridField,
       grid: grids.Grid
   ) -> grids.Tensor:
     """Computes effective eddy viscosity using learned components.
@@ -77,8 +77,9 @@ def learned_scalar_viscosity(
     viscosity_net = tower_factory(1, grid.ndim)
     inputs = jnp.stack([u.data for u in v], axis=-1)
     predicted_viscosity = (viscosity_scale + 1e-6) * viscosity_net(inputs)
-    predicted_viscosity = grids.AlignedArray(
-        jnp.squeeze(predicted_viscosity, -1), grid.cell_center)
+    predicted_viscosity = grids.GridArray(
+        data=jnp.squeeze(predicted_viscosity, -1),
+        offset=grid.cell_center, grid=grid)
     interpolated_viscosities = {
         offset: interpolate(predicted_viscosity, offset, grid, v, dt)
         for offset in unique_offsets}
@@ -102,7 +103,7 @@ def learned_tensor_viscosity(
 
   def viscosity_fn(
       s_ij: grids.Tensor,
-      v: AlignedField,
+      v: GridField,
       grid: grids.Grid
   ) -> grids.Tensor:
     """Computes effective eddy viscosity using learned components.

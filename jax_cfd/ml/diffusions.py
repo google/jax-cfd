@@ -9,7 +9,7 @@ An example explicit diffusion module:
 ```python
 def diffusion_module(dt, module_params, **kwargs):
   pre_compute_values = f(dt, module_params)
-  def diffuse(c: grids.AlignedArray, nu: float, grid: grids.Grid, dt: float):
+  def diffuse(c: grids.GridArray, nu: float, grid: grids.Grid, dt: float):
     # compute time derivative due to diffusion.
     return dc_dt
 
@@ -27,11 +27,10 @@ from jax_cfd.base import subgrid_models
 from jax_cfd.ml import viscosities
 
 
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
-Grid = grids.Grid
-DiffuseFn = Callable[[AlignedArray, float, Grid], AlignedArray]
-DiffusionSolveFn = Callable[[AlignedField, float, float, Grid], AlignedField]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
+DiffuseFn = Callable[[GridArray, float, grids.Grid], GridArray]
+DiffusionSolveFn = Callable[[GridField, float, float, grids.Grid], GridField]
 DiffuseModule = Callable[..., DiffuseFn]
 DiffusionSolveModule = Callable[..., DiffusionSolveFn]
 ViscosityModule = viscosities.ViscosityModule

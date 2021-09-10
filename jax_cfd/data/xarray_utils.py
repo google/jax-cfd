@@ -55,7 +55,7 @@ XR_STABLE_TIME_STEP_ATTR_NAME = 'stable_time_step'
 
 
 def velocity_trajectory_to_xarray(
-    trajectory: Tuple[Union[grids.Array, grids.AlignedArray], ...],
+    trajectory: Tuple[Union[grids.Array, grids.GridArray], ...],
     grid: grids.Grid = None,
     time: np.ndarray = None,
     attrs: Dict[str, Any] = None,
@@ -74,7 +74,7 @@ def velocity_trajectory_to_xarray(
   for component in range(dimension):
     name = XR_VELOCITY_NAMES[component]
     data = trajectory[component]
-    if isinstance(data, grids.AlignedArray):
+    if isinstance(data, grids.GridArray):
       data = data.data
     var_attrs = {}
     if grid is not None:
@@ -85,7 +85,7 @@ def velocity_trajectory_to_xarray(
     name = XR_SCALAR_NAMES[component - dimension]
     data = trajectory[component]
     var_attrs = {}
-    if isinstance(data, grids.AlignedArray):
+    if isinstance(data, grids.GridArray):
       var_attrs[XR_OFFSET_NAME] = data.offset
       data = data.data
     data_vars[prefix_name + name] = xarray.Variable(dims, data, var_attrs)

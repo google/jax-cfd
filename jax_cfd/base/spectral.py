@@ -14,15 +14,12 @@
 
 """Utilities for spectral filtering."""
 
-from typing import Callable, Union
+from typing import Callable
 
 import jax.numpy as jnp
 from jax_cfd.base import grids
-import numpy as np
 
-
-AlignedArray = grids.AlignedArray
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = grids.Array
 
 
 def _angular_frequency_magnitude(grid: grids.Grid) -> Array:

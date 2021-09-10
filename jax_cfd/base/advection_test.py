@@ -29,24 +29,24 @@ import numpy as np
 
 def _gaussian_concentration(grid):
   offset = tuple(-int(jnp.ceil(s / 2.)) for s in grid.shape)
-  return grids.AlignedArray(
+  return grids.GridArray(
       jnp.exp(-sum(jnp.square(m) * 30. for m in grid.mesh(offset=offset))),
-      (0.5,) * len(grid.shape))
+      (0.5,) * len(grid.shape), grid)
 
 
 def _square_concentration(grid):
   select_square = lambda x: jnp.where(jnp.logical_and(x > 0.4, x < 0.6), 1., 0.)
-  return grids.AlignedArray(
+  return grids.GridArray(
       jnp.array([select_square(m) for m in grid.mesh()]).prod(0),
-      (0.5,) * len(grid.shape))
+      (0.5,) * len(grid.shape), grid)
 
 
 def _unit_velocity(grid, velocity_sign=1.):
   dim = len(grid.shape)
   offsets = (jnp.eye(dim) + jnp.ones([dim, dim])) / 2.
   return tuple(
-      grids.AlignedArray(velocity_sign * jnp.ones(grid.shape) if ax == 0
-                         else jnp.zeros(grid.shape), tuple(offset))
+      grids.GridArray(velocity_sign * jnp.ones(grid.shape) if ax == 0
+                      else jnp.zeros(grid.shape), tuple(offset), grid)
       for ax, offset in enumerate(offsets))
 
 
@@ -54,7 +54,7 @@ def _cos_velocity(grid):
   dim = len(grid.shape)
   offsets = (jnp.eye(dim) + jnp.ones([dim, dim])) / 2.
   mesh = grid.mesh()
-  v = tuple(grids.AlignedArray(jnp.cos(mesh[i] * 2. * np.pi), tuple(offset))
+  v = tuple(grids.GridArray(jnp.cos(mesh[i] * 2. * np.pi), tuple(offset), grid)
             for i, offset in enumerate(offsets))
   return v
 

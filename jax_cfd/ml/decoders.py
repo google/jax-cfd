@@ -39,7 +39,7 @@ def aligned_array_decoder(
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
 ) -> DecodeFn:
-  """Generates decoder that extracts data from AlignedArrays."""
+  """Generates decoder that extracts data from GridArrays."""
   del grid, dt, physics_specs  # unused.
   def decode_fn(inputs):
     return tuple(x.data for x in inputs)

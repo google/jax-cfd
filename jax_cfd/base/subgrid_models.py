@@ -25,20 +25,20 @@ from jax_cfd.base import interpolation
 import numpy as np
 
 
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 InterpolationFn = interpolation.InterpolationFn
-ViscosityFn = Callable[[grids.Tensor, AlignedField, grids.Grid], grids.Tensor]
+ViscosityFn = Callable[[grids.Tensor, GridField, grids.Grid], grids.Tensor]
 
 
 def smagorinsky_viscosity(
     s_ij: grids.Tensor,
-    v: AlignedField,
+    v: GridField,
     grid: grids.Grid,
     dt: Optional[float] = None,
     cs: float = 0.2,
     interpolate_fn: InterpolationFn = interpolation.linear
-) -> AlignedField:
+) -> GridField:
   """Computes eddy viscosity based on Smagorinsky model.
 
   This viscosity model computes scalar eddy viscosity at `grid.cell_center` and
@@ -56,7 +56,7 @@ def smagorinsky_viscosity(
     interpolate_fn: interpolation method to use for viscosity interpolations.
 
   Returns:
-    tensor of AlignedArray's containing values of the eddy viscosity at the
+    tensor of GridArray's containing values of the eddy viscosity at the
       same grid offsets as the strain tensor `s_ij`.
   """
   s_ij_offsets = [array.offset for array in s_ij.ravel()]
@@ -76,10 +76,10 @@ def smagorinsky_viscosity(
 
 
 def evm_model(
-    v: AlignedField,
+    v: GridField,
     grid: grids.Grid,
     viscosity_fn: ViscosityFn,
-) -> AlignedField:
+) -> GridField:
   """Computes acceleration due to eddy viscosity turbulence model.
 
   Eddy viscosity models compute a turbulence closure term as a divergence of
@@ -109,13 +109,13 @@ def evm_model(
 
 # TODO(dkochkov) remove when b/160947162 is resolved.
 def implicit_evm_solve_with_diffusion(
-    v: AlignedField,
+    v: GridField,
     viscosity: float,
     dt: float,
     grid: grids.Grid,
     configured_evm_model: Callable,  # pylint: disable=g-bare-generic
     cg_kwargs: Optional[Mapping[str, Any]] = None
-) -> AlignedField:
+) -> GridField:
   """Implicit solve for eddy viscosity model combined with diffusion.
 
   This method is intended to be used with `implicit_diffusion_navier_stokes` to

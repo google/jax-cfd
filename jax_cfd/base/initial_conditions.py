@@ -24,9 +24,9 @@ from jax_cfd.base import pressure
 from jax_cfd.base import spectral
 
 
-def wrap_velocities(v, grid):
+def wrap_velocities(v, grid: grids.Grid) -> Tuple[grids.GridArray, ...]:
   """Wrap velocity arrays for input into simulations."""
-  return tuple(grids.AlignedArray(u, offset)
+  return tuple(grids.GridArray(u, offset, grid)
                for u, offset in zip(v, grid.cell_faces))
 
 
@@ -47,7 +47,7 @@ def filtered_velocity_field(
     maximum_velocity: float = 1,
     peak_wavenumber: float = 3,
     iterations: int = 3,
-) -> Tuple[grids.AlignedArray, ...]:
+) -> Tuple[grids.GridArray, ...]:
   """Create divergence-free velocity fields with appropriate spectral filtering.
 
   Args:

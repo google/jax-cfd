@@ -26,24 +26,32 @@ config.parse_flags_with_absl()
 class TestCase(parameterized.TestCase):
   """TestCase with assertions for arrays and grids.AlignedArray."""
 
-  def _check_and_remove_alignment(self, *arrays):
-    """If arrays are aligned, verify their offsets match."""
-    is_aligned = [isinstance(array, grids.AlignedArray) for array in arrays]
-    if any(is_aligned):
-      self.assertTrue(all(is_aligned), msg=f'arrays have mixed types: {arrays}')
+  def _check_and_remove_alignment_and_grid(self, *arrays):
+    """If arrays are aligned, verify their offsets and grids match."""
+    is_gridarray = [isinstance(array, grids.GridArray) for array in arrays]
+    if any(is_gridarray):
+      self.assertTrue(
+          all(is_gridarray), msg=f'arrays have mixed types: {arrays}')
       try:
-        grids.aligned_offset(*arrays)
-      except grids.AlignmentError as e:
+        grids.consistent_offset(*arrays)
+      except grids.InconsistentOffsetError as e:
+        raise AssertionError(str(e)) from None
+      try:
+        grids.consistent_grid(*arrays)
+      except grids.InconsistentGridError as e:
         raise AssertionError(str(e)) from None
       arrays = tuple(array.data for array in arrays)
     return arrays
 
   # pylint: disable=unbalanced-tuple-unpacking
   def assertArrayEqual(self, expected, actual, **kwargs):
-    expected, actual = self._check_and_remove_alignment(expected, actual)
+    expected, actual = self._check_and_remove_alignment_and_grid(
+        expected, actual)
     np.testing.assert_array_equal(expected, actual, **kwargs)
 
   def assertAllClose(self, expected, actual, **kwargs):
-    expected, actual = self._check_and_remove_alignment(expected, actual)
+    expected, actual = self._check_and_remove_alignment_and_grid(
+        expected, actual)
     np.testing.assert_allclose(expected, actual, **kwargs)
+
   # pylint: enable=unbalanced-tuple-unpacking

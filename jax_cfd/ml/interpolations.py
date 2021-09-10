@@ -14,9 +14,8 @@ from jax_cfd.ml import towers
 import numpy as np
 
 
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
-Grid = grids.Grid
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 InterpolationFn = interpolation.InterpolationFn
 InterpolationModule = Callable[..., InterpolationFn]
 InterpolationTransform = Callable[..., InterpolationFn]
@@ -97,9 +96,9 @@ class FusedLearnedInterpolation:
       }
 
   def __call__(self, c, offset, grid, v, dt, tag=None):
-    del grid, dt  # not used.
+    del dt  # not used.
     # TODO(dkochkov) Add decorator to expand/squeeze channel dim.
-    c = grids.AlignedArray(jnp.expand_dims(c.data, -1), c.offset)
+    c = grids.GridArray(jnp.expand_dims(c.data, -1), c.offset, grid)
     # TODO(jamieas): Try removing the following line.
     if c.offset == offset: return c
     key = (c.offset, offset, tag)
@@ -108,7 +107,7 @@ class FusedLearnedInterpolation:
       raise KeyError(f'No interpolator for key {key}. '
                      f'Available keys: {list(self._interpolators.keys())}')
     result = jnp.squeeze(interpolator(c.data), axis=-1)
-    return grids.AlignedArray(result, offset)
+    return grids.GridArray(result, offset, grid)
 
 
 def _nearest_neighhbor_stencil_size_fn(
@@ -176,7 +175,7 @@ class IndividualLearnedInterpolation:
     c_input = jnp.expand_dims(c.data, axis=-1)
     aux_inputs = [jnp.expand_dims(u.data, axis=-1) for u in v]
     res = self._get_interpolation_module(offsets)(c_input, *aux_inputs)
-    return grids.AlignedArray(jnp.squeeze(res, axis=-1), offset)
+    return grids.GridArray(jnp.squeeze(res, axis=-1), offset, grid)
 
 
 @gin.configurable
@@ -212,7 +211,7 @@ def transformed(
     grid: grids.Grid,
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
-    v: AlignedField,
+    v: GridField,
     base_interpolation_module: InterpolationModule = lax_wendroff,
     transformation: InterpolationTransform = tvd_limiter_transformation,
 ) -> InterpolationFn:

@@ -25,9 +25,9 @@ import numpy as np
 
 
 def _trim_boundary(array):
-  if isinstance(array, grids.AlignedArray):
+  if isinstance(array, grids.GridArray):
     data = array.data[(slice(1, -1),) * array.ndim]
-    return grids.AlignedArray(data, array.offset)
+    return grids.GridArray(data, array.offset, array.grid)
   else:
     return jnp.asarray(array)[(slice(1, -1),) * array.ndim]
 
@@ -65,8 +65,8 @@ class FiniteDifferenceTest(test_util.TestCase):
       positive_shift):
     """Tests finite difference code using explicit indices."""
     grid = grid_type(shape, step)
-    u = grids.AlignedArray(
-        jnp.arange(np.prod(shape)).reshape(shape), (0, 0, 0))
+    u = grids.GridArray(
+        jnp.arange(np.prod(shape)).reshape(shape), (0, 0, 0), grid)
     actual_x, actual_y, actual_z = method(u, grid)
 
     x, y, z = jnp.meshgrid(*[jnp.arange(s) for s in shape], indexing='ij')
@@ -74,17 +74,17 @@ class FiniteDifferenceTest(test_util.TestCase):
     diff_x = (u.data[jnp.roll(x, -positive_shift, axis=0), y, z] -
               u.data[jnp.roll(x, -negative_shift, axis=0), y, z])
     expected_data_x = diff_x / step[0] / (positive_shift - negative_shift)
-    expected_x = grids.AlignedArray(expected_data_x, (expected_offset, 0, 0))
+    expected_x = grids.GridArray(expected_data_x, (expected_offset, 0, 0), grid)
 
     diff_y = (u.data[x, jnp.roll(y, -positive_shift, axis=1), z] -
               u.data[x, jnp.roll(y, -negative_shift, axis=1), z])
     expected_data_y = diff_y / step[1] / (positive_shift - negative_shift)
-    expected_y = grids.AlignedArray(expected_data_y, (0, expected_offset, 0))
+    expected_y = grids.GridArray(expected_data_y, (0, expected_offset, 0), grid)
 
     diff_z = (u.data[x, y, jnp.roll(z, -positive_shift, axis=2)] -
               u.data[x, y, jnp.roll(z, -negative_shift, axis=2)])
     expected_data_z = diff_z / step[2] / (positive_shift - negative_shift)
-    expected_z = grids.AlignedArray(expected_data_z, (0, 0, expected_offset))
+    expected_z = grids.GridArray(expected_data_z, (0, 0, expected_offset), grid)
 
     self.assertArrayEqual(expected_x, actual_x)
     self.assertArrayEqual(expected_y, actual_y)
@@ -128,7 +128,7 @@ class FiniteDifferenceTest(test_util.TestCase):
     step = tuple([2. * jnp.pi / s for s in shape])
     grid = grid_type(shape, step)
     mesh = grid.mesh()
-    u = grids.AlignedArray(f(*mesh), offset)
+    u = grids.GridArray(f(*mesh), offset, grid)
     expected_grad = jnp.stack([df(*mesh) for df in gradf])
     actual_grad = [array.data for array in method(u, grid)]
     self.assertAllClose(expected_grad, actual_grad, atol=atol)
@@ -158,8 +158,8 @@ class FiniteDifferenceTest(test_util.TestCase):
     grid = grid_type(shape, step)
     offset = (0,) * len(shape)
     mesh = grid.mesh(offset)
-    u = grids.AlignedArray(f(*mesh), offset)
-    expected_laplacian = _trim_boundary(grids.AlignedArray(g(*mesh), offset))
+    u = grids.GridArray(f(*mesh), offset, grid)
+    expected_laplacian = _trim_boundary(grids.GridArray(g(*mesh), offset, grid))
     actual_laplacian = _trim_boundary(fd.laplacian(u, grid))
     self.assertAllClose(expected_laplacian, actual_laplacian, atol=atol)
 
@@ -189,10 +189,10 @@ class FiniteDifferenceTest(test_util.TestCase):
   def test_divergence(self, grid_type, shape, offsets, f, g, atol):
     step = tuple([1. / s for s in shape])
     grid = grid_type(shape, step)
-    v = [grids.AlignedArray(f(*grid.mesh(offset))[axis], offset)
+    v = [grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
          for axis, offset in enumerate(offsets)]
     expected_divergence = _trim_boundary(
-        grids.AlignedArray(g(*grid.mesh()), (0,) * grid.ndim))
+        grids.GridArray(g(*grid.mesh()), (0,) * grid.ndim, grid))
     actual_divergence = _trim_boundary(fd.divergence(v, grid))
     self.assertAllClose(expected_divergence, actual_divergence, atol=atol)
 
@@ -232,7 +232,7 @@ class FiniteDifferenceTest(test_util.TestCase):
     grid = grids.Grid(shape, step)
     offsets = grid.cell_faces
     v = [
-        grids.AlignedArray(f(*grid.mesh(offset))[axis], offset)
+        grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
         for axis, offset in enumerate(offsets)
     ]
     expected_gradient = g(*grid.mesh())
@@ -264,11 +264,11 @@ class FiniteDifferenceTest(test_util.TestCase):
   def test_curl_2d(self, grid_type, shape, offsets, f, g, atol):
     step = tuple([1. / s for s in shape])
     grid = grid_type(shape, step)
-    v = [grids.AlignedArray(f(*grid.mesh(offset))[axis], offset)
+    v = [grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
          for axis, offset in enumerate(offsets)]
     result_offset = (0.5, 0.5)
     expected_curl = _trim_boundary(
-        grids.AlignedArray(g(*grid.mesh(result_offset)), result_offset))
+        grids.GridArray(g(*grid.mesh(result_offset)), result_offset, grid))
     actual_curl = _trim_boundary(fd.curl_2d(v, grid))
     self.assertAllClose(expected_curl, actual_curl, atol=atol)
 
@@ -287,11 +287,13 @@ class FiniteDifferenceTest(test_util.TestCase):
       self, grid_type, shape, offsets, expected_offsets, f, g, atol):
     step = tuple([1. / s for s in shape])
     grid = grid_type(shape, step)
-    v = [grids.AlignedArray(f(*grid.mesh(offset))[axis], offset)
+    v = [grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
          for axis, offset in enumerate(offsets)]
     expected_curl = [
-        _trim_boundary(grids.AlignedArray(g(*grid.mesh(offset))[axis], offset))
-        for axis, offset in enumerate(expected_offsets)]
+        _trim_boundary(
+            grids.GridArray(g(*grid.mesh(offset))[axis], offset, grid))
+        for axis, offset in enumerate(expected_offsets)
+    ]
     actual_curl = list(map(_trim_boundary, fd.curl_3d(v, grid)))
     self.assertEqual(len(actual_curl), 3)
     self.assertAllClose(expected_curl[0], actual_curl[0], atol=atol)

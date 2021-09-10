@@ -21,14 +21,14 @@ from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 from jax_cfd.base import interpolation
 
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 # TODO(dkochkov) Consider testing if we need operator splitting methods.
 
 
-def _advect_aligned(cs: AlignedField,
-                    v: AlignedField,
-                    grid: grids.Grid) -> AlignedArray:
+def _advect_aligned(cs: GridField,
+                    v: GridField,
+                    grid: grids.Grid) -> GridArray:
   """Computes fluxes and the associated advection for aligned `cs` and `v`.
 
   The values `cs` should consist of a single quantity `c` that has been
@@ -47,13 +47,13 @@ def _advect_aligned(cs: AlignedField,
   In this case, the returned advection term would have offset `(.5, .5, .5)`.
 
   Args:
-    cs: a sequence of `AlignedArray`s; a single value `c` that has been
+    cs: a sequence of `GridArray`s; a single value `c` that has been
       interpolated so that it is aligned with each component of `v`.
-    v: a sequence of `AlignedArrays` describing a velocity field.
+    v: a sequence of `GridArrays` describing a velocity field.
     grid: the `Grid` on which `cs` and `v` are located.
 
   Returns:
-    An `AlignedArray` containing the time derivative of `c` due to advection by
+    An `GridArray` containing the time derivative of `c` due to advection by
     `v`.
 
   Raises:
@@ -70,11 +70,11 @@ def _advect_aligned(cs: AlignedField,
 
 
 def advect_general(
-    c: AlignedArray,
-    v: AlignedField,
+    c: GridArray,
+    v: GridField,
     grid: grids.Grid,
-    u_interpolation_fn: Callable[..., AlignedArray],
-    c_interpolation_fn: Callable[..., AlignedArray],
+    u_interpolation_fn: Callable[..., GridArray],
+    c_interpolation_fn: Callable[..., GridArray],
     dt: Optional[float] = None
 ):
   """Computes advection of a scalar quantity `c` by the velocity field `v`.
@@ -107,26 +107,26 @@ def advect_general(
   return res
 
 
-def advect_linear(c: AlignedArray,
-                  v: AlignedField,
+def advect_linear(c: GridArray,
+                  v: GridField,
                   grid: grids.Grid,
-                  dt: Optional[float] = None) -> AlignedArray:
+                  dt: Optional[float] = None) -> GridArray:
   """Computes advection using linear interpolations."""
   return advect_general(
       c, v, grid, interpolation.linear, interpolation.linear, dt)
 
 
-def advect_upwind(c: AlignedArray,
-                  v: AlignedField,
+def advect_upwind(c: GridArray,
+                  v: GridField,
                   grid: grids.Grid,
-                  dt: Optional[float] = None) -> AlignedArray:
+                  dt: Optional[float] = None) -> GridArray:
   """Computes advection using first-order upwind interpolation on `c`."""
   return advect_general(
       c, v, grid, interpolation.linear, interpolation.upwind, dt)
 
 
-def _align_velocities(v: AlignedField,
-                      grid: grids.Grid) -> Tuple[AlignedField]:
+def _align_velocities(v: GridField,
+                      grid: grids.Grid) -> Tuple[GridField]:
   """Returns interpolated components of `v` needed for convection.
 
   Args:
@@ -134,7 +134,7 @@ def _align_velocities(v: AlignedField,
     grid: the `Grid` on which `v` is located.
 
   Returns:
-    A d-tuple of d-tuples of `AlignedArray`s `aligned_v`, where `d = len(v)`.
+    A d-tuple of d-tuples of `GridArray`s `aligned_v`, where `d = len(v)`.
     The entry `aligned_v[i][j]` is the component `v[i]` after interpolation to
     the appropriate face of the control volume centered around `v[j]`.
   """
@@ -147,17 +147,17 @@ def _align_velocities(v: AlignedField,
 
 
 def _velocities_to_flux(
-    aligned_v: Tuple[AlignedField]) -> Tuple[AlignedField]:
+    aligned_v: Tuple[GridField]) -> Tuple[GridField]:
   """Computes the fluxes across the control volume faces for a velocity field.
 
   Args:
-    aligned_v: a d-tuple of d-tuples of `AlignedArray`s such that the entry
+    aligned_v: a d-tuple of d-tuples of `GridArray`s such that the entry
     `aligned_v[i][j]` is the component `v[i]` after interpolation to
     the appropriate face of the control volume centered around `v[j]`. This is
     the output of `_align_velocities`.
 
   Returns:
-    A tuple of tuples `flux` of `AlignedArray`s with the same structure as
+    A tuple of tuples `flux` of `GridArray`s with the same structure as
     `aligned_v`. The entry `flux[i][j]` is `aligned_v[i][j] * aligned_v[j][i]`.
   """
   ndim = len(aligned_v)
@@ -171,8 +171,8 @@ def _velocities_to_flux(
   return tuple(flux)
 
 
-def convect_linear(v: AlignedField,
-                   grid: grids.Grid) -> AlignedField:
+def convect_linear(v: GridField,
+                   grid: grids.Grid) -> GridField:
   """Computes convection/self-advection of the velocity field `v`.
 
   This function is conceptually equivalent to
@@ -200,11 +200,11 @@ def convect_linear(v: AlignedField,
 
 
 def advect_van_leer(
-    c: AlignedArray,
-    v: AlignedField,
+    c: GridArray,
+    v: GridField,
     grid: grids.Grid,
     dt: float
-) -> AlignedArray:
+) -> GridArray:
   """Computes advection of a scalar quantity `c` by the velocity field `v`.
 
   Implements Van-Leer flux limiting scheme that uses second order accurate
@@ -260,7 +260,8 @@ def advect_van_leer(
         safe, diffs_prod / jnp.where(safe, neighbor_diff, 1), 0
     )
     # for negative velocity we simply need to shift the correction along v axis.
-    forward_correction_array = grids.AlignedArray(forward_correction, u.offset)
+    forward_correction_array = grids.GridArray(
+        forward_correction, u.offset, grid)
     backward_correction_array = grid.shift(forward_correction_array, +1, axis)
     backward_correction = backward_correction_array.data
     abs_velocity = abs(u)
@@ -275,11 +276,11 @@ def advect_van_leer(
 
 
 def advect_step_semilagrangian(
-    c: AlignedArray,
-    v: AlignedField,
+    c: GridArray,
+    v: GridField,
     grid: grids.Grid,
     dt: float
-) -> AlignedArray:
+) -> GridArray:
   """Semi-Lagrangian advection of a scalar quantity.
 
   Note that unlike the other advection functions, this function returns values
@@ -309,11 +310,11 @@ def advect_step_semilagrangian(
 # TODO(dkochkov) Implement advect_with_flux_limiter method.
 # TODO(dkochkov) Consider moving `advect_van_leer` to test based on performance.
 def advect_van_leer_using_limiters(
-    c: AlignedArray,
-    v: AlignedField,
+    c: GridArray,
+    v: GridField,
     grid: grids.Grid,
     dt: float
-) -> AlignedArray:
+) -> GridArray:
   """Implements Van-Leer advection by applying TVD limiter to Lax-Wendroff."""
   c_interpolation_fn = interpolation.apply_tvd_limiter(
       interpolation.lax_wendroff, limiter=interpolation.van_leer_limiter)

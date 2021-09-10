@@ -15,17 +15,15 @@
 """Descriptions and analytical solutions for validation problems."""
 
 import abc
-
 from typing import Optional, Sequence, Tuple
 
-from jax_cfd.base import grids
 import jax.numpy as jnp
+from jax_cfd.base import grids
 import numpy as np
 
-
-AlignedArray = grids.AlignedArray
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 Offsets = Sequence[Sequence[float]]
-AlignedField = Tuple[AlignedArray, ...]
 
 
 class Problem(metaclass=abc.ABCMeta):
@@ -44,14 +42,14 @@ class Problem(metaclass=abc.ABCMeta):
     return self._viscosity
 
   def force(self,
-            offsets: Optional[Offsets] = None) -> Optional[AlignedField]:
+            offsets: Optional[Offsets] = None) -> Optional[GridField]:
     del offsets  # Unused
     return None
 
   @abc.abstractmethod
   def velocity(self,
                t: float,
-               offsets: Optional[Offsets] = None) -> AlignedField:
+               offsets: Optional[Offsets] = None) -> GridField:
     pass
 
 
@@ -80,7 +78,7 @@ class TaylorGreen(Problem):
   def velocity(
       self,
       t: float = 0,
-      offsets: Optional[Offsets] = None) -> AlignedField:
+      offsets: Optional[Offsets] = None) -> GridField:
     """Returns an analytic solution for velocity at time `t`."""
     if offsets is None:
       offsets = self.grid.cell_faces
@@ -88,12 +86,14 @@ class TaylorGreen(Problem):
     scale = jnp.exp(-2 * self.viscosity * t)
 
     ux, uy = self.grid.mesh(offsets[0])
-    u = grids.AlignedArray(
-        scale * jnp.cos(self._kx * ux) * jnp.sin(self._ky * uy), offsets[0])
+    u = grids.GridArray(
+        data=scale * jnp.cos(self._kx * ux) * jnp.sin(self._ky * uy),
+        offset=offsets[0], grid=self.grid)
 
     vx, vy = self.grid.mesh(offsets[1])
-    v = grids.AlignedArray(
-        -scale * jnp.sin(self._kx * vx) * jnp.cos(self._ky * vy), offsets[1])
+    v = grids.GridArray(
+        data=-scale * jnp.sin(self._kx * vx) * jnp.cos(self._ky * vy),
+        offset=offsets[1], grid=self.grid)
 
     return (u, v)
 

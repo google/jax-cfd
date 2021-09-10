@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Functions for interpolating `AlignedArray`s."""
+"""Functions for interpolating `GridArray`s."""
 
 from typing import Callable, Optional, Tuple
 
@@ -21,18 +21,18 @@ from jax_cfd.base import grids
 import numpy as np
 
 
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 InterpolationFn = Callable[
-    [AlignedArray, Tuple[float, ...], grids.Grid, AlignedField, float],
-    AlignedArray]
+    [GridArray, Tuple[float, ...], grids.Grid, GridField, float],
+    GridArray]
 FluxLimiter = Callable[[grids.Array], grids.Array]
 
 
-def _linear_along_axis(c: grids.AlignedArray,
+def _linear_along_axis(c: grids.GridArray,
                        offset: float,
                        axis: int,
-                       grid: grids.Grid) -> grids.AlignedArray:
+                       grid: grids.Grid) -> grids.GridArray:
   """Linear interpolation of `c` to `offset` along a single specified `axis`."""
   offset_delta = offset - c.offset[axis]
 
@@ -45,9 +45,9 @@ def _linear_along_axis(c: grids.AlignedArray,
 
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
-    return grids.AlignedArray(
+    return grids.GridArray(
         data=grid.shift(c, int(offset_delta), axis).data,
-        offset=tuple(new_offset))
+        offset=new_offset, grid=grid)
 
   floor = int(np.floor(offset_delta))
   ceil = int(np.ceil(offset_delta))
@@ -55,28 +55,28 @@ def _linear_along_axis(c: grids.AlignedArray,
   ceil_weight = 1. - floor_weight
   data = (floor_weight * grid.shift(c, floor, axis).data +
           ceil_weight * grid.shift(c, ceil, axis).data)
-  return grids.AlignedArray(data, new_offset)
+  return grids.GridArray(data=data, offset=new_offset, grid=grid)
 
 
 def linear(
-    c: grids.AlignedArray,
+    c: grids.GridArray,
     offset: Tuple[float, ...],
     grid: grids.Grid,
-    v: Optional[Tuple[grids.AlignedArray, ...]] = None,
+    v: Optional[Tuple[grids.GridArray, ...]] = None,
     dt: Optional[float] = None
-) -> grids.AlignedArray:
+) -> grids.GridArray:
   """Multi-linear interpolation of `c` to `offset`.
 
   Args:
-    c: an `AlignedArray`.
+    c: an `GridArray`.
     offset: a tuple of floats describing the offset to which we will interpolate
       `c`. Must have the same length as `c.offset`.
     grid: a `Grid` compatible with the values `c`.
-    v: a tuple of `AlignedArray`s representing velocity field. Not used.
+    v: a tuple of `GridArray`s representing velocity field. Not used.
     dt: size of the time step. Not used.
 
   Returns:
-    An `AlignedArray` containing the values of `c` after linear interpolation
+    An `GridArray` containing the values of `c` after linear interpolation
     to `offset`. The returned value will have offset equal to `offset`.
   """
   del v, dt  # unused
@@ -90,12 +90,12 @@ def linear(
 
 
 def upwind(
-    c: grids.AlignedArray,
+    c: grids.GridArray,
     offset: Tuple[float, ...],
     grid: grids.Grid,
-    v: Tuple[grids.AlignedArray, ...],
+    v: Tuple[grids.GridArray, ...],
     dt: Optional[float] = None
-) -> grids.AlignedArray:
+) -> grids.GridArray:
   """Upwind interpolation of `c` to `offset` based on velocity field `v`.
 
   Interpolates values of `c` to `offset` in two steps:
@@ -104,20 +104,21 @@ def upwind(
      the previous (next) cell along that axis correspondingly.
 
   Args:
-    c: an `AlignedArray`, the quantitity to be interpolated.
+    c: an `GridArray`, the quantitity to be interpolated.
     offset: a tuple of floats describing the offset to which we will interpolate
       `c`. Must have the same length as `c.offset` and differ in at most one
       entry.
     grid: a `Grid` on which `c` and `u` are located.
-    v: a tuple of `AlignedArray`s representing velocity field with offsets at
+    v: a tuple of `GridArray`s representing velocity field with offsets at
       faces of `c`. One of the components must have the same offset as `offset`.
     dt: size of the time step. Not used.
 
   Returns:
-    An `AlignedArray` that containins the values of `c` after interpolation to
+    An `GridArray` that containins the values of `c` after interpolation to
     `offset`.
   Raises:
-    AlignmentError: if `offset` and `c.offset` differ in more than one entry.
+    InconsistentOffsetError: if `offset` and `c.offset` differ in more than one
+    entry.
   """
   del dt  # unused
   if c.offset == offset: return c
@@ -126,7 +127,7 @@ def upwind(
       if current != target
   )
   if len(interpolation_axes) != 1:
-    raise grids.AlignmentError(
+    raise grids.InconsistentOffsetError(
         f'for upwind interpolation `c.offset` and `offset` must differ at most '
         f'in one entry, but got: {c.offset} and {offset}.')
   axis, = interpolation_axes
@@ -135,9 +136,9 @@ def upwind(
 
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
-    return grids.AlignedArray(
+    return grids.GridArray(
         data=grid.shift(u, int(offset_delta), axis).data,
-        offset=offset)
+        offset=offset, grid=grid)
 
   floor = int(np.floor(offset_delta))
   ceil = int(np.ceil(offset_delta))
@@ -147,12 +148,12 @@ def upwind(
 
 
 def lax_wendroff(
-    c: grids.AlignedArray,
+    c: grids.GridArray,
     offset: Tuple[float, ...],
     grid: grids.Grid,
-    v: Optional[Tuple[grids.AlignedArray, ...]] = None,
+    v: Optional[Tuple[grids.GridArray, ...]] = None,
     dt: Optional[float] = None
-) -> grids.AlignedArray:
+) -> grids.GridArray:
   """Lax_Wendroff interpolation of `c` to `offset` based on velocity field `v`.
 
   Interpolates values of `c` to `offset` in two steps:
@@ -169,20 +170,21 @@ def lax_wendroff(
   a flux limiter. See https://en.wikipedia.org/wiki/Flux_limiter
 
   Args:
-    c: an `AlignedArray`, the quantitity to be interpolated.
+    c: an `GridArray`, the quantitity to be interpolated.
     offset: a tuple of floats describing the offset to which we will interpolate
       `c`. Must have the same length as `c.offset` and differ in at most one
       entry.
     grid: a `Grid` on which `c` and `u` are located.
-    v: a tuple of `AlignedArray`s representing velocity field with offsets at
+    v: a tuple of `GridArray`s representing velocity field with offsets at
       faces of `c`. One of the components must have the same offset as `offset`.
     dt: size of the time step. Not used.
 
   Returns:
-    An `AlignedArray` that containins the values of `c` after interpolation to
+    An `GridArray` that containins the values of `c` after interpolation to
     `offset`.
   Raises:
-    AlignmentError: if `offset` and `c.offset` differ in more than one entry.
+    InconsistentOffsetError: if `offset` and `c.offset` differ in more than one
+    entry.
   """
   # TODO(dkochkov) add a function to compute interpolation axis.
   if c.offset == offset: return c
@@ -191,7 +193,7 @@ def lax_wendroff(
       if current != target
   )
   if len(interpolation_axes) != 1:
-    raise grids.AlignmentError(
+    raise grids.InconsistentOffsetError(
         f'for Lax-Wendroff interpolation `c.offset` and `offset` must differ at'
         f' most in one entry, but got: {c.offset} and {offset}.')
   axis, = interpolation_axes
@@ -269,12 +271,14 @@ def apply_tvd_limiter(
         positive_u_r = safe_div(c.data - c_left.data, c_right.data - c.data)
         negative_u_r = safe_div(c_next_right.data - c_right.data,
                                 c_right.data - c.data)
-        positive_u_phi = grids.AlignedArray(limiter(positive_u_r), c_low.offset)
-        negative_u_phi = grids.AlignedArray(limiter(negative_u_r), c_low.offset)
+        positive_u_phi = grids.GridArray(
+            limiter(positive_u_r), c_low.offset, grid)
+        negative_u_phi = grids.GridArray(
+            limiter(negative_u_r), c_low.offset, grid)
         u = v[axis]
         phi = grids.applied(jnp.where)(u > 0, positive_u_phi, negative_u_phi)
         c_interpolated = c_low - (c_low - c_high) * phi
-        c = grids.AlignedArray(c_interpolated.data, interpolation_offset)
+        c = grids.GridArray(c_interpolated.data, interpolation_offset, grid)
     return c
 
   return tvd_interpolation

@@ -89,7 +89,7 @@ class PressureTest(test_util.TestCase):
     # dimension.
     ks = jax.random.split(jax.random.PRNGKey(seed), 2 * len(shape))
     v = tuple(
-        grids.AlignedArray(1. + .3 * jax.random.normal(k, shape), offset)
+        grids.GridArray(1. + .3 * jax.random.normal(k, shape), offset, grid)
         for k, offset in zip(ks[:len(shape)], _offsets(len(shape))))
     v_corrected = pressure.projection(v, grid, solve)
 

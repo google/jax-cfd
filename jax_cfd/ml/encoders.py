@@ -28,13 +28,13 @@ def aligned_array_encoder(
     physics_specs: physics_specifications.BasePhysicsSpecs,
     data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
 ) -> EncodeFn:
-  """Generates encoder that wraps last data slice as AlignedArrays."""
+  """Generates encoder that wraps last data slice as GridArrays."""
   del dt, physics_specs  # unused.
   data_offsets = data_offsets or grid.cell_faces
   slice_last_fn = lambda x: array_utils.slice_along_axis(x, 0, -1)
 
   def encode_fn(inputs):
-    return tuple(grids.AlignedArray(slice_last_fn(x), offset)
+    return tuple(grids.GridArray(slice_last_fn(x), offset, grid)
                  for x, offset in zip(inputs, data_offsets))
 
   return encode_fn

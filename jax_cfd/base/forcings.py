@@ -18,19 +18,19 @@
 # close over `grid`.
 
 import functools
-from typing import Callable, Union
+from typing import Callable
 
 import jax.numpy as jnp
 from jax_cfd.base import equations
 from jax_cfd.base import grids
 from jax_cfd.base import spectral
 from jax_cfd.base import validation_problems
-import numpy as np
 
-AlignedArray = grids.AlignedArray
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = grids.Array
+GridArray = grids.GridArray
+
 ForcingFunction = Callable[
-    [equations.AlignedField, grids.Grid], equations.AlignedField]
+    [grids.GridField, grids.Grid], grids.GridField]
 
 
 def taylor_green_forcing(
@@ -43,9 +43,9 @@ def taylor_green_forcing(
   if grid.ndim == 2:
     f = (u, v)
   elif grid.ndim == 3:
-    u = grids.AlignedArray(u.data, u.offset + (1/2,))
-    v = grids.AlignedArray(v.data, v.offset + (1/2,))
-    w = grids.AlignedArray(jnp.zeros_like(u.data), (1/2, 1/2, 1))
+    u = grids.GridArray(u.data, u.offset + (1/2,), grid)
+    v = grids.GridArray(v.data, v.offset + (1/2,), grid)
+    w = grids.GridArray(jnp.zeros_like(u.data), (1/2, 1/2, 1), grid)
     f = (u, v, w)
   else:
     raise NotImplementedError
@@ -67,27 +67,27 @@ def kolmogorov_forcing(
 
   if swap_xy:
     x = grid.mesh(offsets[1])[0]
-    v = scale * grids.AlignedArray(jnp.sin(k * x), offsets[1])
+    v = scale * grids.GridArray(jnp.sin(k * x), offsets[1], grid)
 
     if grid.ndim == 2:
-      u = grids.AlignedArray(jnp.zeros_like(v.data), (1, 1/2))
+      u = grids.GridArray(jnp.zeros_like(v.data), (1, 1/2), grid)
       f = (u, v)
     elif grid.ndim == 3:
-      u = grids.AlignedArray(jnp.zeros_like(v.data), (1, 1/2, 1/2))
-      w = grids.AlignedArray(jnp.zeros_like(u.data), (1/2, 1/2, 1))
+      u = grids.GridArray(jnp.zeros_like(v.data), (1, 1/2, 1/2), grid)
+      w = grids.GridArray(jnp.zeros_like(u.data), (1/2, 1/2, 1), grid)
       f = (u, v, w)
     else:
       raise NotImplementedError
   else:
     y = grid.mesh(offsets[0])[1]
-    u = scale * grids.AlignedArray(jnp.sin(k * y), offsets[0])
+    u = scale * grids.GridArray(jnp.sin(k * y), offsets[0], grid)
 
     if grid.ndim == 2:
-      v = grids.AlignedArray(jnp.zeros_like(u.data), (1/2, 1))
+      v = grids.GridArray(jnp.zeros_like(u.data), (1/2, 1), grid)
       f = (u, v)
     elif grid.ndim == 3:
-      v = grids.AlignedArray(jnp.zeros_like(u.data), (1/2, 1, 1/2))
-      w = grids.AlignedArray(jnp.zeros_like(u.data), (1/2, 1/2, 1))
+      v = grids.GridArray(jnp.zeros_like(u.data), (1/2, 1, 1/2), grid)
+      w = grids.GridArray(jnp.zeros_like(u.data), (1/2, 1/2, 1), grid)
       f = (u, v, w)
     else:
       raise NotImplementedError
@@ -155,8 +155,7 @@ def no_forcing(grid):
   offsets = grid.cell_faces
 
   def forcing(v, grid):
-    del grid  # unused
-    return (grids.AlignedArray(jnp.zeros_like(u.data), o)
+    return (grids.GridArray(jnp.zeros_like(u.data), o, grid)
             for u, o in zip(v, offsets))
   return forcing
 

@@ -12,9 +12,9 @@ from jax_cfd.base import grids
 from jax_cfd.base import pressure
 
 
-AlignedArray = grids.AlignedArray
+GridArray = grids.GridArray
 PressureSolveFn = Callable[
-    [Sequence[AlignedArray], grids.Grid, Optional[AlignedArray]], AlignedArray]
+    [Sequence[GridArray], grids.Grid, Optional[GridArray]], GridArray]
 PressureModule = Callable[..., PressureSolveFn]
 
 

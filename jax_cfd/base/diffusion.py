@@ -23,13 +23,13 @@ from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 
 Array = grids.Array
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 
 # pylint: disable=g-bare-generic
 
 
-def diffuse(c: AlignedArray, nu: float, grid: grids.Grid) -> AlignedArray:
+def diffuse(c: GridArray, nu: float, grid: grids.Grid) -> GridArray:
   """Returns the rate of change in a concentration `c` due to diffusion."""
   return nu * fd.laplacian(c, grid)
 
@@ -54,19 +54,19 @@ def stable_time_step(viscosity: float, grid: grids.Grid) -> float:
   return dx ** 2 / (viscosity * 2 ** ndim)
 
 
-def solve_cg(v: Sequence[AlignedArray],
+def solve_cg(v: Sequence[GridArray],
              nu: float,
              dt: float,
              grid: grids.Grid,
              rtol: float = 1e-6,
              atol: float = 1e-6,
-             maxiter: Optional[int] = None) -> AlignedField:
+             maxiter: Optional[int] = None) -> GridField:
   """Conjugate gradient solve for diffusion."""
 
-  def linear_op(u: AlignedArray) -> AlignedArray:
+  def linear_op(u: GridArray) -> GridArray:
     return u - dt * nu * fd.laplacian(u, grid)
 
-  def inv(b: AlignedArray, x0: AlignedArray) -> AlignedArray:
+  def inv(b: GridArray, x0: GridArray) -> GridArray:
     x, _ = jax.scipy.sparse.linalg.cg(
         linear_op, b, x0=x0, tol=rtol, atol=atol, maxiter=maxiter)
     return x
@@ -74,11 +74,11 @@ def solve_cg(v: Sequence[AlignedArray],
   return tuple(inv(u, u) for u in v)
 
 
-def solve_fast_diag(v: Sequence[AlignedArray],
+def solve_fast_diag(v: Sequence[GridArray],
                     nu: float,
                     dt: float,
                     grid: grids.Grid,
-                    implementation: Optional[str] = None) -> AlignedField:
+                    implementation: Optional[str] = None) -> GridField:
   """Solve for diffusion using the fast diagonalization approach."""
   # We reuse eigenvectors from the Laplacian and transform the eigenvalues
   # because this is better conditioned than directly diagonalizing 1 - ν Δt ∇²

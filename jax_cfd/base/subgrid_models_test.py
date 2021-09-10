@@ -32,7 +32,7 @@ def sinusoidal_field(grid):
   mesh_size = jnp.array(grid.shape) * jnp.array(grid.step)
   vs = tuple(jnp.sin(2. * np.pi * g / s)
              for g, s in zip(grid.mesh(), mesh_size))
-  return tuple(grids.AlignedArray(v, o)
+  return tuple(grids.GridArray(v, o, grid)
                for v, o in zip(vs[1:] + vs[:1], grid.cell_faces))
 
 
@@ -41,18 +41,18 @@ def gaussian_field(grid):
   mesh = grid.mesh()
   mesh_size = jnp.array(grid.shape) * jnp.array(grid.step)
   offsets = grid.cell_faces
-  v = [grids.AlignedArray(
+  v = [grids.GridArray(
       jnp.exp(-sum([jnp.square(x / s - .5)
                     for x, s in zip(mesh, mesh_size)]) * 100.),
-      offsets[0])]
+      offsets[0], grid)]
   for j in range(1, grid.ndim):
-    v.append(grids.AlignedArray(jnp.zeros(grid.shape), offsets[j]))
+    v.append(grids.GridArray(jnp.zeros(grid.shape), offsets[j], grid))
   return tuple(v)
 
 
 def zero_field(grid):
   """Returns an all-zero field."""
-  return tuple(grids.AlignedArray(jnp.zeros(grid.shape), o)
+  return tuple(grids.GridArray(jnp.zeros(grid.shape), o, grid)
                for o in grid.cell_faces)
 
 

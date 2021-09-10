@@ -7,9 +7,8 @@ from jax_cfd.base import equations
 from jax_cfd.base import forcings
 from jax_cfd.base import grids
 
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
-Grid = grids.Grid
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 ForcingFunction = forcings.ForcingFunction
 ForcingModule = Callable[..., ForcingFunction]
 

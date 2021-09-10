@@ -103,8 +103,8 @@ class GridTest(test_util.TestCase):
       v = (array_1, array_2)  # tuple is a simple pytree
       v_centered = grid.center(v)
       self.assertLen(v_centered, 2)
-      self.assertIsInstance(v_centered[0], grids.AlignedArray)
-      self.assertIsInstance(v_centered[1], grids.AlignedArray)
+      self.assertIsInstance(v_centered[0], grids.GridArray)
+      self.assertIsInstance(v_centered[1], grids.GridArray)
       self.assertEqual(v_centered[0].shape, (10, 10))
       self.assertEqual(v_centered[1].shape, (20, 30))
       self.assertEqual(v_centered[0].offset, (0.5, 0.5))
@@ -117,8 +117,8 @@ class GridTest(test_util.TestCase):
       v = (array_1, array_2)  # tuple is a simple pytree
       v_centered = grid.center(v)
       self.assertLen(v_centered, 2)
-      self.assertIsInstance(v_centered[0], grids.AlignedArray)
-      self.assertIsInstance(v_centered[1], grids.AlignedArray)
+      self.assertIsInstance(v_centered[0], grids.GridArray)
+      self.assertIsInstance(v_centered[1], grids.GridArray)
       self.assertEqual(v_centered[0].shape, (10,))
       self.assertEqual(v_centered[1].shape, (10, 10, 10))
       self.assertEqual(v_centered[0].offset, (0.5, 0.5))
@@ -220,7 +220,7 @@ class GridTest(test_util.TestCase):
     """Test that `shift` returns the expected values."""
     grid = grids.Grid(shape, step)
     data = backend.arange(np.prod(shape)).reshape(shape)
-    u = grids.AlignedArray(data, initial_offset)
+    u = grids.GridArray(data, initial_offset, grid)
     shifted_u = u
     for axis, o in enumerate(offset):
       shifted_u = grid.shift(shifted_u, o, axis=axis)
@@ -228,67 +228,85 @@ class GridTest(test_util.TestCase):
     shifted_indices = [(jnp.arange(s) + o) % s for s, o in zip(shape, offset)]
     shifted_mesh = jnp.meshgrid(*shifted_indices, indexing='ij')
     expected_offset = tuple(i + o for i, o in zip(initial_offset, offset))
-    expected = grids.AlignedArray(data[tuple(shifted_mesh)], expected_offset)
+    expected = grids.GridArray(data[tuple(shifted_mesh)], expected_offset, grid)
 
     self.assertArrayEqual(shifted_u, expected)
 
   @parameterized.parameters(
       dict(
           grid=grids.Grid((3,), boundaries='periodic'),
-          inputs=grids.AlignedArray(np.array([1, 2, 3]), (0,)),
+          inputs=np.array([1, 2, 3]),
           padding=(0, 0),
-          expected=grids.AlignedArray(np.array([1, 2, 3]), (0,)),
+          expected_array=np.array([1, 2, 3]),
+          expected_offset=(0,),
       ),
       dict(
           grid=grids.Grid((3,), boundaries='periodic'),
-          inputs=grids.AlignedArray(np.array([1, 2, 3]), (0,)),
+          inputs=np.array([1, 2, 3]),
           padding=(0, 1),
-          expected=grids.AlignedArray(np.array([1, 2, 3, 1]), (0,)),
+          expected_array=np.array([1, 2, 3, 1]),
+          expected_offset=(0,),
       ),
       dict(
           grid=grids.Grid((3,), boundaries='periodic'),
-          inputs=grids.AlignedArray(np.array([1, 2, 3]), (0,)),
+          inputs=np.array([1, 2, 3]),
           padding=(1, 1),
-          expected=grids.AlignedArray(np.array([3, 1, 2, 3, 1]), (-1,)),
+          expected_array=np.array([3, 1, 2, 3, 1]),
+          expected_offset=(-1,),
       ),
       dict(
           grid=grids.Grid((3,), boundaries='dirichlet'),
-          inputs=grids.AlignedArray(np.array([1, 2, 3]), (0,)),
+          inputs=np.array([1, 2, 3]),
           padding=(1, 1),
-          expected=grids.AlignedArray(np.array([0, 1, 2, 3, 0]), (-1,)),
+          expected_array=np.array([0, 1, 2, 3, 0]),
+          expected_offset=(-1,),
       ),
       dict(
           grid=grids.Grid((3,)),
-          inputs=grids.AlignedArray(np.array([1, 2, 3]), (0,)),
+          inputs=np.array([1, 2, 3]),
           padding=(2, 1),
+          expected_array=np.array([-1, -1, 1, 2, 3, -2]),
+          expected_offset=(-2,),
           pad_kwargs=dict(mode='constant', constant_values=(-1, -2)),
-          expected=grids.AlignedArray(np.array([-1, -1, 1, 2, 3, -2]), (-2,)),
       ),
   )
-  def test_pad(self, grid, inputs, padding, expected, pad_kwargs=None):
-    actual = grid.pad(inputs, padding, axis=0, pad_kwargs=pad_kwargs)
+  def test_pad(self,
+               grid,
+               inputs,
+               padding,
+               expected_array,
+               expected_offset,
+               pad_kwargs=None):
+    array = grids.GridArray(inputs, (0,), grid)
+    actual = grid.pad(array, padding, axis=0, pad_kwargs=pad_kwargs)
+    expected = grids.GridArray(expected_array, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 
   @parameterized.parameters(
       dict(
-          inputs=grids.AlignedArray(np.array([1, 2, 3]), (0,)),
+          inputs=np.array([1, 2, 3]),
           padding=(0, 0),
-          expected=grids.AlignedArray(np.array([1, 2, 3]), (0,)),
+          expected_array=np.array([1, 2, 3]),
+          expected_offset=(0,),
       ),
       dict(
-          inputs=grids.AlignedArray(np.array([1, 2, 3, 4]), (0,)),
+          inputs=np.array([1, 2, 3, 4]),
           padding=(1, 1),
-          expected=grids.AlignedArray(np.array([2, 3]), (1,)),
+          expected_array=np.array([2, 3]),
+          expected_offset=(1,),
       ),
       dict(
-          inputs=grids.AlignedArray(np.arange(10), (0,)),
+          inputs=np.arange(10),
           padding=(2, 3),
-          expected=grids.AlignedArray(np.arange(2, 7), (2,)),
+          expected_array=np.arange(2, 7),
+          expected_offset=(2,),
       ),
   )
-  def test_trim(self, inputs, padding, expected):
+  def test_trim(self, inputs, padding, expected_array, expected_offset):
     grid = grids.Grid(inputs.data.shape)
-    actual = grid.trim(inputs, padding, axis=0)
+    array = grids.GridArray(inputs, (0,), grid)
+    actual = grid.trim(array, padding, axis=0)
+    expected = grids.GridArray(expected_array, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 
   def test_spectral_axes(self):
@@ -339,35 +357,65 @@ class GridTest(test_util.TestCase):
     assert grid_size // 2 + 1 == len(xs3)
 
 
-class AlignedArrayTest(test_util.TestCase):
+class GridArrayTest(test_util.TestCase):
 
   def test_tree_util(self):
-    array = grids.AlignedArray(jnp.arange(3), offset=(0,))
+    array = grids.GridArray(jnp.arange(3), offset=(0,), grid=grids.Grid((3,)))
     flat, treedef = jax.tree_flatten(array)
     roundtripped = jax.tree_unflatten(treedef, flat)
     self.assertArrayEqual(array, roundtripped)
 
-  def test_aligned_offset(self):
+  def test_consistent_offset(self):
     data = jnp.arange(3)
-    array_at_zero = grids.AlignedArray(data, offset=(0,))
-    array_at_one = grids.AlignedArray(data, offset=(1,))
+    grid = grids.Grid((3,))
+    array_offset_0 = grids.GridArray(data, offset=(0,), grid=grid)
+    array_offset_1 = grids.GridArray(data, offset=(1,), grid=grid)
 
-    offset = grids.aligned_offset(array_at_zero, array_at_zero)
+    offset = grids.consistent_offset(array_offset_0, array_offset_0)
     self.assertEqual(offset, (0,))
 
-    with self.assertRaises(grids.AlignmentError):
-      grids.aligned_offset(array_at_zero, array_at_one)
+    with self.assertRaises(grids.InconsistentOffsetError):
+      grids.consistent_offset(array_offset_0, array_offset_1)
+
+  def test_averaged_offset(self):
+    data = jnp.arange(3)
+    grid = grids.Grid((3,))
+    array_offset_0 = grids.GridArray(data, offset=(0,), grid=grid)
+    array_offset_1 = grids.GridArray(data, offset=(1,), grid=grid)
+
+    averaged_offset = grids.averaged_offset(array_offset_0, array_offset_1)
+    self.assertEqual(averaged_offset, (0.5,))
+
+  def test_control_volume_offsets(self):
+    data = jnp.arange(5, 5)
+    grid = grids.Grid((5, 5))
+    array = grids.GridArray(data, offset=(0, 0), grid=grid)
+    cv_offset = grids.control_volume_offsets(array)
+    self.assertEqual(cv_offset, ((0.5, 0), (0, 0.5)))
+
+  def test_consistent_grid(self):
+    data = jnp.arange(3)
+    offset = (0,)
+    array_grid_3 = grids.GridArray(data, offset, grid=grids.Grid((3,)))
+    array_grid_5 = grids.GridArray(data, offset, grid=grids.Grid((5,)))
+
+    grid = grids.consistent_grid(array_grid_3, array_grid_3)
+    self.assertEqual(grid, grids.Grid((3,)))
+
+    with self.assertRaises(grids.InconsistentGridError):
+      grids.consistent_grid(array_grid_3, array_grid_5)
 
   def test_add_sub_correctness(self):
     values_1 = np.random.uniform(size=(5, 5))
     values_2 = np.random.uniform(size=(5, 5))
     offsets = (0.5, 0.5)
-    input_array_1 = grids.AlignedArray(values_1, offset=offsets)
-    input_array_2 = grids.AlignedArray(values_2, offset=offsets)
+    grid = grids.Grid((5, 5))
+    input_array_1 = grids.GridArray(values_1, offsets, grid)
+    input_array_2 = grids.GridArray(values_2, offsets, grid)
     actual_sum = input_array_1 + input_array_2
     actual_sub = input_array_1 - input_array_2
-    expected_sum = grids.AlignedArray(values_1 + values_2, offset=offsets)
-    expected_sub = grids.AlignedArray(values_1 - values_2, offset=offsets)
+    expected_sum = grids.GridArray(values_1 + values_2, offsets, grid)
+    expected_sub = grids.GridArray(values_1 - values_2, offsets, grid)
     self.assertAllClose(actual_sum, expected_sum, atol=1e-7)
     self.assertAllClose(actual_sub, expected_sub, atol=1e-7)
 
@@ -376,26 +424,45 @@ class AlignedArrayTest(test_util.TestCase):
     values_2 = np.random.uniform(size=(5, 5))
     offset_1 = (0.5, 0.5)
     offset_2 = (0.5, 0.0)
-    input_array_1 = grids.AlignedArray(values_1, offset=offset_1)
-    input_array_2 = grids.AlignedArray(values_2, offset=offset_2)
-    with self.assertRaises(grids.AlignmentError):
+    grid = grids.Grid((5, 5))
+    input_array_1 = grids.GridArray(values_1, offset_1, grid)
+    input_array_2 = grids.GridArray(values_2, offset_2, grid)
+    with self.assertRaises(grids.InconsistentOffsetError):
       _ = input_array_1 + input_array_2
-    with self.assertRaises(grids.AlignmentError):
+    with self.assertRaises(grids.InconsistentOffsetError):
+      _ = input_array_1 - input_array_2
+
+  def test_add_sub_grid_raise(self):
+    values_1 = np.random.uniform(size=(5, 5))
+    values_2 = np.random.uniform(size=(5, 5))
+    offset = (0.5, 0.5)
+    grid_1 = grids.Grid((5, 5),
+                        domain=((0, 1), (0, 1)),
+                        boundaries=('periodic', 'periodic'))
+    grid_2 = grids.Grid((5, 5),
+                        domain=((-2, 2), (-2, 2)),
+                        boundaries=('periodic', 'periodic'))
+    input_array_1 = grids.GridArray(values_1, offset, grid_1)
+    input_array_2 = grids.GridArray(values_2, offset, grid_2)
+    with self.assertRaises(grids.InconsistentGridError):
+      _ = input_array_1 + input_array_2
+    with self.assertRaises(grids.InconsistentGridError):
       _ = input_array_1 - input_array_2
 
   def test_mul_div_correctness(self):
     values_1 = np.random.uniform(size=(5, 5))
     values_2 = np.random.uniform(size=(5, 5))
     scalar = 3.1415
-    offsets = (0.5, 0.5)
-    input_array_1 = grids.AlignedArray(values_1, offset=offsets)
-    input_array_2 = grids.AlignedArray(values_2, offset=offsets)
+    offset = (0.5, 0.5)
+    grid = grids.Grid((5, 5))
+    input_array_1 = grids.GridArray(values_1, offset, grid)
+    input_array_2 = grids.GridArray(values_2, offset, grid)
     actual_mul = input_array_1 * input_array_2
     array_1_times_scalar = input_array_1 * scalar
-    expected_1_times_scalar = grids.AlignedArray(values_1 * scalar, offsets)
+    expected_1_times_scalar = grids.GridArray(values_1 * scalar, offset, grid)
     actual_div = input_array_1 / 2.5
-    expected_div = grids.AlignedArray(values_1 / 2.5, offset=offsets)
-    expected_mul = grids.AlignedArray(values_1 * values_2, offset=offsets)
+    expected_div = grids.GridArray(values_1 / 2.5, offset, grid)
+    expected_mul = grids.GridArray(values_1 * values_2, offset, grid)
     self.assertAllClose(actual_mul, expected_mul, atol=1e-7)
     self.assertAllClose(
         array_1_times_scalar, expected_1_times_scalar, atol=1e-7)
@@ -405,13 +472,14 @@ class AlignedArrayTest(test_util.TestCase):
     values_1 = np.random.uniform(size=(5, 5))
     values_2 = np.random.uniform(size=(5, 5))
     offsets = (0.5, 0.5)
-    array = grids.AlignedArray(values_1, offsets)
+    grid = grids.Grid((5, 5))
+    array = grids.GridArray(values_1, offsets, grid)
     array += values_2
-    expected = grids.AlignedArray(values_1 + values_2, offsets)
+    expected = grids.GridArray(values_1 + values_2, offsets, grid)
     self.assertAllClose(array, expected, atol=1e-7)
 
   def test_jit(self):
-    u = grids.AlignedArray(jnp.ones([10, 10]), (.5, .5))
+    u = grids.GridArray(jnp.ones([10, 10]), (.5, .5), grids.Grid((10, 10)))
 
     def f(u):
       return u.data < 2.
@@ -419,10 +487,27 @@ class AlignedArrayTest(test_util.TestCase):
     self.assertAllClose(f(u), jax.jit(f)(u))
 
   def test_applied(self):
-    u = grids.AlignedArray(jnp.ones([10, 10]), (.5, .5))
-    expected = grids.AlignedArray(-jnp.ones([10, 10]), (.5, .5))
+    grid = grids.Grid((10, 10))
+    offset = (0.5, 0.5)
+    u = grids.GridArray(jnp.ones([10, 10]), offset, grid)
+    expected = grids.GridArray(-jnp.ones([10, 10]), offset, grid)
     actual = grids.applied(jnp.negative)(u)
     self.assertAllClose(expected, actual)
+
+
+class TensorTest(test_util.TestCase):
+
+  def test_tensor_transpose(self):
+    grid = grids.Grid((5, 5))
+    offset = (0.5, 0.5)
+    a = grids.GridArray(1 * jnp.ones([5, 5]), offset, grid)
+    b = grids.GridArray(2 * jnp.ones([5, 5]), offset, grid)
+    c = grids.GridArray(3 * jnp.ones([5, 5]), offset, grid)
+    d = grids.GridArray(4 * jnp.ones([5, 5]), offset, grid)
+    tensor = grids.Tensor([[a, b], [c, d]])
+    self.assertIsInstance(tensor, np.ndarray)
+    transposed_tensor = np.transpose(tensor)
+    self.assertAllClose(tensor[0, 1], transposed_tensor[1, 0])
 
 
 if __name__ == '__main__':

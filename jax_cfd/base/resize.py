@@ -20,13 +20,13 @@ from jax_cfd.base import array_utils as arr_utils
 from jax_cfd.base import grids
 
 Array = grids.Array
-ArrayField = Tuple[Array, ...]
-AlignedArray = grids.AlignedArray
-AlignedField = Tuple[AlignedArray, ...]
+Field = Tuple[Array, ...]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 
 
 def downsample_staggered_velocity_component(u: Array, direction: int,
-                                            factor: int):
+                                            factor: int) -> Array:
   """Downsamples `u`, an array of velocities in the given `direction`.
 
   Downsampling consists of the following steps:
@@ -70,7 +70,7 @@ def downsample_staggered_velocity_component(u: Array, direction: int,
 def downsample_staggered_velocity(
     source_grid: grids.Grid,
     destination_grid: grids.Grid,
-    velocity: Union[ArrayField, AlignedField],
+    velocity: Union[Field, GridField],
 ):
   """Downsamples each component of `v` by `factor`."""
   factor = destination_grid.step[0] / source_grid.step[0]
@@ -78,8 +78,15 @@ def downsample_staggered_velocity(
   assert round(factor) == factor, factor
   result = []
   for j, u in enumerate(velocity):
-    if isinstance(u, grids.AlignedArray):
-      downsample = grids.applied(downsample_staggered_velocity_component)
+    if isinstance(u, GridArray):
+      def downsample(u: GridArray, direction: int, factor: int) -> GridArray:
+        if u.grid != source_grid:
+          raise grids.InconsistentGridError(
+              f'source_grid for downsampling is {source_grid}, but u is defined'
+              f' on {u.grid}')
+        array = downsample_staggered_velocity_component(u.data, direction,
+                                                        round(factor))
+        return GridArray(array, offset=u.offset, grid=destination_grid)
     else:
       downsample = downsample_staggered_velocity_component
     result.append(downsample(u, j, round(factor)))

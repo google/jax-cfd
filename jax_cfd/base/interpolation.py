@@ -24,14 +24,15 @@ import numpy as np
 GridArray = grids.GridArray
 GridField = Tuple[GridArray, ...]
 InterpolationFn = Callable[
-    [GridArray, Tuple[float, ...], GridField, float],
+    [GridArray, Tuple[float, ...], grids.Grid, GridField, float],
     GridArray]
 FluxLimiter = Callable[[grids.Array], grids.Array]
 
 
 def _linear_along_axis(c: grids.GridArray,
                        offset: float,
-                       axis: int) -> grids.GridArray:
+                       axis: int,
+                       grid: grids.Grid) -> grids.GridArray:
   """Linear interpolation of `c` to `offset` along a single specified `axis`."""
   offset_delta = offset - c.offset[axis]
 
@@ -45,21 +46,22 @@ def _linear_along_axis(c: grids.GridArray,
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
     return grids.GridArray(
-        data=c.shift(int(offset_delta), axis).data,
-        offset=new_offset, grid=c.grid)
+        data=grid.shift(c, int(offset_delta), axis).data,
+        offset=new_offset, grid=grid)
 
   floor = int(np.floor(offset_delta))
   ceil = int(np.ceil(offset_delta))
   floor_weight = ceil - offset_delta
   ceil_weight = 1. - floor_weight
-  data = (floor_weight * c.shift(floor, axis).data +
-          ceil_weight * c.shift(ceil, axis).data)
-  return grids.GridArray(data=data, offset=new_offset, grid=c.grid)
+  data = (floor_weight * grid.shift(c, floor, axis).data +
+          ceil_weight * grid.shift(c, ceil, axis).data)
+  return grids.GridArray(data=data, offset=new_offset, grid=grid)
 
 
 def linear(
     c: grids.GridArray,
     offset: Tuple[float, ...],
+    grid: grids.Grid,
     v: Optional[Tuple[grids.GridArray, ...]] = None,
     dt: Optional[float] = None
 ) -> grids.GridArray:
@@ -69,6 +71,7 @@ def linear(
     c: an `GridArray`.
     offset: a tuple of floats describing the offset to which we will interpolate
       `c`. Must have the same length as `c.offset`.
+    grid: a `Grid` compatible with the values `c`.
     v: a tuple of `GridArray`s representing velocity field. Not used.
     dt: size of the time step. Not used.
 
@@ -82,13 +85,14 @@ def linear(
                      f'got {c.offset} and {offset}.')
   interpolated = c
   for a, o in enumerate(offset):
-    interpolated = _linear_along_axis(interpolated, offset=o, axis=a)
+    interpolated = _linear_along_axis(interpolated, o, a, grid)
   return interpolated
 
 
 def upwind(
     c: grids.GridArray,
     offset: Tuple[float, ...],
+    grid: grids.Grid,
     v: Tuple[grids.GridArray, ...],
     dt: Optional[float] = None
 ) -> grids.GridArray:
@@ -104,6 +108,7 @@ def upwind(
     offset: a tuple of floats describing the offset to which we will interpolate
       `c`. Must have the same length as `c.offset` and differ in at most one
       entry.
+    grid: a `Grid` on which `c` and `u` are located.
     v: a tuple of `GridArray`s representing velocity field with offsets at
       faces of `c`. One of the components must have the same offset as `offset`.
     dt: size of the time step. Not used.
@@ -132,19 +137,20 @@ def upwind(
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
     return grids.GridArray(
-        data=u.shift(int(offset_delta), axis).data,
-        offset=offset, grid=grids.consistent_grid(c, u))
+        data=grid.shift(u, int(offset_delta), axis).data,
+        offset=offset, grid=grid)
 
   floor = int(np.floor(offset_delta))
   ceil = int(np.ceil(offset_delta))
   return grids.applied(jnp.where)(
-      u > 0, c.shift(floor, axis).data, c.shift(ceil, axis).data
+      u > 0, grid.shift(c, floor, axis).data, grid.shift(c, ceil, axis).data
   )
 
 
 def lax_wendroff(
     c: grids.GridArray,
     offset: Tuple[float, ...],
+    grid: grids.Grid,
     v: Optional[Tuple[grids.GridArray, ...]] = None,
     dt: Optional[float] = None
 ) -> grids.GridArray:
@@ -168,6 +174,7 @@ def lax_wendroff(
     offset: a tuple of floats describing the offset to which we will interpolate
       `c`. Must have the same length as `c.offset` and differ in at most one
       entry.
+    grid: a `Grid` on which `c` and `u` are located.
     v: a tuple of `GridArray`s representing velocity field with offsets at
       faces of `c`. One of the components must have the same offset as `offset`.
     dt: size of the time step. Not used.
@@ -194,14 +201,13 @@ def lax_wendroff(
   offset_delta = u.offset[axis] - c.offset[axis]
   floor = int(np.floor(offset_delta))  # used for positive velocity
   ceil = int(np.ceil(offset_delta))  # used for negative velocity
-  grid = grids.consistent_grid(c, u)
   courant_numbers = (dt / grid.step[axis]) * u.data
   positive_u_case = (
-      c.shift(floor, axis).data + 0.5 * (1 - courant_numbers) *
-      (c.shift(ceil, axis).data - c.shift(floor, axis).data))
+      grid.shift(c, floor, axis).data + 0.5 * (1 - courant_numbers) *
+      (grid.shift(c, ceil, axis).data - grid.shift(c, floor, axis).data))
   negative_u_case = (
-      c.shift(ceil, axis).data - 0.5 * (1 + courant_numbers) *
-      (c.shift(ceil, axis).data - c.shift(floor, axis).data))
+      grid.shift(c, ceil, axis).data - 0.5 * (1 + courant_numbers) *
+      (grid.shift(c, ceil, axis).data - grid.shift(c, floor, axis).data))
   return grids.where(u > 0, positive_u_case, negative_u_case)
 
 
@@ -241,7 +247,7 @@ def apply_tvd_limiter(
     Interpolation method that uses a combination of high and low order methods
     to produce monotonic interpolation method.
   """
-  def tvd_interpolation(c, offset, v, dt):
+  def tvd_interpolation(c, offset, grid, v, dt):
     """Interpolated `c` to offset `offset`."""
     for axis, axis_offset in enumerate(offset):
       interpolation_offset = tuple([
@@ -252,27 +258,27 @@ def apply_tvd_limiter(
         if interpolation_offset[axis] - c.offset[axis] != 0.5:
           raise NotImplementedError('tvd_interpolation only supports forward '
                                     'interpolation to control volume faces.')
-        c_low = upwind(c, offset, v, dt)
-        c_high = interpolation_fn(c, offset, v, dt)
+        c_low = upwind(c, offset, grid, v, dt)
+        c_high = interpolation_fn(c, offset, grid, v, dt)
 
         # because we are interpolating to the right we are using 2 points ahead
         # and 2 points behind: `c`, `c_left`.
-        c_left = c.shift(-1, axis)
-        c_right = c.shift(1, axis)
-        c_next_right = c.shift(2, axis)
+        c_left = grid.shift(c, -1, axis)
+        c_right = grid.shift(c, 1, axis)
+        c_next_right = grid.shift(c, 2, axis)
         # Velocities of different sign are evaluated with limiters at different
         # points. See equations (4.34) -- (4.39) from the reference above.
         positive_u_r = safe_div(c.data - c_left.data, c_right.data - c.data)
         negative_u_r = safe_div(c_next_right.data - c_right.data,
                                 c_right.data - c.data)
         positive_u_phi = grids.GridArray(
-            limiter(positive_u_r), c_low.offset, c.grid)
+            limiter(positive_u_r), c_low.offset, grid)
         negative_u_phi = grids.GridArray(
-            limiter(negative_u_r), c_low.offset, c.grid)
+            limiter(negative_u_r), c_low.offset, grid)
         u = v[axis]
         phi = grids.applied(jnp.where)(u > 0, positive_u_phi, negative_u_phi)
         c_interpolated = c_low - (c_low - c_high) * phi
-        c = grids.GridArray(c_interpolated.data, interpolation_offset, c.grid)
+        c = grids.GridArray(c_interpolated.data, interpolation_offset, grid)
     return c
 
   return tvd_interpolation

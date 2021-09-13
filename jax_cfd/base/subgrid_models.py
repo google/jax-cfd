@@ -62,14 +62,14 @@ def smagorinsky_viscosity(
   s_ij_offsets = [array.offset for array in s_ij.ravel()]
   unique_offsets = list(set(s_ij_offsets))
   cell_center = grid.cell_center
-  interpolate_to_center = lambda x: interpolate_fn(x, cell_center, v, dt)
+  interpolate_to_center = lambda x: interpolate_fn(x, cell_center, grid, v, dt)
   centered_s_ij = np.vectorize(interpolate_to_center)(s_ij)
   # geometric average
   cutoff = np.prod(np.array(grid.step))**(1 / grid.ndim)
   viscosity = (cs * cutoff)**2 * np.sqrt(
       2 * np.trace(centered_s_ij.dot(centered_s_ij)))
   viscosities_dict = {
-      offset: interpolate_fn(viscosity, offset, v, dt).data
+      offset: interpolate_fn(viscosity, offset, grid, v, dt).data
       for offset in unique_offsets}
   viscosities = [viscosities_dict[offset] for offset in s_ij_offsets]
   return jax.tree_unflatten(jax.tree_util.tree_structure(s_ij), viscosities)

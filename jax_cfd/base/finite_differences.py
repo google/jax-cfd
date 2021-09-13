@@ -150,7 +150,7 @@ def gradient_tensor(v):
       deriv_fn = central_difference
 
     derivative = deriv_fn(v, axis)
-    grad.append(interpolation.linear(derivative, v.grid.cell_center, v.grid))
+    grad.append(interpolation.linear(derivative, v.grid.cell_center))
   return Tensor(grad)
 
 

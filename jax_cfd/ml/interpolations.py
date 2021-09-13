@@ -95,10 +95,15 @@ class FusedLearnedInterpolation:
           for (k, derivative), logits in zip(derivatives.items(), split_logits)
       }
 
-  def __call__(self, c, offset, grid, v, dt, tag=None):
+  def __call__(self,
+               c: GridArray,
+               offset: Tuple[int, ...],
+               v: GridField,
+               dt: float,
+               tag=None) -> GridArray:
     del dt  # not used.
     # TODO(dkochkov) Add decorator to expand/squeeze channel dim.
-    c = grids.GridArray(jnp.expand_dims(c.data, -1), c.offset, grid)
+    c = grids.GridArray(jnp.expand_dims(c.data, -1), c.offset, c.grid)
     # TODO(jamieas): Try removing the following line.
     if c.offset == offset: return c
     key = (c.offset, offset, tag)
@@ -107,7 +112,7 @@ class FusedLearnedInterpolation:
       raise KeyError(f'No interpolator for key {key}. '
                      f'Available keys: {list(self._interpolators.keys())}')
     result = jnp.squeeze(interpolator(c.data), axis=-1)
-    return grids.GridArray(result, offset, grid)
+    return grids.GridArray(result, offset, c.grid)
 
 
 def _nearest_neighhbor_stencil_size_fn(
@@ -146,7 +151,7 @@ class IndividualLearnedInterpolation:
       grid: grids.Grid,
       dt: float,
       physics_specs: physics_specifications.BasePhysicsSpecs,
-      v,
+      v: GridField,
       stencil_size=4,
       tower_factory=towers.forward_tower_factory,
   ):
@@ -167,7 +172,8 @@ class IndividualLearnedInterpolation:
         (0,) * self._ndim, self._tower_factory, self._steps)
     return self._modules[offsets]
 
-  def __call__(self, c, offset, grid, v, dt):
+  def __call__(self, c: GridArray, offset: Tuple[int, ...], v: GridField,
+               dt: float) -> GridArray:
     """Interpolates `c` to `offset`."""
     del dt  # not used.
     if c.offset == offset: return c
@@ -175,7 +181,7 @@ class IndividualLearnedInterpolation:
     c_input = jnp.expand_dims(c.data, axis=-1)
     aux_inputs = [jnp.expand_dims(u.data, axis=-1) for u in v]
     res = self._get_interpolation_module(offsets)(c_input, *aux_inputs)
-    return grids.GridArray(jnp.squeeze(res, axis=-1), offset, grid)
+    return grids.GridArray(jnp.squeeze(res, axis=-1), offset, c.grid)
 
 
 @gin.configurable

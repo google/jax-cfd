@@ -62,11 +62,12 @@ def _advect_aligned(cs: GridField,
   """
   # TODO(jamieas): add more sophisticated alignment checks, ensuring that the
   # values are located on the faces of a control volume.
+  del grid  # TODO(pnorgaard): refactor out grid arg
   if len(cs) != len(v):
     raise ValueError('`cs` and `v` must have the same length;'
                      f'got {len(cs)} vs. {len(v)}.')
   uc = tuple(c * u for c, u in zip(cs, v))
-  return -fd.divergence(uc, grid)
+  return -fd.divergence(uc)
 
 
 def advect_general(
@@ -196,7 +197,7 @@ def convect_linear(v: GridField,
   # TODO(jamieas): incorporate variable density.
   aligned_v = _align_velocities(v, grid)
   flux = _velocities_to_flux(aligned_v)
-  return tuple(-fd.divergence(f, grid) for f in flux)
+  return tuple(-fd.divergence(f) for f in flux)
 
 
 def advect_van_leer(
@@ -271,7 +272,7 @@ def advect_van_leer(
         u > 0, forward_correction, backward_correction)
     flux = upwind_flux + flux_correction
     fluxes.append(flux)
-  advection = -fd.divergence(fluxes, grid)
+  advection = -fd.divergence(fluxes)
   return advection
 
 

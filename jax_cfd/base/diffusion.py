@@ -31,7 +31,8 @@ GridField = Tuple[GridArray, ...]
 
 def diffuse(c: GridArray, nu: float, grid: grids.Grid) -> GridArray:
   """Returns the rate of change in a concentration `c` due to diffusion."""
-  return nu * fd.laplacian(c, grid)
+  del grid  # TODO(pnorgaard): refactor out grid arg
+  return nu * fd.laplacian(c)
 
 
 def stable_time_step(viscosity: float, grid: grids.Grid) -> float:
@@ -62,9 +63,9 @@ def solve_cg(v: Sequence[GridArray],
              atol: float = 1e-6,
              maxiter: Optional[int] = None) -> GridField:
   """Conjugate gradient solve for diffusion."""
-
+  del grid  # TODO(pnorgaard): refactor out grid arg
   def linear_op(u: GridArray) -> GridArray:
-    return u - dt * nu * fd.laplacian(u, grid)
+    return u - dt * nu * fd.laplacian(u)
 
   def inv(b: GridArray, x0: GridArray) -> GridArray:
     x, _ = jax.scipy.sparse.linalg.cg(

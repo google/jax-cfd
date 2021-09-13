@@ -67,7 +67,7 @@ class FiniteDifferenceTest(test_util.TestCase):
     grid = grid_type(shape, step)
     u = grids.GridArray(
         jnp.arange(np.prod(shape)).reshape(shape), (0, 0, 0), grid)
-    actual_x, actual_y, actual_z = method(u, grid)
+    actual_x, actual_y, actual_z = method(u)
 
     x, y, z = jnp.meshgrid(*[jnp.arange(s) for s in shape], indexing='ij')
 
@@ -130,7 +130,7 @@ class FiniteDifferenceTest(test_util.TestCase):
     mesh = grid.mesh()
     u = grids.GridArray(f(*mesh), offset, grid)
     expected_grad = jnp.stack([df(*mesh) for df in gradf])
-    actual_grad = [array.data for array in method(u, grid)]
+    actual_grad = [array.data for array in method(u)]
     self.assertAllClose(expected_grad, actual_grad, atol=atol)
 
   @parameterized.named_parameters(
@@ -160,7 +160,7 @@ class FiniteDifferenceTest(test_util.TestCase):
     mesh = grid.mesh(offset)
     u = grids.GridArray(f(*mesh), offset, grid)
     expected_laplacian = _trim_boundary(grids.GridArray(g(*mesh), offset, grid))
-    actual_laplacian = _trim_boundary(fd.laplacian(u, grid))
+    actual_laplacian = _trim_boundary(fd.laplacian(u))
     self.assertAllClose(expected_laplacian, actual_laplacian, atol=atol)
 
   @parameterized.named_parameters(
@@ -193,7 +193,7 @@ class FiniteDifferenceTest(test_util.TestCase):
          for axis, offset in enumerate(offsets)]
     expected_divergence = _trim_boundary(
         grids.GridArray(g(*grid.mesh()), (0,) * grid.ndim, grid))
-    actual_divergence = _trim_boundary(fd.divergence(v, grid))
+    actual_divergence = _trim_boundary(fd.divergence(v))
     self.assertAllClose(expected_divergence, actual_divergence, atol=atol)
 
   # pylint: disable=g-long-lambda
@@ -236,7 +236,7 @@ class FiniteDifferenceTest(test_util.TestCase):
         for axis, offset in enumerate(offsets)
     ]
     expected_gradient = g(*grid.mesh())
-    actual_gradient = fd.gradient_tensor(v, grid)
+    actual_gradient = fd.gradient_tensor(v)
     for i in range(grid.ndim):
       for j in range(len(v)):
         print('i and j are', i, j)
@@ -269,7 +269,7 @@ class FiniteDifferenceTest(test_util.TestCase):
     result_offset = (0.5, 0.5)
     expected_curl = _trim_boundary(
         grids.GridArray(g(*grid.mesh(result_offset)), result_offset, grid))
-    actual_curl = _trim_boundary(fd.curl_2d(v, grid))
+    actual_curl = _trim_boundary(fd.curl_2d(v))
     self.assertAllClose(expected_curl, actual_curl, atol=atol)
 
   @parameterized.named_parameters(
@@ -294,7 +294,7 @@ class FiniteDifferenceTest(test_util.TestCase):
             grids.GridArray(g(*grid.mesh(offset))[axis], offset, grid))
         for axis, offset in enumerate(expected_offsets)
     ]
-    actual_curl = list(map(_trim_boundary, fd.curl_3d(v, grid)))
+    actual_curl = list(map(_trim_boundary, fd.curl_3d(v)))
     self.assertEqual(len(actual_curl), 3)
     self.assertAllClose(expected_curl[0], actual_curl[0], atol=atol)
     self.assertAllClose(expected_curl[1], actual_curl[1], atol=atol)

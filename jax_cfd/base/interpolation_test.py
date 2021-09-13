@@ -42,7 +42,7 @@ class LinearInterpolationTest(test_util.TestCase):
     grid = grids.Grid(shape, step)
     u = grids.GridArray(jnp.ones(shape), jnp.zeros(shape), grid)
     with self.assertRaises(ValueError):
-      interpolation.linear(u, offset)
+      interpolation.linear(u, offset, grid)
 
   @parameterized.named_parameters(
       dict(testcase_name='_1D',
@@ -74,7 +74,7 @@ class LinearInterpolationTest(test_util.TestCase):
     initial_u = grids.GridArray(f(initial_mesh), initial_offset, grid)
 
     final_mesh = grid.mesh(offset=final_offset)
-    final_u = interpolation.linear(initial_u, final_offset)
+    final_u = interpolation.linear(initial_u, final_offset, grid)
 
     expected_data = spi.interpn(initial_axes,
                                 initial_u.data,
@@ -110,7 +110,7 @@ class UpwindInterpolationTest(test_util.TestCase):
     grid = grids.Grid(grid_shape, grid_step)
     c = grids.GridArray(jnp.ones(grid_shape), offset=c_offset, grid=grid)
     with self.assertRaises(grids.InconsistentOffsetError):
-      interpolation.upwind(c, u_offset, None)
+      interpolation.upwind(c, u_offset, grid, None)
 
   @parameterized.named_parameters(
       dict(testcase_name='_2D_positive',
@@ -151,7 +151,7 @@ class UpwindInterpolationTest(test_util.TestCase):
     v = tuple(
         u if axis == u_axis else None for axis, _ in enumerate(u_offset)
     )
-    final_c = interpolation.upwind(initial_c, u_offset, v)
+    final_c = interpolation.upwind(initial_c, u_offset, grid, v)
     self.assertAllClose(expected_data(), final_c.data)
     self.assertAllClose(u_offset, final_c.offset)
 

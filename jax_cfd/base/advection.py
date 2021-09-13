@@ -14,7 +14,7 @@
 
 """Module for functionality related to advection."""
 
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import finite_differences as fd
@@ -23,7 +23,6 @@ from jax_cfd.base import interpolation
 
 GridArray = grids.GridArray
 GridField = Tuple[GridArray, ...]
-InterpolationFn = interpolation.InterpolationFn
 # TODO(dkochkov) Consider testing if we need operator splitting methods.
 
 
@@ -75,9 +74,10 @@ def advect_general(
     c: GridArray,
     v: GridField,
     grid: grids.Grid,
-    u_interpolation_fn: InterpolationFn,
-    c_interpolation_fn: InterpolationFn,
-    dt: Optional[float] = None) -> GridArray:
+    u_interpolation_fn: Callable[..., GridArray],
+    c_interpolation_fn: Callable[..., GridArray],
+    dt: Optional[float] = None
+):
   """Computes advection of a scalar quantity `c` by the velocity field `v`.
 
   This function follows the following procedure:
@@ -100,9 +100,9 @@ def advect_general(
     The time derivative of `c` due to advection by `v`.
   """
   target_offsets = grids.control_volume_offsets(c)
-  aligned_v = tuple(u_interpolation_fn(u, target_offset, v, dt)
+  aligned_v = tuple(u_interpolation_fn(u, target_offset, grid, v, dt)
                     for u, target_offset in zip(v, target_offsets))
-  aligned_c = tuple(c_interpolation_fn(c, target_offset, aligned_v, dt)
+  aligned_c = tuple(c_interpolation_fn(c, target_offset, grid, aligned_v, dt)
                     for target_offset in target_offsets)
   res = _advect_aligned(aligned_c, aligned_v, grid)
   return res
@@ -126,27 +126,29 @@ def advect_upwind(c: GridArray,
       c, v, grid, interpolation.linear, interpolation.upwind, dt)
 
 
-def _align_velocities(v: GridField) -> Tuple[GridField]:
+def _align_velocities(v: GridField,
+                      grid: grids.Grid) -> Tuple[GridField]:
   """Returns interpolated components of `v` needed for convection.
 
   Args:
     v: a velocity field.
+    grid: the `Grid` on which `v` is located.
 
   Returns:
     A d-tuple of d-tuples of `GridArray`s `aligned_v`, where `d = len(v)`.
     The entry `aligned_v[i][j]` is the component `v[i]` after interpolation to
     the appropriate face of the control volume centered around `v[j]`.
   """
-  grid = grids.consistent_grid(*v)
   offsets = tuple(grids.control_volume_offsets(u) for u in v)
   aligned_v = tuple(
-      tuple(interpolation.linear(v[i], offsets[i][j])
+      tuple(interpolation.linear(v[i], offsets[i][j], grid)
             for j in range(grid.ndim))
       for i in range(grid.ndim))
   return aligned_v
 
 
-def _velocities_to_flux(aligned_v: Tuple[GridField]) -> Tuple[GridField]:
+def _velocities_to_flux(
+    aligned_v: Tuple[GridField]) -> Tuple[GridField]:
   """Computes the fluxes across the control volume faces for a velocity field.
 
   Args:
@@ -193,8 +195,7 @@ def convect_linear(v: GridField,
   """
   # TODO(jamieas): consider a more efficient vectorization of this function.
   # TODO(jamieas): incorporate variable density.
-  del grid  # TODO(pnorgaard): refactor out grid arg
-  aligned_v = _align_velocities(v)
+  aligned_v = _align_velocities(v, grid)
   flux = _velocities_to_flux(aligned_v)
   return tuple(-fd.divergence(f) for f in flux)
 
@@ -237,7 +238,7 @@ def advect_van_leer(
   """
   # TODO(dkochkov) reimplement this using apply_limiter method.
   offsets = grids.control_volume_offsets(c)
-  aligned_v = tuple(interpolation.linear(u, offset)
+  aligned_v = tuple(interpolation.linear(u, offset, grid)
                     for u, offset in zip(v, offsets))
 
   fluxes = []
@@ -297,9 +298,7 @@ def advect_step_semilagrangian(
   """
   # Reference: "Learning to control PDEs with Differentiable Physics"
   # https://openreview.net/pdf?id=HyeSin4FPB (see Appendix A)
-  del grid  # TODO(pnorgaard): refactor out grid arg
-  grid = grids.consistent_grid(c, *v)
-  coords = [x - dt * interpolation.linear(u, c.offset).data
+  coords = [x - dt * interpolation.linear(u, c.offset, grid).data
             for x, u in zip(grid.mesh(c.offset), v)]
   indices = [x / s - o for s, o, x in zip(grid.step, c.offset, coords)]
   if set(grid.boundaries) != {grids.PERIODIC}:

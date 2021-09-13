@@ -64,7 +64,7 @@ def aligned_field_from_split_divergence(
     # tuple(zip(*([iter(a)] * 2))) >>> ((1, 2), (3, 4))
     split_inputs = tuple(zip(*[iter(split_inputs)] * grid.ndim))
     tensor_inputs = grids.Tensor(split_inputs)
-    return tuple(-finite_differences.divergence(tensor_inputs[i, :])
+    return tuple(-finite_differences.divergence(tensor_inputs[i, :], grid)
                  for i in range(grid.ndim))
 
   return hk.to_module(process)()

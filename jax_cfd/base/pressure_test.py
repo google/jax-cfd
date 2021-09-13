@@ -94,7 +94,7 @@ class PressureTest(test_util.TestCase):
     v_corrected = pressure.projection(v, grid, solve)
 
     # The corrected velocity should be divergence free.
-    div = fd.divergence(v_corrected)
+    div = fd.divergence(v_corrected, grid)
     for u, u_corrected in zip(v, v_corrected):
       np.testing.assert_allclose(u.offset, u_corrected.offset)
     np.testing.assert_allclose(div.data, 0., atol=1e-4)

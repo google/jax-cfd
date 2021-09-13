@@ -260,7 +260,7 @@ class Tensor(np.ndarray):
   multiplications of physical tensor quantities is meaningful.
 
   Example usage:
-    grad = fd.gradient_tensor(uv)                    # a rank 2 Tensor
+    grad = fd.gradient_tensor(uv, grid)              # a rank 2 Tensor
     strain_rate = (grad + grad.T) / 2.
     nu_smag = np.sqrt(np.trace(strain_rate.dot(strain_rate)))
     nu_smag = Tensor(nu_smag)                        # a rank 0 Tensor

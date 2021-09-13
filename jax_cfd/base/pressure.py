@@ -14,6 +14,7 @@
 
 """Functions for computing and applying pressure."""
 
+import functools
 from typing import Callable, Optional, Sequence, Tuple
 
 import jax.numpy as jnp
@@ -58,12 +59,12 @@ def solve_cg(v: Sequence[GridArray],
     A pressure correction `q` such that `div(v - grad(q))` is zero.
   """
   # TODO(jamieas): add functionality for non-uniform density.
-  del grid  # TODO(pnorgaard): refactor out grid arg
-  rhs = fd.divergence(v)
+  rhs = fd.divergence(v, grid)
   if q0 is None:
     q0 = grids.applied(jnp.zeros_like)(rhs)
+  laplacian = functools.partial(fd.laplacian, grid=grid)
   q, _ = jax.scipy.sparse.linalg.cg(
-      fd.laplacian, rhs, x0=q0, tol=rtol, atol=atol, maxiter=maxiter)
+      laplacian, rhs, x0=q0, tol=rtol, atol=atol, maxiter=maxiter)
   return q
 
 
@@ -73,7 +74,7 @@ def solve_fast_diag(v: Sequence[GridArray],
                     implementation: Optional[str] = None) -> GridArray:
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
-  rhs = fd.divergence(v)
+  rhs = fd.divergence(v, grid)
   laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))
   pinv = fast_diagonalization.psuedoinverse(
       laplacians, rhs.dtype,
@@ -88,6 +89,6 @@ def projection(
 ) -> GridField:
   """Apply pressure projection to make a velocity field divergence free."""
   q = solve(v, grid)
-  q_grad = fd.forward_difference(q)
+  q_grad = fd.forward_difference(q, grid)
   projected = tuple(u - q_g for u, q_g in zip(v, q_grad))
   return projected

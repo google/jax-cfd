@@ -63,8 +63,8 @@ def momentum(v, density, grid):
       grid.step).prod()
 
 
-def _convect_upwind(v, g):
-  return tuple(advection.advect_upwind(u, v, g) for u in v)
+def _convect_upwind(v):
+  return tuple(advection.advect_upwind(u, v) for u in v)
 
 
 class SemiImplicitNavierStokesTest(test_util.TestCase):

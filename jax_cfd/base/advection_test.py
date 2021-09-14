@@ -66,8 +66,8 @@ def _total_variation(array, motion_axis):
 
 
 def _euler_step(advection_method):
-  def step(c, v, grid, dt):
-    return c + dt * advection_method(c, v, grid, dt)
+  def step(c, v, dt):
+    return c + dt * advection_method(c, v, dt)
   return step
 
 
@@ -152,7 +152,7 @@ class AdvectionTest(test_util.TestCase):
     c = _gaussian_concentration(grid)
 
     dt = cfl_number * min(step)
-    advect = functools.partial(method, v=v, grid=grid, dt=dt)
+    advect = functools.partial(method, v=v, dt=dt)
     evolve = jax.jit(funcutils.repeated(advect, num_steps))
     ct = evolve(c)
 
@@ -228,7 +228,7 @@ class AdvectionTest(test_util.TestCase):
     c_init = _gaussian_concentration(grid)
 
     dt = cfl_number * min(step)
-    advect = jax.remat(functools.partial(method, v=v, grid=grid, dt=dt))
+    advect = jax.remat(functools.partial(method, v=v, dt=dt))
     evolve = jax.jit(funcutils.repeated(advect, steps=10))
 
     def objective(c_init):
@@ -254,9 +254,9 @@ class AdvectionTest(test_util.TestCase):
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
     v = _cos_velocity(grid)
-    self_advected = convection_method(v, grid)
+    self_advected = convection_method(v)
     for u, du in zip(v, self_advected):
-      advected_component = advection_method(u, v, grid)
+      advected_component = advection_method(u, v)
 
       self.assertAllClose(advected_component, du)
 
@@ -283,7 +283,7 @@ class AdvectionTest(test_util.TestCase):
     num_steps = 300
     ct = c
 
-    advect = jax.jit(functools.partial(method, v=v, grid=grid, dt=dt))
+    advect = jax.jit(functools.partial(method, v=v, dt=dt))
 
     initial_total_variation = _total_variation(c, 0) + atol
     for _ in range(num_steps):
@@ -311,11 +311,10 @@ class AdvectionTest(test_util.TestCase):
     dt = min(step) / 100.
     num_steps = 100
     advect_vl = jax.jit(
-        functools.partial(_euler_step(adv.advect_van_leer),
-                          v=v, grid=grid, dt=dt))
+        functools.partial(_euler_step(adv.advect_van_leer), v=v, dt=dt))
     advect_vl_using_limiter = jax.jit(
-        functools.partial(_euler_step(adv.advect_van_leer_using_limiters),
-                          v=v, grid=grid, dt=dt))
+        functools.partial(
+            _euler_step(adv.advect_van_leer_using_limiters), v=v, dt=dt))
     c_vl = c
     c_vl_using_limiter = c
     for _ in range(num_steps):

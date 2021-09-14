@@ -75,9 +75,9 @@ def semi_implicit_navier_stokes(
   """Returns a function that performs a time step of Navier Stokes."""
 
   if convect is None:
-    def convect(v, grid):  # pylint: disable=function-redefined
+    def convect(v):  # pylint: disable=function-redefined
       return tuple(
-          advection.advect_van_leer_using_limiters(u, v, grid, dt) for u in v)
+          advection.advect_van_leer_using_limiters(u, v, dt) for u in v)
 
   convect = jax.named_call(convect, name='convection')
   diffuse = jax.named_call(diffuse, name='diffusion')
@@ -88,7 +88,7 @@ def semi_implicit_navier_stokes(
   @jax.named_call
   def navier_stokes_step(v: GridField) -> GridField:
     """Computes state at time `t + dt` using first order time integration."""
-    convection = convect(v, grid)
+    convection = convect(v)
     accelerations = [convection]
     if viscosity:
       diffusion_ = tuple(diffuse(u, viscosity / density, grid) for u in v)
@@ -117,9 +117,9 @@ def implicit_diffusion_navier_stokes(
   """Returns a function that performs a time step of Navier Stokes."""
 
   if convect is None:
-    def convect(v, grid):  # pylint: disable=function-redefined
+    def convect(v):  # pylint: disable=function-redefined
       return tuple(
-          advection.advect_van_leer_using_limiters(u, v, grid, dt) for u in v)
+          advection.advect_van_leer_using_limiters(u, v, dt) for u in v)
 
   convect = jax.named_call(convect, name='convection')
   pressure_projection = jax.named_call(pressure.projection, name='pressure')
@@ -128,7 +128,7 @@ def implicit_diffusion_navier_stokes(
   @jax.named_call
   def navier_stokes_step(v: GridField) -> GridField:
     """Computes state at time `t + dt` using first order time integration."""
-    convection = convect(v, grid)
+    convection = convect(v)
     accelerations = [convection]
     if forcing is not None:
       # TODO(shoyer): include time in state?

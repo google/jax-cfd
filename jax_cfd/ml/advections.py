@@ -12,9 +12,9 @@ from jax_cfd.ml import physics_specifications
 GridArray = grids.GridArray
 GridField = Tuple[GridArray, ...]
 InterpolationModule = interpolations.InterpolationModule
-AdvectFn = Callable[[GridArray, GridField, grids.Grid, float], GridArray]
+AdvectFn = Callable[[GridArray, GridField, float], GridArray]
 AdvectionModule = Callable[..., AdvectFn]
-ConvectFn = Callable[[GridField, grids.Grid], GridField]
+ConvectFn = Callable[[GridField], GridField]
 ConvectionModule = Callable[..., ConvectFn]
 
 
@@ -34,11 +34,10 @@ def modular_advection(
   def advect(
       c: GridArray,
       v: GridField,
-      grid: grids.Grid,
       dt: Optional[float] = None
   ) -> GridArray:
     return advection.advect_general(
-        c, v, grid, u_interpolate_fn, c_interpolate_fn, dt)
+        c, v, u_interpolate_fn, c_interpolate_fn, dt)
 
   return advect
 
@@ -61,11 +60,10 @@ def modular_self_advection(
   def advect(
       c: GridArray,
       v: GridField,
-      grid: grids.Grid,
       dt: Optional[float] = None
   ) -> GridArray:
     return advection.advect_general(
-        c, v, grid, u_interpolate_fn, c_interpolate_fn, dt)
+        c, v, u_interpolate_fn, c_interpolate_fn, dt)
 
   return advect
 
@@ -81,7 +79,7 @@ def self_advection(
   """Convection module based on simultaneous self-advection of velocities."""
   advect_fn = advection_module(grid, dt, physics_specs, **kwargs)
 
-  def convect(v: GridField, grid: grids.Grid) -> GridField:
-    return tuple(advect_fn(u, v, grid, dt) for u in v)
+  def convect(v: GridField) -> GridField:
+    return tuple(advect_fn(u, v, dt) for u in v)
 
   return convect

@@ -27,9 +27,7 @@ InterpolationFn = interpolation.InterpolationFn
 # TODO(dkochkov) Consider testing if we need operator splitting methods.
 
 
-def _advect_aligned(cs: GridField,
-                    v: GridField,
-                    grid: grids.Grid) -> GridArray:
+def _advect_aligned(cs: GridField, v: GridField) -> GridArray:
   """Computes fluxes and the associated advection for aligned `cs` and `v`.
 
   The values `cs` should consist of a single quantity `c` that has been
@@ -50,8 +48,8 @@ def _advect_aligned(cs: GridField,
   Args:
     cs: a sequence of `GridArray`s; a single value `c` that has been
       interpolated so that it is aligned with each component of `v`.
-    v: a sequence of `GridArrays` describing a velocity field.
-    grid: the `Grid` on which `cs` and `v` are located.
+    v: a sequence of `GridArrays` describing a velocity field. Should be defined
+      on the same Grid as cs.
 
   Returns:
     An `GridArray` containing the time derivative of `c` due to advection by
@@ -63,7 +61,6 @@ def _advect_aligned(cs: GridField,
   """
   # TODO(jamieas): add more sophisticated alignment checks, ensuring that the
   # values are located on the faces of a control volume.
-  del grid  # TODO(pnorgaard): refactor out grid arg
   if len(cs) != len(v):
     raise ValueError('`cs` and `v` must have the same length;'
                      f'got {len(cs)} vs. {len(v)}.')
@@ -74,7 +71,6 @@ def _advect_aligned(cs: GridField,
 def advect_general(
     c: GridArray,
     v: GridField,
-    grid: grids.Grid,
     u_interpolation_fn: InterpolationFn,
     c_interpolation_fn: InterpolationFn,
     dt: Optional[float] = None) -> GridArray:
@@ -90,8 +86,7 @@ def advect_general(
 
   Args:
     c: the quantity to be transported.
-    v: a velocity field.
-    grid: the `Grid` on which `c` and `v` are located.
+    v: a velocity field. Should be defined on the same Grid as c.
     u_interpolation_fn: method for interpolating velocity field `v`.
     c_interpolation_fn: method for interpolating scalar field `c`.
     dt: unused time-step.
@@ -104,26 +99,22 @@ def advect_general(
                     for u, target_offset in zip(v, target_offsets))
   aligned_c = tuple(c_interpolation_fn(c, target_offset, aligned_v, dt)
                     for target_offset in target_offsets)
-  res = _advect_aligned(aligned_c, aligned_v, grid)
+  res = _advect_aligned(aligned_c, aligned_v)
   return res
 
 
 def advect_linear(c: GridArray,
                   v: GridField,
-                  grid: grids.Grid,
                   dt: Optional[float] = None) -> GridArray:
   """Computes advection using linear interpolations."""
-  return advect_general(
-      c, v, grid, interpolation.linear, interpolation.linear, dt)
+  return advect_general(c, v, interpolation.linear, interpolation.linear, dt)
 
 
 def advect_upwind(c: GridArray,
                   v: GridField,
-                  grid: grids.Grid,
                   dt: Optional[float] = None) -> GridArray:
   """Computes advection using first-order upwind interpolation on `c`."""
-  return advect_general(
-      c, v, grid, interpolation.linear, interpolation.upwind, dt)
+  return advect_general(c, v, interpolation.linear, interpolation.upwind, dt)
 
 
 def _align_velocities(v: GridField) -> Tuple[GridField]:
@@ -170,8 +161,7 @@ def _velocities_to_flux(aligned_v: Tuple[GridField]) -> Tuple[GridField]:
   return tuple(flux)
 
 
-def convect_linear(v: GridField,
-                   grid: grids.Grid) -> GridField:
+def convect_linear(v: GridField) -> GridField:
   """Computes convection/self-advection of the velocity field `v`.
 
   This function is conceptually equivalent to
@@ -185,7 +175,6 @@ def convect_linear(v: GridField,
 
   Args:
     v: a velocity field.
-    grid: the `Grid` on which `c` and `v` are located.
 
   Returns:
     A tuple containing the time derivative of each component of `v` due to
@@ -193,7 +182,6 @@ def convect_linear(v: GridField,
   """
   # TODO(jamieas): consider a more efficient vectorization of this function.
   # TODO(jamieas): incorporate variable density.
-  del grid  # TODO(pnorgaard): refactor out grid arg
   aligned_v = _align_velocities(v)
   flux = _velocities_to_flux(aligned_v)
   return tuple(-fd.divergence(f) for f in flux)
@@ -202,7 +190,6 @@ def convect_linear(v: GridField,
 def advect_van_leer(
     c: GridArray,
     v: GridField,
-    grid: grids.Grid,
     dt: float
 ) -> GridArray:
   """Computes advection of a scalar quantity `c` by the velocity field `v`.
@@ -221,8 +208,7 @@ def advect_van_leer(
 
   Args:
     c: the quantity to be transported.
-    v: a velocity field.
-    grid: the `Grid` on which `c` and `v` are located.
+    v: a velocity field. Should be defined on the same Grid as c.
     dt: time step for which this scheme is TVD and second order accurate
       in time.
 
@@ -236,7 +222,6 @@ def advect_van_leer(
 
   """
   # TODO(dkochkov) reimplement this using apply_limiter method.
-  del grid  # TODO(pnorgaard): refactor out grid arg
   offsets = grids.control_volume_offsets(c)
   aligned_v = tuple(interpolation.linear(u, offset)
                     for u, offset in zip(v, offsets))
@@ -279,7 +264,6 @@ def advect_van_leer(
 def advect_step_semilagrangian(
     c: GridArray,
     v: GridField,
-    grid: grids.Grid,
     dt: float
 ) -> GridArray:
   """Semi-Lagrangian advection of a scalar quantity.
@@ -289,8 +273,7 @@ def advect_step_semilagrangian(
 
   Args:
     c: the quantity to be transported.
-    v: a velocity field.
-    grid: the `Grid` on which `c` and `v` are located.
+    v: a velocity field. Should be defined on the same Grid as c.
     dt: desired time-step.
 
   Returns:
@@ -298,7 +281,6 @@ def advect_step_semilagrangian(
   """
   # Reference: "Learning to control PDEs with Differentiable Physics"
   # https://openreview.net/pdf?id=HyeSin4FPB (see Appendix A)
-  del grid  # TODO(pnorgaard): refactor out grid arg
   grid = grids.consistent_grid(c, *v)
   coords = [x - dt * interpolation.linear(u, c.offset).data
             for x, u in zip(grid.mesh(c.offset), v)]
@@ -315,14 +297,12 @@ def advect_step_semilagrangian(
 def advect_van_leer_using_limiters(
     c: GridArray,
     v: GridField,
-    grid: grids.Grid,
     dt: float
 ) -> GridArray:
   """Implements Van-Leer advection by applying TVD limiter to Lax-Wendroff."""
   c_interpolation_fn = interpolation.apply_tvd_limiter(
       interpolation.lax_wendroff, limiter=interpolation.van_leer_limiter)
-  return advect_general(
-      c, v, grid, interpolation.linear, c_interpolation_fn, dt)
+  return advect_general(c, v, interpolation.linear, c_interpolation_fn, dt)
 
 
 def stable_time_step(max_velocity: float,

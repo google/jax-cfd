@@ -27,7 +27,7 @@ from jax_cfd.base import test_util
 import numpy as np
 
 
-def sinusoidal_field(grid):
+def sinusoidal_field(grid: grids.Grid):
   """Returns a divergence-free flow on `grid`."""
   mesh_size = jnp.array(grid.shape) * jnp.array(grid.step)
   vs = tuple(jnp.sin(2. * np.pi * g / s)
@@ -36,7 +36,7 @@ def sinusoidal_field(grid):
                for v, o in zip(vs[1:] + vs[:1], grid.cell_faces))
 
 
-def gaussian_field(grid):
+def gaussian_field(grid: grids.Grid):
   """Returns a 'Gaussian-shaped' field in the 'x' direction."""
   mesh = grid.mesh()
   mesh_size = jnp.array(grid.shape) * jnp.array(grid.step)
@@ -50,20 +50,21 @@ def gaussian_field(grid):
   return tuple(v)
 
 
-def zero_field(grid):
+def zero_field(grid: grids.Grid):
   """Returns an all-zero field."""
   return tuple(grids.GridArray(jnp.zeros(grid.shape), o, grid)
                for o in grid.cell_faces)
 
 
-def momentum(v, density, grid):
+def momentum(v: grids.GridField, density: float):
   """Returns the momentum due to velocity field `v`."""
+  grid = grids.consistent_grid(*v)
   return jnp.array([u.data for u in v]).sum() * density * jnp.array(
       grid.step).prod()
 
 
-def _convect_upwind(v, g):
-  return tuple(advection.advect_upwind(u, v, g) for u in v)
+def _convect_upwind(v: grids.GridField):
+  return tuple(advection.advect_upwind(u, v) for u in v)
 
 
 class SubgridModelsTest(test_util.TestCase):
@@ -154,8 +155,8 @@ class SubgridModelsTest(test_util.TestCase):
       self.assertLess(jnp.max(divergence.data), divergence_atol)
 
     with self.subTest('conservation of momentum'):
-      initial_momentum = momentum(v_initial, density, grid)
-      final_momentum = momentum(v_final, density, grid)
+      initial_momentum = momentum(v_initial, density)
+      final_momentum = momentum(v_final, density)
       if forcing is not None:
         expected_change = (
             jnp.array([f_i.data for f_i in forcing(v_initial, grid)]).sum() *

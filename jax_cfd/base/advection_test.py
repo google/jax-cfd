@@ -59,8 +59,8 @@ def _cos_velocity(grid):
   return v
 
 
-def _total_variation(array, grid, motion_axis):
-  next_values = grid.shift(array, 1, motion_axis)
+def _total_variation(array, motion_axis):
+  next_values = array.shift(1, motion_axis)
   variation = jnp.sum(jnp.abs(next_values.data - array.data))
   return variation
 
@@ -157,7 +157,7 @@ class AdvectionTest(test_util.TestCase):
     ct = evolve(c)
 
     expected_shift = int(round(-cfl_number * num_steps * v_sign))
-    expected = grid.shift(c, expected_shift, axis=0).data
+    expected = c.shift(expected_shift, axis=0).data
     self.assertAllClose(expected, ct.data, atol=atol)
 
   @parameterized.named_parameters(
@@ -285,10 +285,10 @@ class AdvectionTest(test_util.TestCase):
 
     advect = jax.jit(functools.partial(method, v=v, grid=grid, dt=dt))
 
-    initial_total_variation = _total_variation(c, grid, 0) + atol
+    initial_total_variation = _total_variation(c, 0) + atol
     for _ in range(num_steps):
       ct = advect(ct)
-      current_total_variation = _total_variation(ct, grid, 0)
+      current_total_variation = _total_variation(ct, 0)
       self.assertLessEqual(current_total_variation, initial_total_variation)
 
   @parameterized.named_parameters(

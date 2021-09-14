@@ -236,15 +236,16 @@ def advect_van_leer(
 
   """
   # TODO(dkochkov) reimplement this using apply_limiter method.
+  del grid  # TODO(pnorgaard): refactor out grid arg
   offsets = grids.control_volume_offsets(c)
   aligned_v = tuple(interpolation.linear(u, offset)
                     for u, offset in zip(v, offsets))
 
   fluxes = []
-  for axis, (u, h) in enumerate(zip(aligned_v, grid.step)):
+  for axis, (u, h) in enumerate(zip(aligned_v, c.grid.step)):
     c_center = c.data
-    c_left = grid.shift(c, -1, axis=axis).data
-    c_right = grid.shift(c, +1, axis=axis).data
+    c_left = c.shift(-1, axis=axis).data
+    c_right = c.shift(+1, axis=axis).data
     upwind_flux = grids.applied(jnp.where)(u > 0, u * c_center, u * c_right)
 
     # Van-Leer Flux correction is computed in steps to avoid `nan`s.
@@ -261,8 +262,8 @@ def advect_van_leer(
     )
     # for negative velocity we simply need to shift the correction along v axis.
     forward_correction_array = grids.GridArray(
-        forward_correction, u.offset, grid)
-    backward_correction_array = grid.shift(forward_correction_array, +1, axis)
+        forward_correction, u.offset, c.grid)
+    backward_correction_array = forward_correction_array.shift(+1, axis)
     backward_correction = backward_correction_array.data
     abs_velocity = abs(u)
     courant_numbers = (dt / h) * abs_velocity

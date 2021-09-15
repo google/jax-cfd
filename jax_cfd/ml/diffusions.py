@@ -29,8 +29,8 @@ from jax_cfd.ml import viscosities
 
 GridArray = grids.GridArray
 GridField = Tuple[GridArray, ...]
-DiffuseFn = Callable[[GridArray, float, grids.Grid], GridArray]
-DiffusionSolveFn = Callable[[GridField, float, float, grids.Grid], GridField]
+DiffuseFn = Callable[[GridArray, float], GridArray]
+DiffusionSolveFn = Callable[[GridField, float, float], GridField]
 DiffuseModule = Callable[..., DiffuseFn]
 DiffusionSolveModule = Callable[..., DiffusionSolveFn]
 ViscosityModule = viscosities.ViscosityModule

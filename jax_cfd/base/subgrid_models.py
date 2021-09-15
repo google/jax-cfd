@@ -28,17 +28,16 @@ import numpy as np
 GridArray = grids.GridArray
 GridField = Tuple[GridArray, ...]
 InterpolationFn = interpolation.InterpolationFn
-ViscosityFn = Callable[[grids.Tensor, GridField, grids.Grid], grids.Tensor]
+ViscosityFn = Callable[[grids.Tensor, GridField], grids.Tensor]
 
 
 def smagorinsky_viscosity(
     s_ij: grids.Tensor,
     v: GridField,
-    grid: grids.Grid,
     dt: Optional[float] = None,
     cs: float = 0.2,
     interpolate_fn: InterpolationFn = interpolation.linear
-) -> GridField:
+) -> grids.Tensor:
   """Computes eddy viscosity based on Smagorinsky model.
 
   This viscosity model computes scalar eddy viscosity at `grid.cell_center` and
@@ -49,7 +48,6 @@ def smagorinsky_viscosity(
     s_ij: strain rate tensor that is equal to the forward finite difference
       derivatives of the velocity field `(d(u_i)/d(x_j) + d(u_j)/d(x_i)) / 2`.
     v: velocity field, passed to `interpolate_fn`.
-    grid: grid object.
     dt: integration time step passed to `interpolate_fn`. Can be `None` if
       `interpolate_fn` is independent of `dt`. Default: `None`.
     cs: the Smagorinsky constant.
@@ -59,6 +57,7 @@ def smagorinsky_viscosity(
     tensor of GridArray's containing values of the eddy viscosity at the
       same grid offsets as the strain tensor `s_ij`.
   """
+  grid = grids.consistent_grid(*s_ij.ravel(), *v)
   s_ij_offsets = [array.offset for array in s_ij.ravel()]
   unique_offsets = list(set(s_ij_offsets))
   cell_center = grid.cell_center
@@ -77,7 +76,6 @@ def smagorinsky_viscosity(
 
 def evm_model(
     v: GridField,
-    grid: grids.Grid,
     viscosity_fn: ViscosityFn,
 ) -> GridField:
   """Computes acceleration due to eddy viscosity turbulence model.
@@ -89,19 +87,19 @@ def evm_model(
 
   Args:
     v: velocity field.
-    grid: a `grids.Grid` object representing spatial discretization.
     viscosity_fn: function that computes viscosity values at the same offsets
       as strain rate tensor provided as input.
 
   Returns:
     acceleration of the velocity field `v`.
   """
+  grid = grids.consistent_grid(*v)
   s_ij = grids.Tensor([
       [0.5 * (finite_differences.forward_difference(v[i], j) +  # pylint: disable=g-complex-comprehension
               finite_differences.forward_difference(v[j], i))
        for j in range(grid.ndim)]
       for i in range(grid.ndim)])
-  viscosity = viscosity_fn(s_ij, v, grid)
+  viscosity = viscosity_fn(s_ij, v)
   tau = jax.tree_multimap(lambda x, y: -2. * x * y, viscosity, s_ij)
   return tuple(-finite_differences.divergence(tau[i, :])
                for i in range(grid.ndim))
@@ -112,7 +110,6 @@ def implicit_evm_solve_with_diffusion(
     v: GridField,
     viscosity: float,
     dt: float,
-    grid: grids.Grid,
     configured_evm_model: Callable,  # pylint: disable=g-bare-generic
     cg_kwargs: Optional[Mapping[str, Any]] = None
 ) -> GridField:
@@ -125,7 +122,6 @@ def implicit_evm_solve_with_diffusion(
     v: current velocity field.
     viscosity: constant viscosity coefficient.
     dt: time step of implicit integration.
-    grid: a `grids.Grid` object specifying spatial discretization.
     configured_evm_model: eddy viscosity model with specified `viscosity_fn`.
     cg_kwargs: keyword arguments passed to jax.scipy.sparse.linalg.cg.
 
@@ -141,7 +137,7 @@ def implicit_evm_solve_with_diffusion(
   vector_laplacian = np.vectorize(finite_differences.laplacian)
 
   def linear_op(v):
-    acceleration = configured_evm_model(v, grid)
+    acceleration = configured_evm_model(v)
     return tuple(v - dt * (acceleration + viscosity * vector_laplacian(v)))
 
   # We normally prefer fast diagonalization, but that requires an outer

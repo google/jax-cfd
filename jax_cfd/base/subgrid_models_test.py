@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Tests for jax_cfd.subgrid_models."""
+import functools
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -50,6 +51,12 @@ def gaussian_field(grid: grids.Grid):
   return tuple(v)
 
 
+def gaussian_forcing(v):
+  """Returns Gaussian field forcing."""
+  grid = grids.consistent_grid(*v)
+  return gaussian_field(grid)
+
+
 def zero_field(grid: grids.Grid):
   """Returns an all-zero field."""
   return tuple(grids.GridArray(jnp.zeros(grid.shape), o, grid)
@@ -68,6 +75,36 @@ def _convect_upwind(v: grids.GridField):
 
 
 class SubgridModelsTest(test_util.TestCase):
+
+  def test_smagorinsky_viscosity(self):
+    grid = grids.Grid((3, 3))
+    v = (grids.GridArray(jnp.zeros(grid.shape), offset=(1, 0.5), grid=grid),
+         grids.GridArray(jnp.zeros(grid.shape), offset=(0.5, 1), grid=grid))
+    c00 = grids.GridArray(jnp.zeros(grid.shape), offset=(0, 0), grid=grid)
+    c01 = grids.GridArray(jnp.zeros(grid.shape), offset=(0, 1), grid=grid)
+    c10 = grids.GridArray(jnp.zeros(grid.shape), offset=(1, 0), grid=grid)
+    c11 = grids.GridArray(jnp.zeros(grid.shape), offset=(1, 1), grid=grid)
+    s_ij = grids.Tensor(np.array([[c00, c01], [c10, c11]]))
+    viscosity = subgrid_models.smagorinsky_viscosity(
+        s_ij=s_ij, v=v, dt=0.1, cs=0.2)
+    self.assertIsInstance(viscosity, grids.Tensor)
+    self.assertEqual(viscosity.shape, (2, 2))
+    self.assertAllClose(viscosity[0, 0], c00)
+    self.assertAllClose(viscosity[0, 1], c01)
+    self.assertAllClose(viscosity[1, 0], c10)
+    self.assertAllClose(viscosity[1, 1], c11)
+
+  def test_env_model(self):
+    grid = grids.Grid((3, 3))
+    v = (grids.GridArray(jnp.zeros(grid.shape), offset=(1, 0.5), grid=grid),
+         grids.GridArray(jnp.zeros(grid.shape), offset=(0.5, 1), grid=grid))
+    viscosity_fn = functools.partial(
+        subgrid_models.smagorinsky_viscosity, dt=1.0, cs=0.2)
+    acceleration = subgrid_models.evm_model(v, viscosity_fn)
+    self.assertIsInstance(acceleration, tuple)
+    self.assertLen(acceleration, 2)
+    self.assertAllClose(acceleration[0], v[0])
+    self.assertAllClose(acceleration[1], v[1])
 
   @parameterized.named_parameters(
       dict(
@@ -89,7 +126,7 @@ class SubgridModelsTest(test_util.TestCase):
           testcase_name='gaussian_force_upwind_with_subgrid_model',
           cs=0.12,
           velocity=zero_field,
-          forcing=lambda v, g: gaussian_field(g),
+          forcing=gaussian_forcing,
           shape=(40, 40, 40),
           step=(1., 1., 1.),
           density=1.,
@@ -159,7 +196,7 @@ class SubgridModelsTest(test_util.TestCase):
       final_momentum = momentum(v_final, density)
       if forcing is not None:
         expected_change = (
-            jnp.array([f_i.data for f_i in forcing(v_initial, grid)]).sum() *
+            jnp.array([f_i.data for f_i in forcing(v_initial)]).sum() *
             jnp.array(grid.step).prod() * dt * time_steps)
       else:
         expected_change = 0

@@ -14,6 +14,8 @@
 
 """Tests for jax_cfd.forcings."""
 
+import functools
+
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax.numpy as jnp
@@ -22,7 +24,66 @@ from jax_cfd.base import grids
 from jax_cfd.base import test_util
 
 
+def _make_zero_velocity_field(grid):
+  ndim = grid.ndim
+  offsets = (jnp.eye(ndim) + jnp.ones([ndim, ndim])) / 2.
+  return tuple(
+      grids.GridArray(jnp.zeros(grid.shape), tuple(offset), grid)
+      for ax, offset in enumerate(offsets))
+
+
 class ForcingsTest(test_util.TestCase):
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='_taylor_green_forcing',
+          partial_force_fn=functools.partial(
+              forcings.taylor_green_forcing, scale=1.0, k=2),
+      ),
+      dict(
+          testcase_name='_kolmogorov_forcing',
+          partial_force_fn=functools.partial(
+              forcings.kolmogorov_forcing, scale=1.0, k=2),
+      ),
+      dict(
+          testcase_name='_linear_forcing',
+          partial_force_fn=functools.partial(
+              forcings.linear_forcing, coefficient=2.0),
+      ),
+      dict(
+          testcase_name='_no_forcing',
+          partial_force_fn=functools.partial(forcings.no_forcing)),
+      dict(
+          testcase_name='_simple_turbulence_forcing',
+          partial_force_fn=functools.partial(
+              forcings.simple_turbulence_forcing,
+              constant_magnitude=0.0,
+              constant_wavenumber=2,
+              linear_coefficient=0.0,
+              forcing_type='kolmogorov'),
+      ),
+  )
+  def test_forcing_function(self, partial_force_fn):
+    for ndim in [2, 3]:
+      with self.subTest(f'ndim={ndim}'):
+        grid = grids.Grid((16,) * ndim)
+        v = _make_zero_velocity_field(grid)
+        force_fn = partial_force_fn(grid)
+        force = force_fn(v)
+        # Check that offset and grid match velocity input
+        for d in range(ndim):
+          self.assertAllClose(0 * force[d], v[d])
+
+  def test_sum_forcings(self):
+    grid = grids.Grid((16, 16))
+    force_fn_1 = forcings.kolmogorov_forcing(grid, scale=1.0, k=2)
+    force_fn_2 = forcings.no_forcing(grid)
+    force_fn_sum = forcings.sum_forcings(force_fn_1, force_fn_2)
+    v = _make_zero_velocity_field(grid)
+    force_1 = force_fn_1(v)
+    force_sum = force_fn_sum(v)
+    for d in range(grid.ndim):
+      self.assertArrayEqual(force_sum[d], force_1[d])
 
   # pylint: disable=g-long-lambda
   @parameterized.named_parameters(
@@ -67,7 +128,7 @@ class ForcingsTest(test_util.TestCase):
                      zip(velocity_function(*grid.mesh()), grid.cell_faces))
     expected_force = expected_force_function(*grid.mesh())
     actual_force = forcings.filtered_linear_forcing(
-        lower_wavenumber, upper_wavenumber, coefficient)(velocity, grid)
+        lower_wavenumber, upper_wavenumber, coefficient, grid)(velocity)
     for expected, actual in zip(expected_force, actual_force):
       self.assertAllClose(expected, actual.data, atol=1e-5)
 

@@ -42,8 +42,8 @@ def _square_concentration(grid):
 
 
 def _unit_velocity(grid, velocity_sign=1.):
-  dim = len(grid.shape)
-  offsets = (jnp.eye(dim) + jnp.ones([dim, dim])) / 2.
+  ndim = grid.ndim
+  offsets = (jnp.eye(ndim) + jnp.ones([ndim, ndim])) / 2.
   return tuple(
       grids.GridArray(velocity_sign * jnp.ones(grid.shape) if ax == 0
                       else jnp.zeros(grid.shape), tuple(offset), grid)
@@ -51,8 +51,8 @@ def _unit_velocity(grid, velocity_sign=1.):
 
 
 def _cos_velocity(grid):
-  dim = len(grid.shape)
-  offsets = (jnp.eye(dim) + jnp.ones([dim, dim])) / 2.
+  ndim = grid.ndim
+  offsets = (jnp.eye(ndim) + jnp.ones([ndim, ndim])) / 2.
   mesh = grid.mesh()
   v = tuple(grids.GridArray(jnp.cos(mesh[i] * 2. * np.pi), tuple(offset), grid)
             for i, offset in enumerate(offsets))

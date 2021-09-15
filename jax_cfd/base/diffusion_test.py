@@ -33,7 +33,7 @@ class DiffusionTest(test_util.TestCase):
     grid = grids.Grid(shape, step)
 
     c = grids.GridArray(jnp.ones(shape), offset, grid)
-    diffused = diffusion.diffuse(c, nu, grid)
+    diffused = diffusion.diffuse(c, nu)
     expected = grids.GridArray(jnp.zeros_like(diffused.data), offset, grid)
     self.assertAllClose(expected, diffused)
 
@@ -48,7 +48,7 @@ class DiffusionTest(test_util.TestCase):
     offset = (0, 0)
     grid = grids.Grid(shape, step=1)
     v = 2 * (grids.GridArray(jnp.ones(shape), offset, grid),)
-    diffused = solve(v, nu, dt, grid)
+    diffused = solve(v, nu, dt)
     self.assertAllClose(v[0], diffused[0], atol=atol)
     self.assertAllClose(v[1], diffused[1], atol=atol)
 

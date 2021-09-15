@@ -28,30 +28,33 @@ from jax_cfd.base import validation_problems
 
 Array = grids.Array
 GridArray = grids.GridArray
-
-ForcingFunction = Callable[
-    [grids.GridField, grids.Grid], grids.GridField]
+ForcingFn = Callable[[grids.GridField], grids.GridField]
 
 
 def taylor_green_forcing(
     grid: grids.Grid, scale: float = 1, k: int = 2,
-) -> ForcingFunction:
+) -> ForcingFn:
   """Constant driving forced in the form of Taylor-Green vorcities."""
   u, v = validation_problems.TaylorGreen(
       shape=grid.shape[:2], kx=k, ky=k).velocity()
   u, v = u * scale, v * scale
   if grid.ndim == 2:
+    u = grids.GridArray(u.data, u.offset, grid)  # associate with input grid
+    v = grids.GridArray(v.data, v.offset, grid)
     f = (u, v)
   elif grid.ndim == 3:
-    u = grids.GridArray(u.data, u.offset + (1/2,), grid)
-    v = grids.GridArray(v.data, v.offset + (1/2,), grid)
-    w = grids.GridArray(jnp.zeros_like(u.data), (1/2, 1/2, 1), grid)
+    # append z-dimension to u,v arrays
+    u_data = jnp.broadcast_to(jnp.expand_dims(u.data, -1), grid.shape)
+    v_data = jnp.broadcast_to(jnp.expand_dims(v.data, -1), grid.shape)
+    u = grids.GridArray(u_data, (1, 0.5, 0.5), grid)
+    v = grids.GridArray(v_data, (0.5, 1, 0.5), grid)
+    w = grids.GridArray(jnp.zeros_like(u.data), (0.5, 0.5, 1), grid)
     f = (u, v, w)
   else:
     raise NotImplementedError
 
-  def forcing(v, grid):
-    del v, grid
+  def forcing(v):
+    del v
     return f
   return forcing
 
@@ -61,7 +64,7 @@ def kolmogorov_forcing(
     scale: float = 1,
     k: int = 2,
     swap_xy: bool = False,
-) -> ForcingFunction:
+) -> ForcingFn:
   """Returns the Kolmogorov forcing function for turbulence in 2D."""
   offsets = grid.cell_faces
 
@@ -92,60 +95,17 @@ def kolmogorov_forcing(
     else:
       raise NotImplementedError
 
-  def forcing(v, grid):
-    del v, grid
+  def forcing(v):
+    del v
     return f
   return forcing
 
 
-def filtered_forcing(
-    spectral_density: Callable[[Array], Array]
-) -> ForcingFunction:
-  """Apply forcing as a function of angular frequency.
-
-  Args:
-    spectral_density: if `x_hat` is a Fourier component of the velocity with
-      angular frequency `k` then the forcing applied to `x_hat` is
-      `spectral_density(k)`.
-  Returns:
-    A forcing function that applies filtered forcing.
-  """
-  def forcing(v, grid):
-    filter_ = grids.applied(
-        functools.partial(spectral.filter, spectral_density, grid=grid))
-    return tuple(filter_(u) for u in v)
-  return forcing
-
-
-def filtered_linear_forcing(
-    lower_wavenumber: float,
-    upper_wavenumber: float,
-    coefficient: float
-) -> ForcingFunction:
-  """Apply linear forcing to low frequency components of the velocity field.
-
-  Args:
-    lower_wavenumber: the minimum wavenumber to which forcing should be
-      applied.
-    upper_wavenumber: the maximum wavenumber to which forcing should be
-      applied.
-    coefficient: the linear coefficient for forcing applied to components with
-      wavenumber below `threshold`.
-  Returns:
-    A forcing function that applies filtered linear forcing.
-  """
-  def spectral_density(k):
-    return jnp.where(((k >= 2 * jnp.pi * lower_wavenumber) &
-                      (k <= 2 * jnp.pi * upper_wavenumber)),
-                     coefficient,
-                     0)
-  return filtered_forcing(spectral_density)
-
-
-def linear_forcing(coefficient: float) -> ForcingFunction:
+def linear_forcing(grid, coefficient: float) -> ForcingFn:
   """Linear forcing, proportional to velocity."""
-  def forcing(v, grid):
-    del grid  # unused
+  del grid
+
+  def forcing(v):
     return tuple(coefficient * u for u in v)
   return forcing
 
@@ -154,16 +114,16 @@ def no_forcing(grid):
   """Zero-valued forcing field for unforced simulations."""
   offsets = grid.cell_faces
 
-  def forcing(v, grid):
-    return (grids.GridArray(jnp.zeros_like(u.data), o, grid)
-            for u, o in zip(v, offsets))
+  def forcing(v):
+    return tuple(grids.GridArray(jnp.zeros_like(u.data), o, grid)
+                 for u, o in zip(v, offsets))
   return forcing
 
 
-def sum_forcings(*forcings: ForcingFunction) -> ForcingFunction:
+def sum_forcings(*forcings: ForcingFn) -> ForcingFn:
   """Sum multiple forcing functions."""
-  def forcing(v, grid):
-    return equations.sum_fields(*[forcing(v, grid) for forcing in forcings])
+  def forcing(v):
+    return equations.sum_fields(*[forcing(v) for forcing in forcings])
   return forcing
 
 
@@ -177,7 +137,7 @@ def simple_turbulence_forcing(
     constant_wavenumber: int = 2,
     linear_coefficient: float = 0,
     forcing_type: str = 'kolmogorov',
-) -> ForcingFunction:
+) -> ForcingFn:
   """Returns a forcing function for turbulence in 2D or 3D.
 
   2D turbulence needs a driving force injecting energy at intermediate
@@ -205,7 +165,7 @@ def simple_turbulence_forcing(
     Forcing function.
   """
 
-  linear_force = linear_forcing(linear_coefficient)
+  linear_force = linear_forcing(grid, linear_coefficient)
   constant_force_fn = FORCING_FUNCTIONS.get(forcing_type)
   if constant_force_fn is None:
     raise ValueError('Unknown `forcing_type`. '
@@ -214,3 +174,51 @@ def simple_turbulence_forcing(
   constant_force = constant_force_fn(grid, constant_magnitude,
                                      constant_wavenumber)
   return sum_forcings(linear_force, constant_force)
+
+
+def filtered_forcing(
+    spectral_density: Callable[[Array], Array],
+    grid: grids.Grid,
+) -> ForcingFn:
+  """Apply forcing as a function of angular frequency.
+
+  Args:
+    spectral_density: if `x_hat` is a Fourier component of the velocity with
+      angular frequency `k` then the forcing applied to `x_hat` is
+      `spectral_density(k)`.
+    grid: object representing spatial discretization.
+  Returns:
+    A forcing function that applies filtered forcing.
+  """
+  def forcing(v):
+    filter_ = grids.applied(
+        functools.partial(spectral.filter, spectral_density, grid=grid))
+    return tuple(filter_(u) for u in v)
+  return forcing
+
+
+def filtered_linear_forcing(
+    lower_wavenumber: float,
+    upper_wavenumber: float,
+    coefficient: float,
+    grid: grids.Grid,
+) -> ForcingFn:
+  """Apply linear forcing to low frequency components of the velocity field.
+
+  Args:
+    lower_wavenumber: the minimum wavenumber to which forcing should be
+      applied.
+    upper_wavenumber: the maximum wavenumber to which forcing should be
+      applied.
+    coefficient: the linear coefficient for forcing applied to components with
+      wavenumber below `threshold`.
+    grid: object representing spatial discretization.
+  Returns:
+    A forcing function that applies filtered linear forcing.
+  """
+  def spectral_density(k):
+    return jnp.where(((k >= 2 * jnp.pi * lower_wavenumber) &
+                      (k <= 2 * jnp.pi * upper_wavenumber)),
+                     coefficient,
+                     0)
+  return filtered_forcing(spectral_density, grid)

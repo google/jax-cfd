@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Module for functionality related to diffusion."""
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Tuple
 
 import jax.scipy.sparse.linalg
 
@@ -29,9 +29,8 @@ GridField = Tuple[GridArray, ...]
 # pylint: disable=g-bare-generic
 
 
-def diffuse(c: GridArray, nu: float, grid: grids.Grid) -> GridArray:
+def diffuse(c: GridArray, nu: float) -> GridArray:
   """Returns the rate of change in a concentration `c` due to diffusion."""
-  del grid  # TODO(pnorgaard): refactor out grid arg
   return nu * fd.laplacian(c)
 
 
@@ -55,15 +54,13 @@ def stable_time_step(viscosity: float, grid: grids.Grid) -> float:
   return dx ** 2 / (viscosity * 2 ** ndim)
 
 
-def solve_cg(v: Sequence[GridArray],
+def solve_cg(v: GridField,
              nu: float,
              dt: float,
-             grid: grids.Grid,
              rtol: float = 1e-6,
              atol: float = 1e-6,
              maxiter: Optional[int] = None) -> GridField:
   """Conjugate gradient solve for diffusion."""
-  del grid  # TODO(pnorgaard): refactor out grid arg
   def linear_op(u: GridArray) -> GridArray:
     return u - dt * nu * fd.laplacian(u)
 
@@ -75,15 +72,15 @@ def solve_cg(v: Sequence[GridArray],
   return tuple(inv(u, u) for u in v)
 
 
-def solve_fast_diag(v: Sequence[GridArray],
+def solve_fast_diag(v: GridField,
                     nu: float,
                     dt: float,
-                    grid: grids.Grid,
                     implementation: Optional[str] = None) -> GridField:
   """Solve for diffusion using the fast diagonalization approach."""
   # We reuse eigenvectors from the Laplacian and transform the eigenvalues
   # because this is better conditioned than directly diagonalizing 1 - ν Δt ∇²
   # when ν Δt is small.
+  grid = grids.consistent_grid(*v)
   laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))
 
   # Transform the eigenvalues to implement (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²)

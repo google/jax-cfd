@@ -28,6 +28,9 @@ from jax_cfd.base import pressure
 
 GridArray = grids.GridArray
 GridField = Tuple[GridArray, ...]
+ConvectFn = Callable[[GridField], GridField]
+DiffuseFn = Callable[[GridArray, float], GridArray]
+ForcingFn = Callable[[grids.GridField], grids.GridField]
 
 
 def sum_fields(*args):
@@ -67,10 +70,10 @@ def semi_implicit_navier_stokes(
     viscosity: float,
     dt: float,
     grid: grids.Grid,
-    convect: Optional[Callable] = None,
-    diffuse: Callable = diffusion.diffuse,
+    convect: Optional[ConvectFn] = None,
+    diffuse: DiffuseFn = diffusion.diffuse,
     pressure_solve: Callable = pressure.solve_fast_diag,
-    forcing: Optional[Callable] = None,
+    forcing: Optional[ForcingFn] = None,
 ) -> Callable:
   """Returns a function that performs a time step of Navier Stokes."""
 
@@ -91,12 +94,14 @@ def semi_implicit_navier_stokes(
     convection = convect(v)
     accelerations = [convection]
     if viscosity:
-      diffusion_ = tuple(diffuse(u, viscosity / density, grid) for u in v)
+      diffusion_ = tuple(diffuse(u, viscosity / density) for u in v)
       accelerations.append(diffusion_)
     if forcing is not None:
       # TODO(shoyer): include time in state?
-      f = forcing(v, grid)
-      accelerations.append(tuple(f_i / density for f_i in f))
+      force = forcing(v)
+      assert isinstance(force, tuple)
+      assert isinstance(force[0], grids.GridArray)
+      accelerations.append(tuple(f_i / density for f_i in force))
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
     v = pressure_projection(v, grid, pressure_solve)
@@ -132,11 +137,11 @@ def implicit_diffusion_navier_stokes(
     accelerations = [convection]
     if forcing is not None:
       # TODO(shoyer): include time in state?
-      f = forcing(v, grid)
+      f = forcing(v)
       accelerations.append(tuple(f_i / density for f_i in f))
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
     v = pressure_projection(v, grid, pressure_solve)
-    v = diffusion_solve(v, viscosity, dt, grid)
+    v = diffusion_solve(v, viscosity, dt)
     return v
   return navier_stokes_step

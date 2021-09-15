@@ -51,14 +51,21 @@ def gaussian_field(grid):
   return tuple(v)
 
 
+def gaussian_forcing(v):
+  """Returns Gaussian field forcing."""
+  grid = grids.consistent_grid(*v)
+  return gaussian_field(grid)
+
+
 def zero_field(grid):
   """Returns an all-zero field."""
   return tuple(grids.GridArray(jnp.zeros(grid.shape), o, grid)
                for o in grid.cell_faces)
 
 
-def momentum(v, density, grid):
+def momentum(v, density):
   """Returns the momentum due to velocity field `v`."""
+  grid = grids.consistent_grid(*v)
   return jnp.array([u.data for u in v]).sum() * density * jnp.array(
       grid.step).prod()
 
@@ -85,7 +92,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            momentum_atol=2e-3),
       dict(testcase_name='gaussian_force_upwind',
            velocity=zero_field,
-           forcing=lambda v, g: gaussian_field(g),
+           forcing=gaussian_forcing,
            shape=(40, 40, 40),
            step=(1., 1., 1.),
            density=1.,
@@ -131,11 +138,11 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
     divergence = fd.divergence(v_final)
     self.assertLess(jnp.max(divergence.data), divergence_atol)
 
-    initial_momentum = momentum(v_initial, density, grid)
-    final_momentum = momentum(v_final, density, grid)
+    initial_momentum = momentum(v_initial, density)
+    final_momentum = momentum(v_final, density)
     if forcing is not None:
       expected_change = (
-          jnp.array([f_i.data for f_i in forcing(v_initial, grid)]).sum() *
+          jnp.array([f_i.data for f_i in forcing(v_initial)]).sum() *
           jnp.array(grid.step).prod() * dt * time_steps)
     else:
       expected_change = 0

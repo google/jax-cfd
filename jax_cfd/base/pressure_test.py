@@ -47,41 +47,35 @@ class PressureTest(test_util.TestCase):
            shape=(301,),
            solve=solve_cg,
            step=(.1,),
-           density=10.,
            seed=111),
       dict(testcase_name='_2D_cg',
            shape=(100, 100),
            solve=solve_cg,
            step=(1., 1.),
-           density=1.,
            seed=222),
       dict(testcase_name='_3D_cg',
            shape=(10, 10, 10),
            solve=solve_cg,
            step=(.1, .1, .1),
-           density=3.,
            seed=333),
       dict(testcase_name='_1D_fast_diag',
            shape=(301,),
            solve=pressure.solve_fast_diag,
            step=(.1,),
-           density=10.,
            seed=111),
       dict(testcase_name='_2D_fast_diag',
            shape=(100, 100),
            solve=pressure.solve_fast_diag,
            step=(1., 1.),
-           density=1.,
            seed=222),
       dict(testcase_name='_3D_fast_diag',
            shape=(10, 10, 10),
            solve=pressure.solve_fast_diag,
            step=(.1, .1, .1),
-           density=3.,
            seed=333),
   )
   def testPressureCorrectionZeroDivergence(
-      self, shape, solve, step, density, seed):
+      self, shape, solve, step, seed):
     """Returned velocity should be divergence free."""
     grid = grids.Grid(shape, step)
 

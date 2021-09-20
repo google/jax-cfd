@@ -76,6 +76,7 @@ def semi_implicit_navier_stokes(
     forcing: Optional[ForcingFn] = None,
 ) -> Callable:
   """Returns a function that performs a time step of Navier Stokes."""
+  del grid  # TODO(pnorgaard) refactor out grid arg
 
   if convect is None:
     def convect(v):  # pylint: disable=function-redefined
@@ -104,7 +105,7 @@ def semi_implicit_navier_stokes(
       accelerations.append(tuple(f_i / density for f_i in force))
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
-    v = pressure_projection(v, grid, pressure_solve)
+    v = pressure_projection(v, pressure_solve)
     return v
   return navier_stokes_step
 
@@ -120,7 +121,7 @@ def implicit_diffusion_navier_stokes(
     forcing: Optional[Callable] = None,
 ) -> Callable:
   """Returns a function that performs a time step of Navier Stokes."""
-
+  del grid  # TODO(pnorgaard) refactor out grid arg
   if convect is None:
     def convect(v):  # pylint: disable=function-redefined
       return tuple(
@@ -141,7 +142,7 @@ def implicit_diffusion_navier_stokes(
       accelerations.append(tuple(f_i / density for f_i in f))
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
-    v = pressure_projection(v, grid, pressure_solve)
+    v = pressure_projection(v, pressure_solve)
     v = diffusion_solve(v, viscosity, dt)
     return v
   return navier_stokes_step

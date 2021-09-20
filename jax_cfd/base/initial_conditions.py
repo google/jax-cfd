@@ -78,7 +78,7 @@ def filtered_velocity_field(
   filtered = wrap_velocities(velocity_components, grid)
 
   def project_and_normalize(v):
-    v = pressure.projection(v, grid)
+    v = pressure.projection(v)
     vmax = _max_speed(v)
     v = tuple(maximum_velocity * u / vmax for u in v)
     return v

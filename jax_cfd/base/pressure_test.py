@@ -85,7 +85,7 @@ class PressureTest(test_util.TestCase):
     v = tuple(
         grids.GridArray(1. + .3 * jax.random.normal(k, shape), offset, grid)
         for k, offset in zip(ks[:len(shape)], _offsets(len(shape))))
-    v_corrected = pressure.projection(v, grid, solve)
+    v_corrected = pressure.projection(v, solve)
 
     # The corrected velocity should be divergence free.
     div = fd.divergence(v_corrected)

@@ -33,7 +33,6 @@ GridField = Tuple[GridArray, ...]
 
 
 def solve_cg(v: Sequence[GridArray],
-             grid: grids.Grid,
              q0: Optional[GridArray] = None,
              rtol: float = 1e-6,
              atol: float = 1e-6,
@@ -47,7 +46,6 @@ def solve_cg(v: Sequence[GridArray],
 
   Args:
     v: the velocity field.
-    grid: a `Grid`
     q0: an initial value, or "guess" for the pressure correction. A common
       choice is the correction from the previous time step.
     rtol: relative tolerance for convergence.
@@ -58,7 +56,6 @@ def solve_cg(v: Sequence[GridArray],
     A pressure correction `q` such that `div(v - grad(q))` is zero.
   """
   # TODO(jamieas): add functionality for non-uniform density.
-  del grid  # TODO(pnorgaard): refactor out grid arg
   rhs = fd.divergence(v)
   if q0 is None:
     q0 = grids.applied(jnp.zeros_like)(rhs)
@@ -68,12 +65,12 @@ def solve_cg(v: Sequence[GridArray],
 
 
 def solve_fast_diag(v: Sequence[GridArray],
-                    grid: grids.Grid,
                     q0: Optional[GridArray] = None,
                     implementation: Optional[str] = None) -> GridArray:
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
   rhs = fd.divergence(v)
+  grid = grids.consistent_grid(*v)
   laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))
   pinv = fast_diagonalization.psuedoinverse(
       laplacians, rhs.dtype,
@@ -83,11 +80,10 @@ def solve_fast_diag(v: Sequence[GridArray],
 
 def projection(
     v: GridField,
-    grid: grids.Grid,
     solve: Callable = solve_fast_diag,
 ) -> GridField:
   """Apply pressure projection to make a velocity field divergence free."""
-  q = solve(v, grid)
+  q = solve(v)
   q_grad = fd.forward_difference(q)
   projected = tuple(u - q_g for u, q_g in zip(v, q_grad))
   return projected

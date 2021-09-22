@@ -37,7 +37,7 @@ FORCING_MODULES = [
 FORCING_SCALE = .1
 
 
-def test_parameters():
+def navier_stokes_test_parameters():
   product = itertools.product(GRIDS,
                               C_INTERPOLATION_MODULES,
                               PRESSURE_MODULES,
@@ -56,6 +56,17 @@ def test_parameters():
         forcing_module=forcing,
         convection_module='advections.self_advection',
         u_interpolation_module='interpolations.linear'))
+  return parameterized.named_parameters(*parameters)
+
+
+def ml_test_parameters():
+  product = itertools.product(GRIDS, FORCING_MODULES)
+  parameters = []
+  for grid, forcing in product:
+    shape = 'x'.join(str(s) for s in grid.shape)
+    name = f'epd_{forcing.split(".")[-1]}_{shape}'
+    parameters.append(
+        dict(testcase_name=name, grid=grid, forcing_module=forcing))
   return parameterized.named_parameters(*parameters)
 
 
@@ -88,7 +99,7 @@ class NavierStokesModulesTest(test_util.TestCase):
     outputs = step_model.apply(params, inputs)
     return inputs, outputs
 
-  @test_parameters()
+  @navier_stokes_test_parameters()
   def test_all_modules(
       self,
       convection_module,
@@ -188,6 +199,62 @@ class NavierStokesModulesTest(test_util.TestCase):
     _, outputs2 = self._generate_inputs_and_outputs(config2, grid)
     for out1, out2 in zip(outputs1, outputs2):
       self.assertAllClose(out1, out2, rtol=1e-6)
+
+
+class MLModulesTest(test_util.TestCase):
+
+  def _generate_inputs_and_outputs(self, config, grid):
+    gin.enter_interactive_mode()
+    gin.parse_config(config)
+    dt = 0.1
+    physics_specs = physics_specifications.get_physics_specs()
+    def step_fwd(x):
+      model = equations.time_derivative_network_model(
+          grid, dt, physics_specs)
+      return model(x)
+
+    step_model = hk.without_apply_rng(hk.transform(step_fwd))
+    inputs = []
+    for seed, _ in enumerate(grid.cell_faces):
+      rng_key = jax.random.PRNGKey(seed)
+      data = jax.random.uniform(rng_key, grid.shape, jnp.float32)
+      inputs.append(data)
+    inputs = jnp.stack(inputs, axis=-1)
+    rng = jax.random.PRNGKey(42)
+
+    with funcutils.init_context():
+      params = step_model.init(rng, inputs)
+    self.assertIsNotNone(params)
+    outputs = step_model.apply(params, inputs)
+    return inputs, outputs
+
+  @ml_test_parameters()
+  def test_epd_modules(
+      self,
+      forcing_module,
+      grid
+  ):
+    """Intgeration tests checking that `step_fn` produces expected shape."""
+    ndim = grid.ndim
+    latent_dims = 20
+    ml_module_name = 'equations.time_derivative_network_model'
+    epd_towers = '(@enc/tower_module, @proc/tower_module, @dec/tower_module,)'
+    config = [
+        f'enc/tower_module.num_output_channels = {latent_dims}',
+        'enc/tower_module.tower_factory = @forward_tower_factory',
+        'proc/tower_module.tower_factory = @residual_block_tower_factory',
+        f'dec/tower_module.num_output_channels = {ndim}',
+        'dec/tower_module.tower_factory = @forward_tower_factory',
+        f'{ml_module_name}.derivative_modules = {epd_towers}',
+        f'{forcing_module}.scale = {FORCING_SCALE}',
+        f'NavierStokesPhysicsSpecs.forcing_module = @{forcing_module}',
+        'NavierStokesPhysicsSpecs.density = 1.',
+        'NavierStokesPhysicsSpecs.viscosity = 0.1',
+        'get_physics_specs.physics_specs_cls = @NavierStokesPhysicsSpecs',
+    ]
+    inputs, outputs = self._generate_inputs_and_outputs(config, grid)
+    for u_input, u_output in zip(inputs, outputs):
+      self.assertEqual(u_input.shape, u_output.shape)
 
 
 if __name__ == '__main__':

@@ -147,7 +147,7 @@ def time_derivative_network_model(
       v = array_utils.split_axis(x, axis=-1)
       v = (grids.GridArray(u, o, grid) for u, o in zip(v, grid.cell_faces))
       forcing_scalars = jnp.stack(
-          [a.data for a in active_forcing_fn(v, None)], axis=-1)
+          [a.data for a in active_forcing_fn(v)], axis=-1)
       # TODO(dkochkov) consider conditioning on the forcing terms.
       for module_fn in modules:
         x = module_fn(x)

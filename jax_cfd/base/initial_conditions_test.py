@@ -44,7 +44,7 @@ class InitialConditionsTest(test_util.TestCase):
            maximum_velocity=10.,
            peak_wavenumber=17),
   )
-  def testFilteredVelocityField(
+  def test_filtered_velocity_field(
       self, seed, grid, maximum_velocity, peak_wavenumber):
     v = ic.filtered_velocity_field(
         jax.random.PRNGKey(seed), grid, maximum_velocity, peak_wavenumber)
@@ -56,6 +56,40 @@ class InitialConditionsTest(test_util.TestCase):
 
     # Assert that the specified maximum velocity is obtained.
     self.assertAllClose(maximum_velocity, actual_maximum_velocity, atol=1e-5)
+
+  def test_initial_velocity_field_no_projection(self):
+    # Test on an already incompressible velocity field
+    grid = grids.Grid((10, 10), step=1.0)
+    x_velocity_fn = lambda x, y: jnp.ones_like(x)
+    y_velocity_fn = lambda x, y: jnp.zeros_like(x)
+    v0 = ic.initial_velocity_field((x_velocity_fn, y_velocity_fn), grid)
+    expected_v0 = (
+        grids.GridArray(jnp.ones((10, 10)), offset=(1, 0.5), grid=grid),
+        grids.GridArray(jnp.zeros((10, 10)), offset=(0.5, 1), grid=grid))
+    for d in range(len(v0)):
+      self.assertArrayEqual(expected_v0[d], v0[d])
+
+    with self.subTest('correction does not change answer'):
+      v0_corrected = ic.initial_velocity_field(
+          (x_velocity_fn, y_velocity_fn), grid, iterations=5)
+      for d in range(len(v0)):
+        self.assertArrayEqual(expected_v0[d], v0_corrected[d])
+
+  def test_initial_velocity_field_with_projection(self):
+    grid = grids.Grid((100, 100), step=1.0)
+    random_noise = 0.2 * np.random.rand(100, 100)
+    x_velocity_fn = lambda x, y: jnp.ones_like(x)
+    y_velocity_fn = lambda x, y: jnp.zeros_like(x) + random_noise
+
+    with self.subTest('corrected'):
+      v0 = ic.initial_velocity_field((x_velocity_fn, y_velocity_fn),
+                                     grid, iterations=5)
+      self.assertAllClose(fd.divergence(v0).data, 0, atol=1e-7)
+
+    with self.subTest('not corrected'):
+      v0_uncorrected = ic.initial_velocity_field((x_velocity_fn, y_velocity_fn),
+                                                 grid, iterations=None)
+      self.assertGreater(abs(fd.divergence(v0_uncorrected).data).max(), 0.1)
 
 
 if __name__ == '__main__':

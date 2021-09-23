@@ -13,15 +13,19 @@
 # limitations under the License.
 
 """Prepare initial conditions for simulations."""
-from typing import Tuple
+from typing import Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-
 from jax_cfd.base import funcutils
 from jax_cfd.base import grids
 from jax_cfd.base import pressure
 from jax_cfd.base import spectral
+import numpy as np
+
+Array = Union[np.ndarray, jnp.DeviceArray]
+GridArray = grids.GridArray
+GridField = Tuple[GridArray, ...]
 
 
 def wrap_velocities(v, grid: grids.Grid) -> Tuple[grids.GridArray, ...]:
@@ -52,7 +56,7 @@ def filtered_velocity_field(
 
   Args:
     rng_key: key for seeding the random initial velocity field.
-    grid: the grid on which the velocity field is located.
+    grid: the grid on which the velocity field is defined.
     maximum_velocity: the maximum speed in the velocity field.
     peak_wavenumber: the velocity field will be filtered so that the largest
       magnitudes are associated with this wavenumber.
@@ -86,3 +90,32 @@ def filtered_velocity_field(
   # velocity field. This ensures that it is divergence-free and achieves the
   # specified maximum velocity.
   return funcutils.repeated(project_and_normalize, iterations)(filtered)
+
+
+def initial_velocity_field(
+    velocity_fns: Tuple[Callable[..., Array], ...],
+    grid: grids.Grid,
+    iterations: Optional[int] = None) -> GridField:
+  """Given velocity functions on arrays, returns the velocity field on the grid.
+
+  Typical usage example:
+    grid = cfd.grids.Grid((128, 128))
+    x_velocity_fn = lambda x, y: jnp.sin(x) * jnp.cos(y)
+    y_velocity_fn = lambda x, y: jnp.zeros_like(x)
+    v0 = initial_velocity_field((x_velocity_fn, y_velocity_fn), grid, 5)
+
+  Args:
+    velocity_fns: Functions for computing each velocity component. These should
+      takes the args (x, y, ...) and return an array of the same shape.
+    grid: the grid on which the velocity field is defined.
+    iterations: if specified, the number of iterations of applied projection
+      onto an incompressible velocity field.
+
+  Returns:
+    Velocity components defined with expected offsets on the grid.
+  """
+  velocity = tuple(grid.eval_on_mesh(v_fn, offset)
+                   for v_fn, offset in zip(velocity_fns, grid.cell_faces))
+  if iterations is not None:
+    velocity = funcutils.repeated(pressure.projection, iterations)(velocity)
+  return velocity

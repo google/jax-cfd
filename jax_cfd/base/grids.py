@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import numbers
 import operator
-from typing import Any, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 from jax import lax
@@ -463,6 +463,23 @@ class Grid:
     rfft_axes = self.rfft_axes()
     return tuple(jnp.meshgrid(*rfft_axes, indexing='ij'))
 
+  def eval_on_mesh(self,
+                   fn: Callable[..., Array],
+                   offset: Optional[Sequence[float]] = None) -> GridArray:
+    """Evaluates the function on the grid mesh with the specified offset.
+
+    Args:
+      fn: A function that accepts the mesh arrays and returns an array.
+      offset: an optional sequence of length `ndim`.  If not specified, uses the
+      offset for the cell center.
+
+    Returns:
+      fn(x, y, ...) evaluated on the mesh, as a GridArray with specified offset.
+    """
+    if offset is None:
+      offset = self.cell_center
+    return GridArray(fn(*self.mesh(offset)), offset, self)
+
   def shift(
       self,
       u: GridArray,
@@ -546,4 +563,3 @@ class Grid:
     offset = list(u.offset)
     offset[axis] += padding[0]
     return GridArray(data, tuple(offset), self)
-

@@ -170,6 +170,33 @@ class GridTest(test_util.TestCase):
       self.assertAllClose(mesh[1][0, :], axes[1])
 
   @parameterized.parameters(
+      dict(
+          shape=(10,),
+          fn=lambda x: 2 * np.ones_like(x),
+          offset=None,
+          expected_array=2 * np.ones((10,)),
+          expected_offset=(0.5,)),
+      dict(
+          shape=(10, 10),
+          fn=lambda x, y: np.ones_like(x) + np.ones_like(y),
+          offset=(1, 0.5),
+          expected_array=2 * np.ones((10, 10)),
+          expected_offset=(1, 0.5)),
+      dict(
+          shape=(10, 10, 10),
+          fn=lambda x, y, z: np.ones_like(z),
+          offset=None,
+          expected_array=np.ones((10, 10, 10)),
+          expected_offset=(0.5, 0.5, 0.5)),
+  )
+  def test_eval_on_mesh_default_offset(self, shape, fn, offset, expected_array,
+                                       expected_offset):
+    grid = grids.Grid(shape, step=0.1)
+    expected = grids.GridArray(expected_array, expected_offset, grid)
+    actual = grid.eval_on_mesh(fn, offset)
+    self.assertArrayEqual(expected, actual)
+
+  @parameterized.parameters(
       dict(backend=np,
            shape=(11,),
            initial_offset=(0.0,),

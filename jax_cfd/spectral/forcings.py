@@ -12,20 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Non-learned "base" physics routines for JAX-CFD."""
+"""Functions that implement different forcing terms."""
 
-import jax_cfd.base.advection
-import jax_cfd.base.array_utils
-import jax_cfd.base.diffusion
-import jax_cfd.base.equations
-import jax_cfd.base.fast_diagonalization
-import jax_cfd.base.finite_differences
-import jax_cfd.base.forcings
-import jax_cfd.base.funcutils
-import jax_cfd.base.grids
-import jax_cfd.base.initial_conditions
-import jax_cfd.base.interpolation
-import jax_cfd.base.pressure
-import jax_cfd.base.resize
-import jax_cfd.base.subgrid_models
-import jax_cfd.base.validation_problems
+import jax.numpy as jnp
+from jax_cfd.base import grids
+from jax_cfd.spectral import types as spectral_types
+
+
+# pylint: disable=unused-argument
+def kolmogorov_forcing_fn(grid: grids.Grid,
+                          state: spectral_types.Array) -> spectral_types.Array:
+  """Constant Kolmogorov forcing function."""
+  _, ys = grid.mesh()
+  constant_forcing = -4 * jnp.cos(4 * ys)
+  return constant_forcing

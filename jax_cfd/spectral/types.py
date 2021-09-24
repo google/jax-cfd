@@ -12,20 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Non-learned "base" physics routines for JAX-CFD."""
+"""Common types that are used throughout the spectral codes."""
 
-import jax_cfd.base.advection
-import jax_cfd.base.array_utils
-import jax_cfd.base.diffusion
-import jax_cfd.base.equations
-import jax_cfd.base.fast_diagonalization
-import jax_cfd.base.finite_differences
-import jax_cfd.base.forcings
-import jax_cfd.base.funcutils
-import jax_cfd.base.grids
-import jax_cfd.base.initial_conditions
-import jax_cfd.base.interpolation
-import jax_cfd.base.pressure
-import jax_cfd.base.resize
-import jax_cfd.base.subgrid_models
-import jax_cfd.base.validation_problems
+from typing import Callable, Union
+
+import jax.numpy as jnp
+from jax_cfd.base import grids
+import numpy as np
+
+Array = Union[np.ndarray, jnp.DeviceArray]
+StepFn = Callable[[Array], Array]
+ForcingFn = Callable[[grids.Grid, Array], Array]

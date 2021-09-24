@@ -22,8 +22,8 @@ from typing import Callable
 
 import jax.numpy as jnp
 from jax_cfd.base import equations
+from jax_cfd.base import filter_utils
 from jax_cfd.base import grids
-from jax_cfd.base import spectral
 from jax_cfd.base import validation_problems
 
 Array = grids.Array
@@ -192,7 +192,7 @@ def filtered_forcing(
   """
   def forcing(v):
     filter_ = grids.applied(
-        functools.partial(spectral.filter, spectral_density, grid=grid))
+        functools.partial(filter_utils.filter, spectral_density, grid=grid))
     return tuple(filter_(u) for u in v)
   return forcing
 

@@ -17,10 +17,11 @@ from typing import Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+
+from jax_cfd.base import filter_utils
 from jax_cfd.base import funcutils
 from jax_cfd.base import grids
 from jax_cfd.base import pressure
-from jax_cfd.base import spectral
 import numpy as np
 
 Array = Union[np.ndarray, jnp.DeviceArray]
@@ -78,7 +79,8 @@ def filtered_velocity_field(
   velocity_components = []
   for k in keys:
     noise = jax.random.normal(k, grid.shape)
-    velocity_components.append(spectral.filter(spectral_density, noise, grid))
+    velocity_components.append(
+        filter_utils.filter(spectral_density, noise, grid))
   filtered = wrap_velocities(velocity_components, grid)
 
   def project_and_normalize(v):

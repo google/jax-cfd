@@ -25,7 +25,8 @@ We are currently preparing more example notebooks, inculding:
 
 JAX-CFD is organized around sub-modules:
 
-- `jax_cfd.base`: core numerical methods for CFD, written in JAX.
+- `jax_cfd.base`: core finite volume/difference methods for CFD, written in JAX.
+- `jax_cfd.spectral`: core pseudospectral methods for CFD, written in JAX.
 - `jax_cfd.ml`: machine learning augmented models for CFD,
   written in JAX and [Haiku](https://dm-haiku.readthedocs.io/en/latest/).
 - `jax_cfd.data`: data processing utilities for preparing, evaluating and
@@ -41,9 +42,12 @@ To install dependencies for the other submodules, use `pip install jax-cfd[ml]`,
 
 JAX-CFD is currently focused on unsteady turbulent flows:
 
-- *Spatial discretization*: Finite volume/difference methods on a staggered
-  grid (the "Arakawa C" or "MAC" grid) with pressure at the center of each cell
-  and velocity components defined on corresponding faces.
+- *Spatial discretization*:
+  - *Finite volume/difference* methods on a staggered grid (the "Arakawa C" or
+  "MAC" grid) with pressure at the center of each cell and velocity components
+  defined on corresponding faces.
+  - *Pseudospectral* methods for vorticity which use anti-aliasing filtering
+  techniques for non-linear terms to maintain stability.
 - *Temporal discretization*: Currently only first-order temporal
   discretization, using explicit time-stepping for advection and either implicit
   or explicit time-stepping for diffusion.
@@ -59,7 +63,6 @@ TODO: add a notebook explaining our numerical models in more depth.
 In the long term, we're interested in expanding JAX-CFD to implement methods
 relevant for related research, e.g.,
 
-- Spectral methods
 - Colocated grids
 - Alternative boundary conditions (e.g., non-periodic boundaries and immersed
   boundary methods)

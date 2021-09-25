@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import numbers
 import operator
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import jax
 from jax import lax
@@ -94,44 +94,34 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
       self,
       offset: int,
       axis: int,
-      pad_kwargs: Optional[Mapping[str, Any]] = None,
   ) -> GridArray:
     """Shift this GridArray by `offset`.
 
     Args:
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
-      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
-        default, uses appropriate padding for the Grid's boundary conditions
-        (`mode='wrap'` for periodic, `mode='constant` with a fill value of
-        zero for dirichlet).
 
     Returns:
       A copy of this GridArray, shifted by `offset`. The returned `GridArray`
       has offset `u.offset + offset`.
     """
-    return self.grid.shift(self, offset, axis, pad_kwargs)
+    return self.grid.shift(self, offset, axis)
 
   def pad(
       self,
       padding: Tuple[int, int],
       axis: int,
-      pad_kwargs: Optional[Mapping[str, Any]] = None,
   ) -> GridArray:
     """Pad this GridArray by `padding`.
 
     Args:
       padding: left and right padding along this axis.
       axis: axis to pad along.
-      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
-        default, uses appropriate padding for the Grid's boundary conditions
-        (`mode='wrap'` for periodic, `mode='constant'` with a fill value of zero
-        for dirichlet).
 
     Returns:
       Padded GridArray, elongated along the indicated axis.
     """
-    return self.grid.pad(self, padding, axis, pad_kwargs)
+    return self.grid.pad(self, padding, axis)
 
   def trim(
       self,
@@ -174,6 +164,186 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
       return GridArray(result, offset, grid)
 
 
+GridField = Tuple[GridArray, ...]
+
+
+# NOTE: only periodic boundary conditions work correctly in the majority of the
+# JAX-CFD code.
+PERIODIC = 'periodic'
+DIRICHLET = 'dirichlet'
+VALID_BOUNDARIES = (PERIODIC, DIRICHLET)
+
+
+# TODO(pnorgaard) Generalize BC implementation
+@dataclasses.dataclass(init=False, frozen=True)
+class BoundaryConditions:
+  """Boundary conditions for a PDE variable.
+
+  Example usage:
+    grid = Grid((10, 10))
+    array = GridArray(np.zeros((10, 10)), offset=(0.5, 0.5), grid)
+    bc = BoundaryConditions((PERIODIC, PERIODIC))
+    u = GridVariable(array, bc)
+
+
+  Attributes:
+    boundaries: `boundaries[i]` gives the boundary conditions in each direction.
+  """
+  boundaries: Tuple[str, ...]
+
+  def __init__(self, boundaries: Union[str, Tuple[str]] = 'periodic'):
+    if isinstance(boundaries, str):
+      boundaries = (boundaries,)
+    invalid_boundaries = [b for b in boundaries if b not in VALID_BOUNDARIES]
+    if invalid_boundaries:
+      raise ValueError(f'Invalid boundary condition: {invalid_boundaries}')
+    object.__setattr__(self, 'boundaries', boundaries)
+
+
+@register_pytree_node_class
+@dataclasses.dataclass
+class GridVariable(np.lib.mixins.NDArrayOperatorsMixin):
+  """Associates a GridArray with BoundaryConditions.
+
+  Performing pad and shift operations, e.g. for finite difference calculations,
+  requires boundary condition (BC) information. Since different variables in a
+  PDE system can have different BCs, this class associates a specific variable's
+  data with its BCs.
+
+  Array operations on GridVariables act like array operations on the
+  encapsulated GridArray.
+
+  Attributes:
+    array: GridArray with the array data, offset, and associated grid.
+    bc: boundary conditions for this variable.
+    grid: the Grid associated with the array data.
+    dtype: type of the array data.
+    shape: lengths of the array dimensions.
+    ndim: number of array dimensions.
+    data: array values.
+    offset: alignment location of the data with respect to the grid.
+    grid: the Grid associated with the array data.
+  """
+  array: GridArray
+  bc: BoundaryConditions
+
+  def __post_init__(self):
+    if len(self.bc.boundaries) != self.ndim:
+      raise ValueError(
+          'Incompatible dimension between array and bc, array dimension = '
+          f'{self.array.ndim}, bc dimension = {len(self.bc.boundaries)}')
+
+  def tree_flatten(self):
+    """Returns flattening recipe for GridVariable JAX pytree."""
+    children = (self.array,)
+    aux_data = (self.bc,)
+    return children, aux_data
+
+  @classmethod
+  def tree_unflatten(cls, aux_data, children):
+    """Returns unflattening recipe for GridVariable JAX pytree."""
+    return cls(*children, *aux_data)
+
+  @property
+  def dtype(self):
+    return self.array.dtype
+
+  @property
+  def shape(self) -> Tuple[int, ...]:
+    return self.array.shape
+
+  @property
+  def ndim(self) -> int:
+    return self.array.ndim
+
+  @property
+  def data(self) -> Array:
+    return self.array.data
+
+  @property
+  def offset(self) -> Tuple[float, ...]:
+    return self.array.offset
+
+  @property
+  def grid(self) -> Grid:
+    return self.array.grid
+
+  # TODO(pnorgaard) refactor shift/pad/trim out of Grid
+  def shift(
+      self,
+      offset: int,
+      axis: int,
+  ) -> GridArray:
+    """Shift this GridVariable by `offset`.
+
+    Args:
+      offset: positive or negative integer offset to shift.
+      axis: axis to shift along.
+
+    Returns:
+      A copy of the encapsulated GridArray, shifted by `offset`. The returned
+      GridArray has offset `u.offset + offset`.
+    """
+    return self.array.grid.shift(self.array, offset, axis)
+
+  def pad(
+      self,
+      padding: Tuple[int, int],
+      axis: int,
+  ) -> GridArray:
+    """Pad this GridVariable by `padding`.
+
+    Args:
+      padding: left and right padding along this axis.
+      axis: axis to pad along.
+
+    Returns:
+      A copy of the encapsulated GridArray, padded along the indicated axis.
+    """
+    return self.array.grid.pad(self.array, padding, axis)
+
+  def trim(
+      self,
+      padding: Tuple[int, int],
+      axis: int,
+  ) -> GridArray:
+    """Trim padding from this GridVariable.
+
+    Args:
+      padding: left and right padding along this axis.
+      axis: axis to trim along.
+
+    Returns:
+      A copy of the encapsulated GridArray, trimmed along the indicated axis.
+    """
+    return self.array.grid.trim(self.array, padding, axis)
+
+
+class Tensor(np.ndarray):
+  """A numpy array of GridArrays, representing a physical tensor field.
+
+  Packing tensor coordinates into a numpy array of dtype object is useful
+  because pointwise matrix operations like trace, transpose, and matrix
+  multiplications of physical tensor quantities is meaningful.
+
+  Example usage:
+    grad = fd.gradient_tensor(uv)                    # a rank 2 Tensor
+    strain_rate = (grad + grad.T) / 2.
+    nu_smag = np.sqrt(np.trace(strain_rate.dot(strain_rate)))
+    nu_smag = Tensor(nu_smag)                        # a rank 0 Tensor
+    subgrid_stress = -2 * nu_smag * strain_rate      # a rank 2 Tensor
+  """
+
+  def __new__(cls, arrays):
+    return np.asarray(arrays).view(cls)
+
+
+jax.tree_util.register_pytree_node(
+    Tensor,
+    lambda tensor: (tensor.ravel().tolist(), tensor.shape),
+    lambda shape, arrays: Tensor(np.asarray(arrays).reshape(shape)),
+)
+
 def applied(func):
   """Convert an array function into one defined on GridArrays.
 
@@ -208,18 +378,8 @@ def applied(func):
   return wrapper
 
 
-class InconsistentOffsetError(Exception):
-  """Raised for cases of inconsistent offset in GridArrays."""
-
-
-def consistent_offset(*arrays: GridArray) -> Tuple[float, ...]:
-  """Returns the single unique offset, or raises InconsistentOffsetError."""
-  offsets = {array.offset for array in arrays}
-  if len(offsets) != 1:
-    raise InconsistentOffsetError(
-        f'arrays do not have a unique offset: {offsets}')
-  offset, = offsets
-  return offset
+# Aliases for often used `grids.applied` functions.
+where = applied(jnp.where)
 
 
 def averaged_offset(*arrays: GridArray) -> Tuple[float, ...]:
@@ -236,6 +396,20 @@ def control_volume_offsets(c: GridArray) -> Tuple[Tuple[float, ...], ...]:
       for j in range(len(c.offset)))
 
 
+class InconsistentOffsetError(Exception):
+  """Raised for cases of inconsistent offset in GridArrays."""
+
+
+def consistent_offset(*arrays: GridArray) -> Tuple[float, ...]:
+  """Returns the single unique offset, or raises InconsistentOffsetError."""
+  offsets = {array.offset for array in arrays}
+  if len(offsets) != 1:
+    raise InconsistentOffsetError(
+        f'arrays do not have a unique offset: {offsets}')
+  offset, = offsets
+  return offset
+
+
 class InconsistentGridError(Exception):
   """Raised for cases of inconsistent grids between GridArrays."""
 
@@ -247,44 +421,6 @@ def consistent_grid(*arrays: GridArray) -> Grid:
     raise InconsistentGridError(f'arrays do not have a unique grid: {grids}')
   grid, = grids
   return grid
-
-
-GridField = Tuple[GridArray, ...]
-
-
-class Tensor(np.ndarray):
-  """A numpy array of GridArrays, representing a physical tensor field.
-
-  Packing tensor coordinates into a numpy array of dtype object is useful
-  because pointwise matrix operations like trace, transpose, and matrix
-  multiplications of physical tensor quantities is meaningful.
-
-  Example usage:
-    grad = fd.gradient_tensor(uv)                    # a rank 2 Tensor
-    strain_rate = (grad + grad.T) / 2.
-    nu_smag = np.sqrt(np.trace(strain_rate.dot(strain_rate)))
-    nu_smag = Tensor(nu_smag)                        # a rank 0 Tensor
-    subgrid_stress = -2 * nu_smag * strain_rate      # a rank 2 Tensor
-  """
-
-  def __new__(cls, arrays):
-    return np.asarray(arrays).view(cls)
-
-
-jax.tree_util.register_pytree_node(
-    Tensor,
-    lambda tensor: (tensor.ravel().tolist(), tensor.shape),
-    lambda shape, arrays: Tensor(np.asarray(arrays).reshape(shape)),
-)
-
-
-# Aliases for often used `grids.applied` functions.
-where = applied(jnp.where)
-
-
-PERIODIC = 'periodic'
-DIRICHLET = 'dirichlet'
-VALID_BOUNDARIES = {PERIODIC, DIRICHLET}
 
 
 @dataclasses.dataclass(init=False, frozen=True)
@@ -300,16 +436,11 @@ class Grid:
   - `step[i]` is the width of each grid cell.
   - `(lower, upper) = domain[i]` gives the locations of lower and upper
     boundaries. The identity `upper - lower = step[i] * shape[i]` is enforced.
-  - `boundaries[i]` gives the boundary conditions in this direction, either
-    periodic or dirichlet.
-
-  NOTE: only periodic boundary conditions work correctly in the rest of the
-  JAX-CFD code.
   """
   shape: Tuple[int, ...]
   step: Tuple[float, ...]
   domain: Tuple[Tuple[float, float], ...]
-  boundaries: Tuple[str, ...]
+  boundaries: Tuple[str, ...]  # TODO(pnorgaard) remove this property
 
   def __init__(
       self,
@@ -480,12 +611,12 @@ class Grid:
       offset = self.cell_center
     return GridArray(fn(*self.mesh(offset)), offset, self)
 
+  # TODO(pnorgaard) Refactor shift/pad/trim out of Grid
   def shift(
       self,
       u: GridArray,
       offset: int,
       axis: int,
-      pad_kwargs: Optional[Mapping[str, Any]] = None,
   ) -> GridArray:
     """Shift an GridArray by `offset`.
 
@@ -493,17 +624,13 @@ class Grid:
       u: an `GridArray` object.
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
-      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
-        default, uses appropriate padding for the Grid's boundary conditions
-        (`mode='wrap'` for periodic, `mode='constant` with a fill value of zero
-        for dirichlet).
 
     Returns:
       A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
       `u.offset + offset`.
     """
     padding = (-offset, 0) if offset < 0 else (0, offset)
-    padded = self.pad(u, padding, axis, pad_kwargs)
+    padded = self.pad(u, padding, axis)
     trimmed = self.trim(padded, padding[::-1], axis)
     return trimmed
 
@@ -512,7 +639,6 @@ class Grid:
       u: GridArray,
       padding: Tuple[int, int],
       axis: int,
-      pad_kwargs: Optional[Mapping[str, Any]] = None,
   ) -> GridArray:
     """Pad an GridArray by `padding`.
 
@@ -520,20 +646,15 @@ class Grid:
       u: an `GridArray` object.
       padding: left and right padding along this axis.
       axis: axis to pad along.
-      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
-        default, uses appropriate padding for the Grid's boundary conditions
-        (`mode='wrap'` for periodic, `mode='constant'` with a fill value of zero
-        for dirichlet).
 
     Returns:
       Padded array, elongated along the indicated axis.
     """
-    if pad_kwargs is None:
-      if self.boundaries[axis] == PERIODIC:
-        pad_kwargs = dict(mode='wrap')
-      else:
-        assert self.boundaries[axis] == DIRICHLET
-        pad_kwargs = dict(mode='constant')
+    if self.boundaries[axis] == PERIODIC:
+      pad_kwargs = dict(mode='wrap')
+    else:
+      assert self.boundaries[axis] == DIRICHLET
+      pad_kwargs = dict(mode='constant')
 
     offset = list(u.offset)
     offset[axis] -= padding[0]

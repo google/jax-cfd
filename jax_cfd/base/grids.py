@@ -176,6 +176,7 @@ def applied(func):
   Returns:
     A wrapped version of `func` that takes GridArray instead of Array args.
   """
+
   def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
     offset = consistent_offset(*[
         arg for arg in args + tuple(kwargs.values())
@@ -185,12 +186,9 @@ def applied(func):
         arg for arg in args + tuple(kwargs.values())
         if isinstance(arg, GridArray)
     ])
-    raw_args = [
-        arg.data if isinstance(arg, GridArray) else arg for arg in args
-    ]
+    raw_args = [arg.data if isinstance(arg, GridArray) else arg for arg in args]
     raw_kwargs = {
-        k: v.data if isinstance(v, GridArray) else v
-        for k, v in kwargs.items()
+        k: v.data if isinstance(v, GridArray) else v for k, v in kwargs.items()
     }
     data = func(*raw_args, **raw_kwargs)
     return GridArray(data, offset, grid)
@@ -241,6 +239,157 @@ def consistent_grid(*arrays: GridArray) -> Grid:
 
 GridField = Tuple[GridArray, ...]
 
+# NOTE: only periodic boundary conditions work correctly in the majority of the
+# JAX-CFD code.
+PERIODIC = 'periodic'
+DIRICHLET = 'dirichlet'
+VALID_BOUNDARIES = (PERIODIC, DIRICHLET)
+
+
+# TODO(pnorgaard) Generalize BC implementation
+@dataclasses.dataclass(init=False, frozen=True)
+class BoundaryConditions:
+  """Boundary conditions for a PDE variable.
+
+  Example usage:
+    grid = Grid((10, 10))
+    array = GridArray(np.zeros((10, 10)), offset=(0.5, 0.5), grid)
+    bc = BoundaryConditions((PERIODIC, PERIODIC))
+    u = GridVariable(array, bc)
+
+
+  Attributes:
+    boundaries: `boundaries[i]` gives the boundary conditions in each direction.
+  """
+  boundaries: Tuple[str, ...]
+
+  def __init__(self, boundaries: Union[str, Tuple[str]] = 'periodic'):
+    if isinstance(boundaries, str):
+      boundaries = (boundaries,)
+    invalid_boundaries = [b for b in boundaries if b not in VALID_BOUNDARIES]
+    if invalid_boundaries:
+      raise ValueError(f'Invalid boundary condition: {invalid_boundaries}')
+    object.__setattr__(self, 'boundaries', boundaries)
+
+
+@register_pytree_node_class
+@dataclasses.dataclass
+class GridVariable:
+  """Associates a GridArray with BoundaryConditions.
+
+  Performing pad and shift operations, e.g. for finite difference calculations,
+  requires boundary condition (BC) information. Since different variables in a
+  PDE system can have different BCs, this class associates a specific variable's
+  data with its BCs.
+
+  Array operations on GridVariables act like array operations on the
+  encapsulated GridArray.
+
+  Attributes:
+    array: GridArray with the array data, offset, and associated grid.
+    bc: boundary conditions for this variable.
+    grid: the Grid associated with the array data.
+    dtype: type of the array data.
+    shape: lengths of the array dimensions.
+    ndim: number of array dimensions.
+    data: array values.
+    offset: alignment location of the data with respect to the grid.
+    grid: the Grid associated with the array data.
+  """
+  array: GridArray
+  bc: BoundaryConditions
+
+  def __post_init__(self):
+    if len(self.bc.boundaries) != self.ndim:
+      raise ValueError(
+          'Incompatible dimension between array and bc, array dimension = '
+          f'{self.array.ndim}, bc dimension = {len(self.bc.boundaries)}')
+
+  def tree_flatten(self):
+    """Returns flattening recipe for GridVariable JAX pytree."""
+    children = (self.array,)
+    aux_data = (self.bc,)
+    return children, aux_data
+
+  @classmethod
+  def tree_unflatten(cls, aux_data, children):
+    """Returns unflattening recipe for GridVariable JAX pytree."""
+    return cls(*children, *aux_data)
+
+  @property
+  def dtype(self):
+    return self.array.dtype
+
+  @property
+  def shape(self) -> Tuple[int, ...]:
+    return self.array.shape
+
+  @property
+  def ndim(self) -> int:
+    return self.array.ndim
+
+  @property
+  def data(self) -> Array:
+    return self.array.data
+
+  @property
+  def offset(self) -> Tuple[float, ...]:
+    return self.array.offset
+
+  @property
+  def grid(self) -> Grid:
+    return self.array.grid
+
+  # TODO(pnorgaard) refactor shift/pad/trim out of Grid
+  def shift(
+      self,
+      offset: int,
+      axis: int,
+  ) -> GridArray:
+    """Shift this GridVariable by `offset`.
+
+    Args:
+      offset: positive or negative integer offset to shift.
+      axis: axis to shift along.
+
+    Returns:
+      A copy of the encapsulated GridArray, shifted by `offset`. The returned
+      GridArray has offset `u.offset + offset`.
+    """
+    return self.array.grid.shift(self.array, offset, axis)
+
+  def pad(
+      self,
+      padding: Tuple[int, int],
+      axis: int,
+  ) -> GridArray:
+    """Pad this GridVariable by `padding`.
+
+    Args:
+      padding: left and right padding along this axis.
+      axis: axis to pad along.
+
+    Returns:
+      A copy of the encapsulated GridArray, padded along the indicated axis.
+    """
+    return self.array.grid.pad(self.array, padding, axis)
+
+  def trim(
+      self,
+      padding: Tuple[int, int],
+      axis: int,
+  ) -> GridArray:
+    """Trim padding from this GridVariable.
+
+    Args:
+      padding: left and right padding along this axis.
+      axis: axis to trim along.
+
+    Returns:
+      A copy of the encapsulated GridArray, trimmed along the indicated axis.
+    """
+    return self.array.grid.trim(self.array, padding, axis)
+
 
 class Tensor(np.ndarray):
   """A numpy array of GridArrays, representing a physical tensor field.
@@ -267,14 +416,8 @@ jax.tree_util.register_pytree_node(
     lambda shape, arrays: Tensor(np.asarray(arrays).reshape(shape)),
 )
 
-
 # Aliases for often used `grids.applied` functions.
 where = applied(jnp.where)
-
-
-PERIODIC = 'periodic'
-DIRICHLET = 'dirichlet'
-VALID_BOUNDARIES = {PERIODIC, DIRICHLET}
 
 
 @dataclasses.dataclass(init=False, frozen=True)
@@ -290,16 +433,11 @@ class Grid:
   - `step[i]` is the width of each grid cell.
   - `(lower, upper) = domain[i]` gives the locations of lower and upper
     boundaries. The identity `upper - lower = step[i] * shape[i]` is enforced.
-  - `boundaries[i]` gives the boundary conditions in this direction, either
-    periodic or dirichlet.
-
-  NOTE: only periodic boundary conditions work correctly in the rest of the
-  JAX-CFD code.
   """
   shape: Tuple[int, ...]
   step: Tuple[float, ...]
   domain: Tuple[Tuple[float, float], ...]
-  boundaries: Tuple[str, ...]
+  boundaries: Tuple[str, ...]  # TODO(pnorgaard) remove this property
 
   def __init__(
       self,
@@ -343,8 +481,7 @@ class Grid:
     if isinstance(boundaries, str):
       boundaries = (boundaries,) * self.ndim
     invalid_boundaries = [
-        boundary for boundary in boundaries
-        if boundary not in VALID_BOUNDARIES
+        boundary for boundary in boundaries if boundary not in VALID_BOUNDARIES
     ]
     if invalid_boundaries:
       raise ValueError(f'invalid boundaries: {invalid_boundaries}')
@@ -461,7 +598,7 @@ class Grid:
     Args:
       fn: A function that accepts the mesh arrays and returns an array.
       offset: an optional sequence of length `ndim`.  If not specified, uses the
-      offset for the cell center.
+        offset for the cell center.
 
     Returns:
       fn(x, y, ...) evaluated on the mesh, as a GridArray with specified offset.
@@ -470,6 +607,7 @@ class Grid:
       offset = self.cell_center
     return GridArray(fn(*self.mesh(offset)), offset, self)
 
+  # TODO(pnorgaard) Refactor shift/pad/trim out of Grid
   def shift(
       self,
       u: GridArray,

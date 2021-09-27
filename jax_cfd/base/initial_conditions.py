@@ -43,7 +43,10 @@ def _log_normal_pdf(x, mode, variance=.25):
 
 
 def _max_speed(v):
-  return jnp.linalg.norm([u.data for u in v], axis=0).max()
+  # If u.data[i].shape = B, then after stacking we have shape B + [ndim].
+  # Take the norm along the rightmost axis, to get shape B of norms.
+  # Finally take the max over all batch members.
+  return jnp.linalg.norm(jnp.stack([u.data for u in v], axis=-1), axis=-1).max()
 
 
 def filtered_velocity_field(

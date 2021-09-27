@@ -288,24 +288,15 @@ class GridTest(test_util.TestCase):
           expected_array=np.array([0, 1, 2, 3, 0]),
           expected_offset=(-1,),
       ),
-      dict(
-          grid=grids.Grid((3,)),
-          inputs=np.array([1, 2, 3]),
-          padding=(2, 1),
-          expected_array=np.array([-1, -1, 1, 2, 3, -2]),
-          expected_offset=(-2,),
-          pad_kwargs=dict(mode='constant', constant_values=(-1, -2)),
-      ),
   )
   def test_pad(self,
                grid,
                inputs,
                padding,
                expected_array,
-               expected_offset,
-               pad_kwargs=None):
+               expected_offset):
     array = grids.GridArray(inputs, (0,), grid)
-    actual = grid.pad(array, padding, axis=0, pad_kwargs=pad_kwargs)
+    actual = grid.pad(array, padding, axis=0)
     expected = grids.GridArray(expected_array, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 

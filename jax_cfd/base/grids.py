@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import numbers
 import operator
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import jax
 from jax import lax
@@ -94,44 +94,34 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
       self,
       offset: int,
       axis: int,
-      pad_kwargs: Optional[Mapping[str, Any]] = None,
   ) -> GridArray:
     """Shift this GridArray by `offset`.
 
     Args:
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
-      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
-        default, uses appropriate padding for the Grid's boundary conditions
-        (`mode='wrap'` for periodic, `mode='constant` with a fill value of
-        zero for dirichlet).
 
     Returns:
       A copy of this GridArray, shifted by `offset`. The returned `GridArray`
       has offset `u.offset + offset`.
     """
-    return self.grid.shift(self, offset, axis, pad_kwargs)
+    return self.grid.shift(self, offset, axis)
 
   def pad(
       self,
       padding: Tuple[int, int],
       axis: int,
-      pad_kwargs: Optional[Mapping[str, Any]] = None,
   ) -> GridArray:
     """Pad this GridArray by `padding`.
 
     Args:
       padding: left and right padding along this axis.
       axis: axis to pad along.
-      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
-        default, uses appropriate padding for the Grid's boundary conditions
-        (`mode='wrap'` for periodic, `mode='constant'` with a fill value of zero
-        for dirichlet).
 
     Returns:
       Padded GridArray, elongated along the indicated axis.
     """
-    return self.grid.pad(self, padding, axis, pad_kwargs)
+    return self.grid.pad(self, padding, axis)
 
   def trim(
       self,
@@ -485,7 +475,6 @@ class Grid:
       u: GridArray,
       offset: int,
       axis: int,
-      pad_kwargs: Optional[Mapping[str, Any]] = None,
   ) -> GridArray:
     """Shift an GridArray by `offset`.
 
@@ -493,17 +482,13 @@ class Grid:
       u: an `GridArray` object.
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
-      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
-        default, uses appropriate padding for the Grid's boundary conditions
-        (`mode='wrap'` for periodic, `mode='constant` with a fill value of zero
-        for dirichlet).
 
     Returns:
       A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
       `u.offset + offset`.
     """
     padding = (-offset, 0) if offset < 0 else (0, offset)
-    padded = self.pad(u, padding, axis, pad_kwargs)
+    padded = self.pad(u, padding, axis)
     trimmed = self.trim(padded, padding[::-1], axis)
     return trimmed
 
@@ -512,7 +497,6 @@ class Grid:
       u: GridArray,
       padding: Tuple[int, int],
       axis: int,
-      pad_kwargs: Optional[Mapping[str, Any]] = None,
   ) -> GridArray:
     """Pad an GridArray by `padding`.
 
@@ -520,20 +504,15 @@ class Grid:
       u: an `GridArray` object.
       padding: left and right padding along this axis.
       axis: axis to pad along.
-      pad_kwargs: optional keyword arguments passed into `jax.np.pad`. By
-        default, uses appropriate padding for the Grid's boundary conditions
-        (`mode='wrap'` for periodic, `mode='constant'` with a fill value of zero
-        for dirichlet).
 
     Returns:
       Padded array, elongated along the indicated axis.
     """
-    if pad_kwargs is None:
-      if self.boundaries[axis] == PERIODIC:
-        pad_kwargs = dict(mode='wrap')
-      else:
-        assert self.boundaries[axis] == DIRICHLET
-        pad_kwargs = dict(mode='constant')
+    if self.boundaries[axis] == PERIODIC:
+      pad_kwargs = dict(mode='wrap')
+    else:
+      assert self.boundaries[axis] == DIRICHLET
+      pad_kwargs = dict(mode='constant')
 
     offset = list(u.offset)
     offset[axis] -= padding[0]

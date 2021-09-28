@@ -94,7 +94,7 @@ def semi_implicit_navier_stokes(
     """Computes state at time `t + dt` using first order time integration."""
     convection = convect(v)
     accelerations = [convection]
-    if viscosity:
+    if viscosity is not None:
       diffusion_ = tuple(diffuse(u, viscosity / density) for u in v)
       accelerations.append(diffusion_)
     if forcing is not None:

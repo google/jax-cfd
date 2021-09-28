@@ -96,7 +96,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            shape=(40, 40, 40),
            step=(1., 1., 1.),
            density=1.,
-           viscosity=0,
+           viscosity=None,
            convect=_convect_upwind,
            pressure_solve=pressure.solve_cg,
            dt=1e-3,

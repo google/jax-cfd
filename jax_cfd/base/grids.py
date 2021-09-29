@@ -164,79 +164,6 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
       return GridArray(result, offset, grid)
 
 
-def applied(func):
-  """Convert an array function into one defined on GridArrays.
-
-  Since `func` can only act on `data` attribute of GridArray, it implicitly
-  enforces that `func` cannot modify the other attributes such as offset.
-
-  Args:
-    func: function being wrapped.
-
-  Returns:
-    A wrapped version of `func` that takes GridArray instead of Array args.
-  """
-
-  def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
-    offset = consistent_offset(*[
-        arg for arg in args + tuple(kwargs.values())
-        if isinstance(arg, GridArray)
-    ])
-    grid = consistent_grid(*[
-        arg for arg in args + tuple(kwargs.values())
-        if isinstance(arg, GridArray)
-    ])
-    raw_args = [arg.data if isinstance(arg, GridArray) else arg for arg in args]
-    raw_kwargs = {
-        k: v.data if isinstance(v, GridArray) else v for k, v in kwargs.items()
-    }
-    data = func(*raw_args, **raw_kwargs)
-    return GridArray(data, offset, grid)
-
-  return wrapper
-
-
-class InconsistentOffsetError(Exception):
-  """Raised for cases of inconsistent offset in GridArrays."""
-
-
-def consistent_offset(*arrays: GridArray) -> Tuple[float, ...]:
-  """Returns the single unique offset, or raises InconsistentOffsetError."""
-  offsets = {array.offset for array in arrays}
-  if len(offsets) != 1:
-    raise InconsistentOffsetError(
-        f'arrays do not have a unique offset: {offsets}')
-  offset, = offsets
-  return offset
-
-
-def averaged_offset(*arrays: GridArray) -> Tuple[float, ...]:
-  """Returns the averaged offset of the given arrays."""
-  offset = np.mean([array.offset for array in arrays], axis=0)
-  return tuple(offset.tolist())
-
-
-def control_volume_offsets(c: GridArray) -> Tuple[Tuple[float, ...], ...]:
-  """Returns offsets for the faces of the control volume centered at `c`."""
-  return tuple(
-      tuple(o + .5 if i == j else o
-            for i, o in enumerate(c.offset))
-      for j in range(len(c.offset)))
-
-
-class InconsistentGridError(Exception):
-  """Raised for cases of inconsistent grids between GridArrays."""
-
-
-def consistent_grid(*arrays: GridArray) -> Grid:
-  """Returns the single unique grid, or raises InconsistentGridError."""
-  grids = {array.grid for array in arrays}
-  if len(grids) != 1:
-    raise InconsistentGridError(f'arrays do not have a unique grid: {grids}')
-  grid, = grids
-  return grid
-
-
 GridField = Tuple[GridArray, ...]
 
 # NOTE: only periodic boundary conditions work correctly in the majority of the
@@ -416,8 +343,82 @@ jax.tree_util.register_pytree_node(
     lambda shape, arrays: Tensor(np.asarray(arrays).reshape(shape)),
 )
 
+
+def applied(func):
+  """Convert an array function into one defined on GridArrays.
+
+  Since `func` can only act on `data` attribute of GridArray, it implicitly
+  enforces that `func` cannot modify the other attributes such as offset.
+
+  Args:
+    func: function being wrapped.
+
+  Returns:
+    A wrapped version of `func` that takes GridArray instead of Array args.
+  """
+
+  def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
+    offset = consistent_offset(*[
+        arg for arg in args + tuple(kwargs.values())
+        if isinstance(arg, GridArray)
+    ])
+    grid = consistent_grid(*[
+        arg for arg in args + tuple(kwargs.values())
+        if isinstance(arg, GridArray)
+    ])
+    raw_args = [arg.data if isinstance(arg, GridArray) else arg for arg in args]
+    raw_kwargs = {
+        k: v.data if isinstance(v, GridArray) else v for k, v in kwargs.items()
+    }
+    data = func(*raw_args, **raw_kwargs)
+    return GridArray(data, offset, grid)
+
+  return wrapper
+
+
 # Aliases for often used `grids.applied` functions.
 where = applied(jnp.where)
+
+
+def averaged_offset(*arrays: GridArray) -> Tuple[float, ...]:
+  """Returns the averaged offset of the given arrays."""
+  offset = np.mean([array.offset for array in arrays], axis=0)
+  return tuple(offset.tolist())
+
+
+def control_volume_offsets(c: GridArray) -> Tuple[Tuple[float, ...], ...]:
+  """Returns offsets for the faces of the control volume centered at `c`."""
+  return tuple(
+      tuple(o + .5 if i == j else o
+            for i, o in enumerate(c.offset))
+      for j in range(len(c.offset)))
+
+
+class InconsistentOffsetError(Exception):
+  """Raised for cases of inconsistent offset in GridArrays."""
+
+
+def consistent_offset(*arrays: GridArray) -> Tuple[float, ...]:
+  """Returns the single unique offset, or raises InconsistentOffsetError."""
+  offsets = {array.offset for array in arrays}
+  if len(offsets) != 1:
+    raise InconsistentOffsetError(
+        f'arrays do not have a unique offset: {offsets}')
+  offset, = offsets
+  return offset
+
+
+class InconsistentGridError(Exception):
+  """Raised for cases of inconsistent grids between GridArrays."""
+
+
+def consistent_grid(*arrays: GridArray) -> Grid:
+  """Returns the single unique grid, or raises InconsistentGridError."""
+  grids = {array.grid for array in arrays}
+  if len(grids) != 1:
+    raise InconsistentGridError(f'arrays do not have a unique grid: {grids}')
+  grid, = grids
+  return grid
 
 
 @dataclasses.dataclass(init=False, frozen=True)

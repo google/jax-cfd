@@ -56,7 +56,6 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
     grid: the Grid associated with the array data.
     dtype: type of the array data.
     shape: lengths of the array dimensions.
-    ndim: number of array dimensions.
   """
   # Don't (yet) enforce any explicit consistency requirements between data.ndim
   # and len(offset), e.g., so we can feel to add extra time/batch/channel
@@ -85,10 +84,6 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
   @property
   def shape(self) -> Tuple[int, ...]:
     return self.data.shape
-
-  @property
-  def ndim(self) -> int:
-    return self.data.ndim
 
   def shift(
       self,
@@ -218,7 +213,6 @@ class GridVariable:
     grid: the Grid associated with the array data.
     dtype: type of the array data.
     shape: lengths of the array dimensions.
-    ndim: number of array dimensions.
     data: array values.
     offset: alignment location of the data with respect to the grid.
     grid: the Grid associated with the array data.
@@ -227,10 +221,10 @@ class GridVariable:
   bc: BoundaryConditions
 
   def __post_init__(self):
-    if len(self.bc.boundaries) != self.ndim:
+    if len(self.bc.boundaries) != self.grid.ndim:
       raise ValueError(
-          'Incompatible dimension between array and bc, array dimension = '
-          f'{self.array.ndim}, bc dimension = {len(self.bc.boundaries)}')
+          'Incompatible dimension between grid and bc, array dimension = '
+          f'{self.array.grid.ndim}, bc dimension = {len(self.bc.boundaries)}')
 
   def tree_flatten(self):
     """Returns flattening recipe for GridVariable JAX pytree."""
@@ -250,10 +244,6 @@ class GridVariable:
   @property
   def shape(self) -> Tuple[int, ...]:
     return self.array.shape
-
-  @property
-  def ndim(self) -> int:
-    return self.array.ndim
 
   @property
   def data(self) -> Array:

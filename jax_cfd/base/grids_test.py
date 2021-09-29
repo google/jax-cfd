@@ -182,7 +182,6 @@ class GridVariableTest(test_util.TestCase):
       self.assertEqual(variable.bc, bc)
       self.assertEqual(variable.dtype, np.float32)
       self.assertEqual(variable.shape, (10,))
-      self.assertEqual(variable.ndim, 1)
       self.assertArrayEqual(variable.data, data)
       self.assertEqual(variable.offset, (0.5,))
       self.assertEqual(variable.grid, grid)
@@ -197,14 +196,27 @@ class GridVariableTest(test_util.TestCase):
       self.assertEqual(variable.bc, bc)
       self.assertEqual(variable.dtype, np.float32)
       self.assertEqual(variable.shape, (10, 10))
-      self.assertEqual(variable.ndim, 2)
+      self.assertArrayEqual(variable.data, data)
+      self.assertEqual(variable.offset, (0.5, 0.5))
+      self.assertEqual(variable.grid, grid)
+
+    with self.subTest('batch dim data'):
+      grid = grids.Grid((10, 10))
+      data = np.zeros((5, 10, 10), dtype=np.float32)
+      array = grids.GridArray(data, offset=(0.5, 0.5), grid=grid)
+      bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))
+      variable = grids.GridVariable(array, bc)
+      self.assertEqual(variable.array, array)
+      self.assertEqual(variable.bc, bc)
+      self.assertEqual(variable.dtype, np.float32)
+      self.assertEqual(variable.shape, (5, 10, 10))
       self.assertArrayEqual(variable.data, data)
       self.assertEqual(variable.offset, (0.5, 0.5))
       self.assertEqual(variable.grid, grid)
 
     with self.subTest('raises exception'):
       with self.assertRaisesRegex(
-          ValueError, 'Incompatible dimension between array and bc'):
+          ValueError, 'Incompatible dimension between grid and bc'):
         grid = grids.Grid((10,))
         data = np.zeros((10,))
         array = grids.GridArray(data, offset=(0.5,), grid=grid)  # 1D

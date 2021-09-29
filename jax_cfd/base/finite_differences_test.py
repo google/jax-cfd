@@ -26,7 +26,7 @@ import numpy as np
 
 def _trim_boundary(array):
   if isinstance(array, grids.GridArray):
-    data = array.data[(slice(1, -1),) * array.ndim]
+    data = array.data[(slice(1, -1),) * array.data.ndim]
     return grids.GridArray(data, array.offset, array.grid)
   else:
     return jnp.asarray(array)[(slice(1, -1),) * array.ndim]

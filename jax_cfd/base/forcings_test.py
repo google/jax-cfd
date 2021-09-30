@@ -22,11 +22,12 @@ import jax.numpy as jnp
 from jax_cfd.base import forcings
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
+import numpy as np
 
 
 def _make_zero_velocity_field(grid):
   ndim = grid.ndim
-  offsets = (jnp.eye(ndim) + jnp.ones([ndim, ndim])) / 2.
+  offsets = (np.eye(ndim) + np.ones([ndim, ndim])) / 2.
   return tuple(
       grids.GridArray(jnp.zeros(grid.shape), tuple(offset), grid)
       for ax, offset in enumerate(offsets))

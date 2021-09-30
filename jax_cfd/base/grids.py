@@ -226,6 +226,21 @@ class GridVariable:
           'Incompatible dimension between grid and bc, array dimension = '
           f'{self.array.grid.ndim}, bc dimension = {len(self.bc.boundaries)}')
 
+  @classmethod
+  def create(
+      cls,
+      data: Array,
+      offset: Tuple[float, ...],
+      grid: Grid,
+      boundaries: Union[str, Tuple[str, ...]],
+  ) -> GridVariable:
+    """Create the enclosed GridArray and BoundaryConditions on the fly."""
+    array = GridArray(data, offset, grid)
+    if isinstance(boundaries, str):
+      boundaries = (boundaries,) * grid.ndim
+    bc = BoundaryConditions(boundaries)
+    return cls(array, bc)
+
   def tree_flatten(self):
     """Returns flattening recipe for GridVariable JAX pytree."""
     children = (self.array,)
@@ -388,8 +403,9 @@ class InconsistentOffsetError(Exception):
   """Raised for cases of inconsistent offset in GridArrays."""
 
 
-def consistent_offset(*arrays: GridArray) -> Tuple[float, ...]:
-  """Returns the single unique offset, or raises InconsistentOffsetError."""
+def consistent_offset(
+    *arrays: Union[GridArray, GridVariable]) -> Tuple[float, ...]:
+  """Returns the unique offset, or raises InconsistentOffsetError."""
   offsets = {array.offset for array in arrays}
   if len(offsets) != 1:
     raise InconsistentOffsetError(
@@ -402,13 +418,27 @@ class InconsistentGridError(Exception):
   """Raised for cases of inconsistent grids between GridArrays."""
 
 
-def consistent_grid(*arrays: GridArray) -> Grid:
-  """Returns the single unique grid, or raises InconsistentGridError."""
+def consistent_grid(*arrays: Union[GridArray, GridVariable]) -> Grid:
+  """Returns the unique grid, or raises InconsistentGridError."""
   grids = {array.grid for array in arrays}
   if len(grids) != 1:
     raise InconsistentGridError(f'arrays do not have a unique grid: {grids}')
   grid, = grids
   return grid
+
+
+class InconsistentBoundaryConditionError(Exception):
+  """Raised for cases of inconsistent bc between GridVariables."""
+
+
+def consistent_boundary_conditions(*arrays: GridVariable) -> BoundaryConditions:
+  """Returns the unique BCs, or raises InconsistentBoundaryConditionError."""
+  bcs = {array.bc for array in arrays}
+  if len(bcs) != 1:
+    raise InconsistentBoundaryConditionError(
+        f'arrays do not have a unique bc: {bcs}')
+  bc, = bcs
+  return bc
 
 
 @dataclasses.dataclass(init=False, frozen=True)

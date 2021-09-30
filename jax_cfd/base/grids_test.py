@@ -262,6 +262,30 @@ class GridVariableTest(test_util.TestCase):
       self.assertArrayEqual(
           u.trim(padding, axis), grid.trim(array, padding, axis))
 
+    with self.subTest('raises exception'):
+      with self.assertRaisesRegex(
+          ValueError, 'Incompatible dimension between grid and bc'):
+        grid = grids.Grid((10,))
+        data = np.zeros((10,))
+        array = grids.GridArray(data, offset=(0.5,), grid=grid)  # 1D
+        bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))  # 2D
+        grids.GridVariable(array, bc)
+
+  def test_construction_with_create(self):
+    grid = grids.Grid((10, 10))
+    data = np.zeros((10, 10))
+    offset = (0.5, 0.5)
+    array = grids.GridArray(data, offset, grid)
+    boundaries = (grids.PERIODIC, grids.PERIODIC)
+    bc = grids.BoundaryConditions(boundaries)
+    variable_1 = grids.GridVariable(array, bc)
+    variable_2 = grids.GridVariable.create(data, offset, grid, boundaries)
+    self.assertArrayEqual(variable_1, variable_2)
+
+    with self.subTest('str boundaries arg'):
+      variable_3 = grids.GridVariable.create(data, offset, grid, 'periodic')
+      self.assertArrayEqual(variable_1, variable_3)
+
 
 class TensorTest(test_util.TestCase):
 

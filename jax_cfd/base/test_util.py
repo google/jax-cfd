@@ -27,8 +27,20 @@ class TestCase(parameterized.TestCase):
   """TestCase with assertions for arrays and grids.AlignedArray."""
 
   def _check_and_remove_alignment_and_grid(self, *arrays):
-    """If arrays are aligned, verify their offsets and grids match."""
+    """Check that array-like data values and other attributes match.
+
+    If args type is GridArray, verify their offsets and grids match.
+    If args type is GridVariable, verify their offsets, grids, and bc match.
+
+    Args:
+      *arrays: one or more Array, GridArray or GridVariable, but they all be the
+        same type.
+
+    Returns:
+      The data-only arrays, with other attributes removed.
+    """
     is_gridarray = [isinstance(array, grids.GridArray) for array in arrays]
+    # GridArray
     if any(is_gridarray):
       self.assertTrue(
           all(is_gridarray), msg=f'arrays have mixed types: {arrays}')
@@ -41,6 +53,26 @@ class TestCase(parameterized.TestCase):
       except grids.InconsistentGridError as e:
         raise AssertionError(str(e)) from None
       arrays = tuple(array.data for array in arrays)
+    # GridVariable
+    is_gridvariable = [
+        isinstance(array, grids.GridVariable) for array in arrays
+    ]
+    if any(is_gridvariable):
+      self.assertTrue(
+          all(is_gridvariable), msg=f'arrays have mixed types: {arrays}')
+      try:
+        grids.consistent_offset(*arrays)
+      except grids.InconsistentOffsetError as e:
+        raise AssertionError(str(e)) from None
+      try:
+        grids.consistent_grid(*arrays)
+      except grids.InconsistentGridError as e:
+        raise AssertionError(str(e)) from None
+      try:
+        grids.consistent_boundary_conditions(*arrays)
+      except grids.InconsistentBoundaryConditionError as e:
+        raise AssertionError(str(e)) from None
+      arrays = tuple(array.array.data for array in arrays)
     return arrays
 
   # pylint: disable=unbalanced-tuple-unpacking

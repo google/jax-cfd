@@ -159,7 +159,34 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
       return GridArray(result, offset, grid)
 
 
-GridField = Tuple[GridArray, ...]
+GridArrayVector = Tuple[GridArray, ...]
+
+
+class GridArrayTensor(np.ndarray):
+  """A numpy array of GridArrays, representing a physical tensor field.
+
+  Packing tensor coordinates into a numpy array of dtype object is useful
+  because pointwise matrix operations like trace, transpose, and matrix
+  multiplications of physical tensor quantities is meaningful.
+
+  Example usage:
+    grad = fd.gradient_tensor(uv)                    # a rank 2 Tensor
+    strain_rate = (grad + grad.T) / 2.
+    nu_smag = np.sqrt(np.trace(strain_rate.dot(strain_rate)))
+    nu_smag = Tensor(nu_smag)                        # a rank 0 Tensor
+    subgrid_stress = -2 * nu_smag * strain_rate      # a rank 2 Tensor
+  """
+
+  def __new__(cls, arrays):
+    return np.asarray(arrays).view(cls)
+
+
+jax.tree_util.register_pytree_node(
+    GridArrayTensor,
+    lambda tensor: (tensor.ravel().tolist(), tensor.shape),
+    lambda shape, arrays: GridArrayTensor(np.asarray(arrays).reshape(shape)),
+)
+
 
 # NOTE: only periodic boundary conditions work correctly in the majority of the
 # JAX-CFD code.
@@ -223,8 +250,8 @@ class GridVariable:
   def __post_init__(self):
     if len(self.bc.boundaries) != self.grid.ndim:
       raise ValueError(
-          'Incompatible dimension between grid and bc, array dimension = '
-          f'{self.array.grid.ndim}, bc dimension = {len(self.bc.boundaries)}')
+          'Incompatible dimension between grid and bc, grid dimension = '
+          f'{self.grid.ndim}, bc dimension = {len(self.bc.boundaries)}')
 
   @classmethod
   def create(
@@ -323,30 +350,7 @@ class GridVariable:
     return self.array.grid.trim(self.array, padding, axis)
 
 
-class Tensor(np.ndarray):
-  """A numpy array of GridArrays, representing a physical tensor field.
-
-  Packing tensor coordinates into a numpy array of dtype object is useful
-  because pointwise matrix operations like trace, transpose, and matrix
-  multiplications of physical tensor quantities is meaningful.
-
-  Example usage:
-    grad = fd.gradient_tensor(uv)                    # a rank 2 Tensor
-    strain_rate = (grad + grad.T) / 2.
-    nu_smag = np.sqrt(np.trace(strain_rate.dot(strain_rate)))
-    nu_smag = Tensor(nu_smag)                        # a rank 0 Tensor
-    subgrid_stress = -2 * nu_smag * strain_rate      # a rank 2 Tensor
-  """
-
-  def __new__(cls, arrays):
-    return np.asarray(arrays).view(cls)
-
-
-jax.tree_util.register_pytree_node(
-    Tensor,
-    lambda tensor: (tensor.ravel().tolist(), tensor.shape),
-    lambda shape, arrays: Tensor(np.asarray(arrays).reshape(shape)),
-)
+GridVariableVector = Tuple[GridVariable, ...]
 
 
 def applied(func):

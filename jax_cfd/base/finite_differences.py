@@ -20,7 +20,7 @@ from jax_cfd.base import interpolation
 import numpy as np
 
 GridArray = grids.GridArray
-Tensor = grids.Tensor
+GridArrayTensor = grids.GridArrayTensor
 
 
 def stencil_sum(*arrays: GridArray) -> GridArray:
@@ -126,19 +126,19 @@ def divergence(v: Sequence[GridArray]) -> GridArray:
 
 
 @typing.overload
-def gradient_tensor(v: GridArray) -> Tensor:
+def gradient_tensor(v: GridArray) -> GridArrayTensor:
   ...
 
 
 @typing.overload
-def gradient_tensor(v: Sequence[GridArray]) -> Tensor:
+def gradient_tensor(v: Sequence[GridArray]) -> GridArrayTensor:
   ...
 
 
 def gradient_tensor(v):
   """Approximates the cell-centered gradient of `v`."""
   if not isinstance(v, GridArray):
-    return Tensor(np.stack([gradient_tensor(u) for u in v], axis=-1))
+    return GridArrayTensor(np.stack([gradient_tensor(u) for u in v], axis=-1))
   grad = []
   for axis in range(v.grid.ndim):
     offset = v.offset[axis]
@@ -151,7 +151,7 @@ def gradient_tensor(v):
 
     derivative = deriv_fn(v, axis)
     grad.append(interpolation.linear(derivative, v.grid.cell_center))
-  return Tensor(grad)
+  return GridArrayTensor(grad)
 
 
 def curl_2d(v: Sequence[GridArray]) -> GridArray:

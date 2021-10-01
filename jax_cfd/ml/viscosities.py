@@ -1,7 +1,7 @@
 """Models for closure terms and effective viscosities."""
 
 import functools
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 import gin
 import haiku as hk
@@ -16,9 +16,10 @@ import numpy as np
 
 Array = Union[np.ndarray, jnp.DeviceArray]
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 InterpolationModule = interpolations.InterpolationModule
-ViscosityFn = Callable[[grids.Tensor, GridField, grids.Grid], grids.Tensor]
+ViscosityFn = Callable[[grids.GridArrayTensor, GridArrayVector, grids.Grid],
+                       grids.GridArrayTensor]
 ViscosityModule = Callable[..., ViscosityFn]
 
 
@@ -53,10 +54,10 @@ def learned_scalar_viscosity(
   interpolate = interpolate_module(grid, dt, physics_specs)
 
   def viscosity_fn(
-      s_ij: grids.Tensor,
-      v: GridField,
+      s_ij: grids.GridArrayTensor,
+      v: GridArrayVector,
       grid: grids.Grid
-  ) -> grids.Tensor:
+  ) -> grids.GridArrayTensor:
     """Computes effective eddy viscosity using learned components.
 
     This viscosity model computes parametric scalar viscosity that is
@@ -102,10 +103,10 @@ def learned_tensor_viscosity(
   del grid, dt, physics_specs
 
   def viscosity_fn(
-      s_ij: grids.Tensor,
-      v: GridField,
+      s_ij: grids.GridArrayTensor,
+      v: GridArrayVector,
       grid: grids.Grid
-  ) -> grids.Tensor:
+  ) -> grids.GridArrayTensor:
     """Computes effective eddy viscosity using learned components.
 
     This viscosity model computes parametric tensor viscosity that predicts

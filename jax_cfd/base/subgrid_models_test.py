@@ -63,14 +63,14 @@ def zero_field(grid: grids.Grid):
                for o in grid.cell_faces)
 
 
-def momentum(v: grids.GridField, density: float):
+def momentum(v: grids.GridArrayVector, density: float):
   """Returns the momentum due to velocity field `v`."""
   grid = grids.consistent_grid(*v)
   return jnp.array([u.data for u in v]).sum() * density * jnp.array(
       grid.step).prod()
 
 
-def _convect_upwind(v: grids.GridField):
+def _convect_upwind(v: grids.GridArrayVector):
   return tuple(advection.advect_upwind(u, v) for u in v)
 
 
@@ -84,10 +84,10 @@ class SubgridModelsTest(test_util.TestCase):
     c01 = grids.GridArray(jnp.zeros(grid.shape), offset=(0, 1), grid=grid)
     c10 = grids.GridArray(jnp.zeros(grid.shape), offset=(1, 0), grid=grid)
     c11 = grids.GridArray(jnp.zeros(grid.shape), offset=(1, 1), grid=grid)
-    s_ij = grids.Tensor(np.array([[c00, c01], [c10, c11]]))
+    s_ij = grids.GridArrayTensor(np.array([[c00, c01], [c10, c11]]))
     viscosity = subgrid_models.smagorinsky_viscosity(
         s_ij=s_ij, v=v, dt=0.1, cs=0.2)
-    self.assertIsInstance(viscosity, grids.Tensor)
+    self.assertIsInstance(viscosity, grids.GridArrayTensor)
     self.assertEqual(viscosity.shape, (2, 2))
     self.assertAllClose(viscosity[0, 0], c00)
     self.assertAllClose(viscosity[0, 1], c01)

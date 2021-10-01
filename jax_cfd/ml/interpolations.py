@@ -15,7 +15,7 @@ import numpy as np
 
 
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 InterpolationFn = interpolation.InterpolationFn
 InterpolationModule = Callable[..., InterpolationFn]
 InterpolationTransform = Callable[..., InterpolationFn]
@@ -98,7 +98,7 @@ class FusedLearnedInterpolation:
   def __call__(self,
                c: GridArray,
                offset: Tuple[int, ...],
-               v: GridField,
+               v: GridArrayVector,
                dt: float,
                tag=None) -> GridArray:
     del dt  # not used.
@@ -151,7 +151,7 @@ class IndividualLearnedInterpolation:
       grid: grids.Grid,
       dt: float,
       physics_specs: physics_specifications.BasePhysicsSpecs,
-      v: GridField,
+      v: GridArrayVector,
       stencil_size=4,
       tower_factory=towers.forward_tower_factory,
   ):
@@ -172,7 +172,7 @@ class IndividualLearnedInterpolation:
         (0,) * self._ndim, self._tower_factory, self._steps)
     return self._modules[offsets]
 
-  def __call__(self, c: GridArray, offset: Tuple[int, ...], v: GridField,
+  def __call__(self, c: GridArray, offset: Tuple[int, ...], v: GridArrayVector,
                dt: float) -> GridArray:
     """Interpolates `c` to `offset`."""
     del dt  # not used.
@@ -217,7 +217,7 @@ def transformed(
     grid: grids.Grid,
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
-    v: GridField,
+    v: GridArrayVector,
     base_interpolation_module: InterpolationModule = lax_wendroff,
     transformation: InterpolationTransform = tvd_limiter_transformation,
 ) -> InterpolationFn:

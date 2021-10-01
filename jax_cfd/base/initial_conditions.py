@@ -26,10 +26,10 @@ import numpy as np
 
 Array = Union[np.ndarray, jnp.DeviceArray]
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 
 
-def wrap_velocities(v, grid: grids.Grid) -> Tuple[grids.GridArray, ...]:
+def wrap_velocities(v, grid: grids.Grid) -> GridArrayVector:
   """Wrap velocity arrays for input into simulations."""
   return tuple(grids.GridArray(u, offset, grid)
                for u, offset in zip(v, grid.cell_faces))
@@ -52,7 +52,7 @@ def filtered_velocity_field(
     maximum_velocity: float = 1,
     peak_wavenumber: float = 3,
     iterations: int = 3,
-) -> Tuple[grids.GridArray, ...]:
+) -> GridArrayVector:
   """Create divergence-free velocity fields with appropriate spectral filtering.
 
   Args:
@@ -97,7 +97,7 @@ def filtered_velocity_field(
 def initial_velocity_field(
     velocity_fns: Tuple[Callable[..., Array], ...],
     grid: grids.Grid,
-    iterations: Optional[int] = None) -> GridField:
+    iterations: Optional[int] = None) -> GridArrayVector:
   """Given velocity functions on arrays, returns the velocity field on the grid.
 
   Typical usage example:

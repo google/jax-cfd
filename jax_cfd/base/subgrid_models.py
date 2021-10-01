@@ -14,7 +14,7 @@
 
 """Code for subgrid models."""
 import functools
-from typing import Any, Callable, Mapping, Optional, Tuple
+from typing import Any, Callable, Mapping, Optional
 
 import jax
 from jax_cfd.base import equations
@@ -26,18 +26,19 @@ import numpy as np
 
 
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 InterpolationFn = interpolation.InterpolationFn
-ViscosityFn = Callable[[grids.Tensor, GridField], grids.Tensor]
+ViscosityFn = Callable[[grids.GridArrayTensor, GridArrayVector],
+                       grids.GridArrayTensor]
 
 
 def smagorinsky_viscosity(
-    s_ij: grids.Tensor,
-    v: GridField,
+    s_ij: grids.GridArrayTensor,
+    v: GridArrayVector,
     dt: Optional[float] = None,
     cs: float = 0.2,
     interpolate_fn: InterpolationFn = interpolation.linear
-) -> grids.Tensor:
+) -> grids.GridArrayTensor:
   """Computes eddy viscosity based on Smagorinsky model.
 
   This viscosity model computes scalar eddy viscosity at `grid.cell_center` and
@@ -75,9 +76,9 @@ def smagorinsky_viscosity(
 
 
 def evm_model(
-    v: GridField,
+    v: GridArrayVector,
     viscosity_fn: ViscosityFn,
-) -> GridField:
+) -> GridArrayVector:
   """Computes acceleration due to eddy viscosity turbulence model.
 
   Eddy viscosity models compute a turbulence closure term as a divergence of
@@ -94,7 +95,7 @@ def evm_model(
     acceleration of the velocity field `v`.
   """
   grid = grids.consistent_grid(*v)
-  s_ij = grids.Tensor([
+  s_ij = grids.GridArrayTensor([
       [0.5 * (finite_differences.forward_difference(v[i], j) +  # pylint: disable=g-complex-comprehension
               finite_differences.forward_difference(v[j], i))
        for j in range(grid.ndim)]
@@ -107,12 +108,12 @@ def evm_model(
 
 # TODO(dkochkov) remove when b/160947162 is resolved.
 def implicit_evm_solve_with_diffusion(
-    v: GridField,
+    v: GridArrayVector,
     viscosity: float,
     dt: float,
     configured_evm_model: Callable,  # pylint: disable=g-bare-generic
     cg_kwargs: Optional[Mapping[str, Any]] = None
-) -> GridField:
+) -> GridArrayVector:
   """Implicit solve for eddy viscosity model combined with diffusion.
 
   This method is intended to be used with `implicit_diffusion_navier_stokes` to

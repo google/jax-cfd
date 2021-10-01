@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Examples of defining equations."""
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional
 
 import jax
 import jax.numpy as jnp
@@ -27,10 +27,10 @@ from jax_cfd.base import pressure
 # pylint: disable=g-bare-generic
 
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
-ConvectFn = Callable[[GridField], GridField]
+GridArrayVector = grids.GridArrayVector
+ConvectFn = Callable[[GridArrayVector], GridArrayVector]
 DiffuseFn = Callable[[GridArray, float], GridArray]
-ForcingFn = Callable[[grids.GridField], grids.GridField]
+ForcingFn = Callable[[grids.GridArrayVector], grids.GridArrayVector]
 
 
 def sum_fields(*args):
@@ -54,7 +54,7 @@ def stable_time_step(
   return dt
 
 
-def dynamic_time_step(v: GridField,
+def dynamic_time_step(v: GridArrayVector,
                       max_courant_number: float,
                       viscosity: float,
                       grid: grids.Grid,
@@ -90,7 +90,7 @@ def semi_implicit_navier_stokes(
   # TODO(jamieas): Consider a scheme where pressure calculations and
   # advection/diffusion are staggered in time.
   @jax.named_call
-  def navier_stokes_step(v: GridField) -> GridField:
+  def navier_stokes_step(v: GridArrayVector) -> GridArrayVector:
     """Computes state at time `t + dt` using first order time integration."""
     convection = convect(v)
     accelerations = [convection]
@@ -132,7 +132,7 @@ def implicit_diffusion_navier_stokes(
   diffusion_solve = jax.named_call(diffusion_solve, name='diffusion')
 
   @jax.named_call
-  def navier_stokes_step(v: GridField) -> GridField:
+  def navier_stokes_step(v: GridArrayVector) -> GridArrayVector:
     """Computes state at time `t + dt` using first order time integration."""
     convection = convect(v)
     accelerations = [convection]

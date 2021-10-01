@@ -17,7 +17,7 @@ def diffusion_module(dt, module_params, **kwargs):
 ```
 """
 import functools
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional
 import gin
 import haiku as hk
 from jax_cfd.base import diffusion
@@ -28,9 +28,9 @@ from jax_cfd.ml import viscosities
 
 
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 DiffuseFn = Callable[[GridArray, float], GridArray]
-DiffusionSolveFn = Callable[[GridField, float, float], GridField]
+DiffusionSolveFn = Callable[[GridArrayVector, float, float], GridArrayVector]
 DiffuseModule = Callable[..., DiffuseFn]
 DiffusionSolveModule = Callable[..., DiffusionSolveFn]
 ViscosityModule = viscosities.ViscosityModule

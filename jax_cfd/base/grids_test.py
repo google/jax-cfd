@@ -278,16 +278,23 @@ class GridVariableTest(test_util.TestCase):
     array = grids.GridArray(data, offset, grid)
     boundaries = (grids.PERIODIC, grids.PERIODIC)
     bc = grids.BoundaryConditions(boundaries)
-    variable_1 = grids.GridVariable(array, bc)
-    variable_2 = grids.GridVariable.create(data, offset, grid, boundaries)
-    self.assertArrayEqual(variable_1, variable_2)
+
+    with self.subTest('tuple boundaries arg'):
+      variable_1 = grids.GridVariable(array, bc)
+      variable_2 = grids.GridVariable.create(data, offset, grid, boundaries)
+      self.assertArrayEqual(variable_1, variable_2)
+
+    with self.subTest('str boundaries arg'):
+      variable_1 = grids.GridVariable(array, bc)
+      variable_2 = grids.GridVariable.create(data, offset, grid, 'periodic')
+      self.assertArrayEqual(variable_1, variable_2)
 
     with self.subTest('str boundaries arg'):
       variable_3 = grids.GridVariable.create(data, offset, grid, 'periodic')
       self.assertArrayEqual(variable_1, variable_3)
 
 
-class TensorTest(test_util.TestCase):
+class GridArrayTensorTest(test_util.TestCase):
 
   def test_tensor_transpose(self):
     grid = grids.Grid((5, 5))
@@ -296,7 +303,7 @@ class TensorTest(test_util.TestCase):
     b = grids.GridArray(2 * jnp.ones([5, 5]), offset, grid)
     c = grids.GridArray(3 * jnp.ones([5, 5]), offset, grid)
     d = grids.GridArray(4 * jnp.ones([5, 5]), offset, grid)
-    tensor = grids.Tensor([[a, b], [c, d]])
+    tensor = grids.GridArrayTensor([[a, b], [c, d]])
     self.assertIsInstance(tensor, np.ndarray)
     transposed_tensor = np.transpose(tensor)
     self.assertAllClose(tensor[0, 1], transposed_tensor[1, 0])

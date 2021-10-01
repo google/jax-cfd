@@ -67,7 +67,7 @@ class ResizeTest(test_util.TestCase):
                                                     destination_grid, velocity)
       self.assertAllClose(expected, actual)
 
-    with self.subTest('GridField'):
+    with self.subTest('GridArrayVector'):
       velocity = (grids.GridArray(u, offset=(1, 0), grid=source_grid),
                   grids.GridArray(u, offset=(0, 1), grid=source_grid))
       actual = resize.downsample_staggered_velocity(source_grid,
@@ -78,7 +78,7 @@ class ResizeTest(test_util.TestCase):
       self.assertAllClose(expected_aligned[0], actual[0])
       self.assertAllClose(expected_aligned[1], actual[1])
 
-    with self.subTest('GridField: Inconsistent Grids'):
+    with self.subTest('GridArrayVector: Inconsistent Grids'):
       with self.assertRaisesRegex(grids.InconsistentGridError,
                                   'source_grid for downsampling'):
         different_grid = grids.Grid((4, 4), domain=[(-2, 2), (0, 1)])

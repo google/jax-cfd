@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Module for functionality related to diffusion."""
-from typing import Optional, Tuple
+from typing import Optional
 
 import jax.scipy.sparse.linalg
 
@@ -24,7 +24,7 @@ from jax_cfd.base import grids
 
 Array = grids.Array
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 
 # pylint: disable=g-bare-generic
 
@@ -54,12 +54,12 @@ def stable_time_step(viscosity: float, grid: grids.Grid) -> float:
   return dx ** 2 / (viscosity * 2 ** ndim)
 
 
-def solve_cg(v: GridField,
+def solve_cg(v: GridArrayVector,
              nu: float,
              dt: float,
              rtol: float = 1e-6,
              atol: float = 1e-6,
-             maxiter: Optional[int] = None) -> GridField:
+             maxiter: Optional[int] = None) -> GridArrayVector:
   """Conjugate gradient solve for diffusion."""
   def linear_op(u: GridArray) -> GridArray:
     return u - dt * nu * fd.laplacian(u)
@@ -72,10 +72,10 @@ def solve_cg(v: GridField,
   return tuple(inv(u, u) for u in v)
 
 
-def solve_fast_diag(v: GridField,
+def solve_fast_diag(v: GridArrayVector,
                     nu: float,
                     dt: float,
-                    implementation: Optional[str] = None) -> GridField:
+                    implementation: Optional[str] = None) -> GridArrayVector:
   """Solve for diffusion using the fast diagonalization approach."""
   # We reuse eigenvectors from the Laplacian and transform the eigenvalues
   # because this is better conditioned than directly diagonalizing 1 - ν Δt ∇²

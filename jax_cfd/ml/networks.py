@@ -24,7 +24,7 @@ def split_to_aligned_field(
     physics_specs: physics_specifications.BasePhysicsSpecs,
     data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
 ):
-  """Returns module that splits inputs along last axis into GridField."""
+  """Returns module that splits inputs along last axis into GridArrayVector."""
   del dt, physics_specs  # unused.
   data_offsets = data_offsets or grid.cell_faces
 
@@ -42,7 +42,7 @@ def aligned_field_from_split_divergence(
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
 ):
-  """Returns module that splits inputs along last axis into GridField."""
+  """Returns module that splits inputs along last axis into GridArrayVector."""
   del dt, physics_specs  # unused.
 
   def _shift_offset(offset, axis):
@@ -63,7 +63,7 @@ def aligned_field_from_split_divergence(
     # a = [1, 2, 3, 4]
     # tuple(zip(*([iter(a)] * 2))) >>> ((1, 2), (3, 4))
     split_inputs = tuple(zip(*[iter(split_inputs)] * grid.ndim))
-    tensor_inputs = grids.Tensor(split_inputs)
+    tensor_inputs = grids.GridArrayTensor(split_inputs)
     return tuple(-finite_differences.divergence(tensor_inputs[i, :])
                  for i in range(grid.ndim))
 
@@ -76,7 +76,7 @@ def stack_aligned_field(
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
 ):
-  """Returns a module that stacks GridField along the last axis."""
+  """Returns a module that stacks GridArrayVector along the last axis."""
   del grid, dt, physics_specs  # unused.
 
   def process(inputs):

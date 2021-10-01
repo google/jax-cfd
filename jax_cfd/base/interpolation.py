@@ -22,9 +22,9 @@ import numpy as np
 
 
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 InterpolationFn = Callable[
-    [GridArray, Tuple[float, ...], GridField, float],
+    [GridArray, Tuple[float, ...], GridArrayVector, float],
     GridArray]
 FluxLimiter = Callable[[grids.Array], grids.Array]
 

@@ -28,7 +28,7 @@ from jax_cfd.base import validation_problems
 
 Array = grids.Array
 GridArray = grids.GridArray
-ForcingFn = Callable[[grids.GridField], grids.GridField]
+ForcingFn = Callable[[grids.GridArrayVector], grids.GridArrayVector]
 
 
 def taylor_green_forcing(

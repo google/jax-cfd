@@ -14,7 +14,7 @@
 
 """Functions for computing and applying pressure."""
 
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence
 
 import jax.numpy as jnp
 import jax.scipy.sparse.linalg
@@ -26,7 +26,7 @@ from jax_cfd.base import grids
 
 Array = grids.Array
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 
 # Specifying the full signatures of Callable would get somewhat onerous
 # pylint: disable=g-bare-generic
@@ -79,9 +79,9 @@ def solve_fast_diag(v: Sequence[GridArray],
 
 
 def projection(
-    v: GridField,
+    v: GridArrayVector,
     solve: Callable = solve_fast_diag,
-) -> GridField:
+) -> GridArrayVector:
   """Apply pressure projection to make a velocity field divergence free."""
   q = solve(v)
   q_grad = fd.forward_difference(q)

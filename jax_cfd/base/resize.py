@@ -22,7 +22,7 @@ from jax_cfd.base import grids
 Array = grids.Array
 Field = Tuple[Array, ...]
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 
 
 def downsample_staggered_velocity_component(u: Array, direction: int,
@@ -70,7 +70,7 @@ def downsample_staggered_velocity_component(u: Array, direction: int,
 def downsample_staggered_velocity(
     source_grid: grids.Grid,
     destination_grid: grids.Grid,
-    velocity: Union[Field, GridField],
+    velocity: Union[Field, GridArrayVector],
 ):
   """Downsamples each component of `v` by `factor`."""
   factor = destination_grid.step[0] / source_grid.step[0]

@@ -1,14 +1,12 @@
 """Components that apply forcing. See jax_cfd.base.forcings for forcing API."""
 
-from typing import Callable, Tuple
+from typing import Callable
 import gin
 
 from jax_cfd.base import equations
 from jax_cfd.base import forcings
 from jax_cfd.base import grids
 
-GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
 ForcingFn = forcings.ForcingFn
 ForcingModule = Callable[..., ForcingFn]
 

@@ -22,7 +22,7 @@ from jax_cfd.base import grids
 import numpy as np
 
 GridArray = grids.GridArray
-GridField = Tuple[GridArray, ...]
+GridArrayVector = grids.GridArrayVector
 Offsets = Sequence[Sequence[float]]
 
 
@@ -42,14 +42,14 @@ class Problem(metaclass=abc.ABCMeta):
     return self._viscosity
 
   def force(self,
-            offsets: Optional[Offsets] = None) -> Optional[GridField]:
+            offsets: Optional[Offsets] = None) -> Optional[GridArrayVector]:
     del offsets  # Unused
     return None
 
   @abc.abstractmethod
   def velocity(self,
                t: float,
-               offsets: Optional[Offsets] = None) -> GridField:
+               offsets: Optional[Offsets] = None) -> GridArrayVector:
     pass
 
 
@@ -78,7 +78,7 @@ class TaylorGreen(Problem):
   def velocity(
       self,
       t: float = 0,
-      offsets: Optional[Offsets] = None) -> GridField:
+      offsets: Optional[Offsets] = None) -> GridArrayVector:
     """Returns an analytic solution for velocity at time `t`."""
     if offsets is None:
       offsets = self.grid.cell_faces

@@ -14,13 +14,14 @@
 
 """Functions for interpolating `GridArray`s."""
 
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Union
 
+import jax
 import jax.numpy as jnp
 from jax_cfd.base import grids
 import numpy as np
 
-
+Array = Union[np.ndarray, jnp.DeviceArray]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
 InterpolationFn = Callable[
@@ -276,3 +277,57 @@ def apply_tvd_limiter(
     return c
 
   return tvd_interpolation
+
+
+def point_interpolation(
+    point: Array,
+    c: grids.GridArray,
+    order: int = 1,
+    mode: str = 'nearest',
+    cval: float = 0.0,
+) -> jnp.DeviceArray:
+  """Interpolate `c` at `point`.
+
+  Args:
+    point: length N 1-D Array. The point to interpolate to.
+    c: N-dimensional GridArray. The values that will be interpolated.
+    order: Integer in the range 0-1. The order of the spline interpolation.
+    mode: one of {'reflect', 'constant', 'nearest', 'mirror', 'wrap'}.
+      The `mode` parameter determines how the input array is extended
+      beyond its boundaries. Default is 'constant'. Behavior for each valid
+      value is as follows:
+      'reflect' (`d c b a | a b c d | d c b a`)
+          The input is extended by reflecting about the edge of the last
+          pixel.
+      'constant' (`k k k k | a b c d | k k k k`)
+          The input is extended by filling all values beyond the edge with
+          the same constant value, defined by the `cval` parameter.
+      'nearest' (`a a a a | a b c d | d d d d`)
+          The input is extended by replicating the last pixel.
+      'mirror' (`d c b | a b c d | c b a`)
+          The input is extended by reflecting about the center of the last
+          pixel.
+      'wrap' (`a b c d | a b c d | a b c d`)
+          The input is extended by wrapping around to the opposite edge.
+    cval: Value to fill past edges of input if `mode` is 'constant'. Default 0.0
+
+  Returns:
+    the interpolated value at `point`.
+  """
+  point = jnp.asarray(point)
+
+  domain_lower, domain_upper = zip(*c.grid.domain)
+  domain_lower = jnp.array(domain_lower)
+  domain_upper = jnp.array(domain_upper)
+  shape = jnp.array(c.grid.shape)
+  offset = jnp.array(c.offset)
+  # For each dimension `i` in point,
+  # The map from `point[i]` to index is linear.
+  # index(domain_lower[i]) = -offset[i]
+  # index(domain_upper[i]) = shape[i] - offset[i]
+  # This is easily vectorized as
+  index = (-offset + (point - domain_lower) * shape /
+           (domain_upper - domain_lower))
+
+  return jax.scipy.ndimage.map_coordinates(
+      c.data, coordinates=index, order=order, mode=mode, cval=cval)

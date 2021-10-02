@@ -17,6 +17,7 @@
 from absl.testing import absltest
 from absl.testing import parameterized
 
+import jax
 import jax.numpy as jnp
 from jax_cfd.base import grids
 from jax_cfd.base import interpolation
@@ -154,6 +155,79 @@ class UpwindInterpolationTest(test_util.TestCase):
     final_c = interpolation.upwind(initial_c, u_offset, v)
     self.assertAllClose(expected_data(), final_c.data)
     self.assertAllClose(u_offset, final_c.offset)
+
+
+class PointInterpolationTest(test_util.TestCase):
+
+  def test_eval_of_2d_function(self):
+    grid_shape = (50, 111)
+    offset = (0.5, 0.8)
+
+    grid = grids.Grid(grid_shape, domain=((0., jnp.pi),) * 2)
+    xy_grid_pts = jnp.stack(grid.mesh(offset), axis=-1)
+
+    func = lambda xy: jnp.sin(xy[..., 0]) * xy[..., 1]
+
+    c = grids.GridArray(data=func(xy_grid_pts), offset=offset, grid=grid)
+
+    vec_interp = jax.vmap(
+        interpolation.point_interpolation, in_axes=(0, None), out_axes=0)
+
+    # At the grid points, accuracy should be excellent...almost perfect up to
+    # epsilon.
+    xy_grid_pts = jnp.reshape(xy_grid_pts, (-1, 2))  # Reshape for vmap.
+    self.assertAllClose(
+        vec_interp(xy_grid_pts, c), func(xy_grid_pts), atol=1e-6)
+
+    # At random points, tol is guided by standard first order method heuristics.
+    atol = 1 / min(*grid_shape)
+    xy_random = np.random.RandomState(0).rand(100, 2) * np.pi
+    self.assertAllClose(
+        vec_interp(xy_random, c), func(xy_random), atol=atol)
+
+  def test_order_equals_0_is_piecewise_constant(self):
+    grid_shape = (3,)
+    offset = (0.5,)
+
+    grid = grids.Grid(grid_shape, domain=((0., 1.),))
+    x_grid_pts, = grid.mesh(offset=offset)
+
+    func = lambda x: 2 * x**2
+
+    c = grids.GridArray(data=func(x_grid_pts), offset=offset, grid=grid)
+
+    def _nearby_points(value):
+      eps = grid.step[0] / 3
+      return [value - eps, value, value + eps]
+
+    def _interp(x):
+      return interpolation.point_interpolation(x, c, order=0)
+
+    for x in x_grid_pts:
+      for near_x in _nearby_points(x):
+        np.testing.assert_allclose(func(x), _interp(near_x))
+
+  def test_mode_and_cval_args_are_used(self):
+    # Just test that the mode arg is used, in the simplest way.
+    # We don't have to check the correctnesss of these args, since
+    # jax.scipy.ndimage.map_coordinates is tested separately.
+    grid_shape = (3,)
+    offset = (0.5,)
+
+    grid = grids.Grid(grid_shape, domain=((0., 1.),))
+    x_grid_pts, = grid.mesh(offset=offset)
+
+    c = grids.GridArray(
+        # Just use random points. Won't affect anything.
+        data=x_grid_pts * 0.1, offset=offset, grid=grid)
+
+    # Outside the domain, the passing of mode='constant' and cval=1234 results
+    # in this value being used.
+    outside_domain_point = 10.
+    self.assertAllClose(
+        1234,
+        interpolation.point_interpolation(
+            outside_domain_point, c, mode='constant', cval=1234))
 
 
 if __name__ == '__main__':

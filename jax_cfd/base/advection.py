@@ -283,6 +283,16 @@ def advect_step_semilagrangian(
   # Reference: "Learning to control PDEs with Differentiable Physics"
   # https://openreview.net/pdf?id=HyeSin4FPB (see Appendix A)
   grid = grids.consistent_grid(c, *v)
+
+  # TODO(shoyer) Enable lower domains != 0 for this function.
+  # Hint: indices = [
+  #     -o + (x - l) * n / (u - l)
+  #     for (l, u), o, x, n in zip(grid.domain, c.offset, coords, grid.shape)
+  # ]
+  if not all(d[0] == 0 for d in grid.domain):
+    raise ValueError(
+        f'Grid domains currently must start at zero. Found {grid.domain}')
+
   coords = [x - dt * interpolation.linear(u, c.offset).data
             for x, u in zip(grid.mesh(c.offset), v)]
   indices = [x / s - o for s, o, x in zip(grid.step, c.offset, coords)]

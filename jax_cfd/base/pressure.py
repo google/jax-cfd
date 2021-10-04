@@ -84,6 +84,8 @@ def projection(
 ) -> GridArrayVector:
   """Apply pressure projection to make a velocity field divergence free."""
   q = solve(v)
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  q = grids.make_gridvariable_from_gridarray(q)
   q_grad = fd.forward_difference(q)
   projected = tuple(u - q_g for u, q_g in zip(v, q_grad))
   return projected

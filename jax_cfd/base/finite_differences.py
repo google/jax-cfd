@@ -11,7 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Functions for approximating derivatives."""
+"""Functions for approximating derivatives.
+
+Finite difference methods operate on GridVariable and return GridArray.
+Evaluating finite differences requires boundary conditions, which are defined
+for a GridVariable. But the operation of taking a derivative makes the boundary
+condition undefined, which is why the return type is GridArray.
+
+For example, if the variable c has the boundary condition c_b = 0, and we take
+the derivate dc/dx, then it is unclear what the boundary condition on dc/dx
+should be. So programmatically, after taking finite differences and doing
+operations, the user has to explicitly assign boundary conditions to the result.
+
+Example:
+  c = GridVariable(c_array, c_boundary_condition)
+  dcdx = finite_differences.forward_difference(c)  # returns GridArray
+  c_new = c + dt * (-velocity * dcdx)  # operations on GridArrays
+  c_new = GridVariable(c_new, c_boundary_condition)  # assocaite BCs
+"""
 
 import typing
 from typing import Optional, Sequence, Tuple
@@ -20,6 +37,7 @@ from jax_cfd.base import interpolation
 import numpy as np
 
 GridArray = grids.GridArray
+GridVariable = grids.GridVariable
 GridArrayTensor = grids.GridArrayTensor
 
 
@@ -43,13 +61,13 @@ def stencil_sum(*arrays: GridArray) -> GridArray:
 
 
 @typing.overload
-def central_difference(u: GridArray, axis: int) -> GridArray:
+def central_difference(u: GridVariable, axis: int) -> GridArray:
   ...
 
 
 @typing.overload
 def central_difference(
-    u: GridArray, axis: Optional[Tuple[int, ...]]) -> Tuple[GridArray, ...]:
+    u: GridVariable, axis: Optional[Tuple[int, ...]]) -> Tuple[GridArray, ...]:
   ...
 
 
@@ -64,13 +82,13 @@ def central_difference(u, axis=None):
 
 
 @typing.overload
-def backward_difference(u: GridArray, axis: int) -> GridArray:
+def backward_difference(u: GridVariable, axis: int) -> GridArray:
   ...
 
 
 @typing.overload
 def backward_difference(
-    u: GridArray, axis: Optional[Tuple[int, ...]]) -> Tuple[GridArray, ...]:
+    u: GridVariable, axis: Optional[Tuple[int, ...]]) -> Tuple[GridArray, ...]:
   ...
 
 
@@ -80,18 +98,18 @@ def backward_difference(u, axis=None):
     axis = range(u.grid.ndim)
   if not isinstance(axis, int):
     return tuple(backward_difference(u, a) for a in axis)
-  diff = stencil_sum(u, -u.shift(-1, axis))
+  diff = stencil_sum(u.array, -u.shift(-1, axis))
   return diff / u.grid.step[axis]
 
 
 @typing.overload
-def forward_difference(u: GridArray, axis: int) -> GridArray:
+def forward_difference(u: GridVariable, axis: int) -> GridArray:
   ...
 
 
 @typing.overload
 def forward_difference(
-    u: GridArray,
+    u: GridVariable,
     axis: Optional[Tuple[int, ...]] = ...) -> Tuple[GridArray, ...]:
   ...
 
@@ -102,7 +120,7 @@ def forward_difference(u, axis=None):
     axis = range(u.grid.ndim)
   if not isinstance(axis, int):
     return tuple(forward_difference(u, a) for a in axis)
-  diff = stencil_sum(u.shift(+1, axis), -u)
+  diff = stencil_sum(u.shift(+1, axis), -u.array)
   return diff / u.grid.step[axis]
 
 
@@ -110,6 +128,8 @@ def laplacian(u: GridArray) -> GridArray:
   """Approximates the Laplacian of `u`."""
   scales = np.square(1 / np.array(u.grid.step, dtype=u.dtype))
   result = -2 * u * np.sum(scales)
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  u = grids.make_gridvariable_from_gridarray(u)
   for axis in range(u.grid.ndim):
     result += stencil_sum(u.shift(-1, axis), u.shift(+1, axis)) * scales[axis]
   return result
@@ -121,23 +141,25 @@ def divergence(v: Sequence[GridArray]) -> GridArray:
   if len(v) != grid.ndim:
     raise ValueError('The length of `v` must be equal to `grid.ndim`.'
                      f'Expected length {grid.ndim}; got {len(v)}.')
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
   differences = [backward_difference(u, axis) for axis, u in enumerate(v)]
   return sum(differences)
 
 
 @typing.overload
-def gradient_tensor(v: GridArray) -> GridArrayTensor:
+def gradient_tensor(v: GridVariable) -> GridArrayTensor:
   ...
 
 
 @typing.overload
-def gradient_tensor(v: Sequence[GridArray]) -> GridArrayTensor:
+def gradient_tensor(v: Sequence[GridVariable]) -> GridArrayTensor:
   ...
 
 
 def gradient_tensor(v):
   """Approximates the cell-centered gradient of `v`."""
-  if not isinstance(v, GridArray):
+  if not isinstance(v, GridVariable):
     return GridArrayTensor(np.stack([gradient_tensor(u) for u in v], axis=-1))
   grad = []
   for axis in range(v.grid.ndim):
@@ -154,7 +176,7 @@ def gradient_tensor(v):
   return GridArrayTensor(grad)
 
 
-def curl_2d(v: Sequence[GridArray]) -> GridArray:
+def curl_2d(v: Sequence[GridVariable]) -> GridArray:
   """Approximates the curl of `v` in 2D using forward differences."""
   if len(v) != 2:
     raise ValueError(f'Length of `v` is not 2: {len(v)}')
@@ -164,7 +186,8 @@ def curl_2d(v: Sequence[GridArray]) -> GridArray:
   return forward_difference(v[1], axis=0) - forward_difference(v[0], axis=1)
 
 
-def curl_3d(v: Sequence[GridArray]) -> Tuple[GridArray, GridArray, GridArray]:
+def curl_3d(
+    v: Sequence[GridVariable]) -> Tuple[GridArray, GridArray, GridArray]:
   """Approximates the curl of `v` in 2D using forward differences."""
   if len(v) != 3:
     raise ValueError(f'Length of `v` is not 3: {len(v)}')

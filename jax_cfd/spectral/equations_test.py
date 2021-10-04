@@ -56,6 +56,9 @@ class EquationsTest2D(test_util.TestCase):
     grid = grids.Grid((128, 128), domain=((0, 2 * jnp.pi), (0, 2 * jnp.pi)))
     v0 = cfd.initial_conditions.filtered_velocity_field(
         jax.random.PRNGKey(42), grid, 7, 4)
+    velocity_bcs = (grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)),
+                    grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)))
+    v0 = tuple(grids.GridVariable(u, bc) for u, bc in zip(v0, velocity_bcs))
     vorticity0 = cfd.finite_differences.curl_2d(v0).data
     vorticity_hat0 = jnp.fft.rfftn(vorticity0)
 
@@ -77,6 +80,9 @@ class EquationsTest2D(test_util.TestCase):
     grid = grids.Grid((128, 128), domain=((0, 2 * jnp.pi), (0, 2 * jnp.pi)))
     v0 = cfd.initial_conditions.filtered_velocity_field(
         jax.random.PRNGKey(42), grid, 7, 4)
+    velocity_bcs = (grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)),
+                    grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)))
+    v0 = tuple(grids.GridVariable(u, bc) for u, bc in zip(v0, velocity_bcs))
     vorticity0 = cfd.finite_differences.curl_2d(v0).data
     vorticity_hat0 = jnp.fft.rfftn(vorticity0)
 
@@ -114,7 +120,11 @@ class EquationsTest2D(test_util.TestCase):
                     time, atol):
     # This closely emulates a test in jax cfd:
     # https://source.corp.google.com/piper///depot/google3/third_party/py/jax_cfd/base/validation_test.py;l=113
-    vorticity = finite_differences.curl_2d(problem.velocity(0.)).data
+    v0 = problem.velocity(0.)
+    velocity_bcs = (grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)),
+                    grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)))
+    v0 = tuple(grids.GridVariable(u, bc) for u, bc in zip(v0, velocity_bcs))
+    vorticity = finite_differences.curl_2d(v0).data
 
     dt = cfd.equations.stable_time_step(
         7,
@@ -134,7 +144,9 @@ class EquationsTest2D(test_util.TestCase):
         cfd.funcutils.repeated(step_fn, steps), 1)(
             jnp.fft.rfftn(vorticity))
 
-    vorticity_analytic = finite_differences.curl_2d(problem.velocity(time)).data
+    v = problem.velocity(time)
+    v = tuple(grids.GridVariable(u, bc) for u, bc in zip(v, velocity_bcs))
+    vorticity_analytic = finite_differences.curl_2d(v).data
 
     self.assertAllClose(
         jnp.fft.irfftn(vorticity_computed[0]), vorticity_analytic, atol=atol)
@@ -181,6 +193,9 @@ class EquationsTest2D(test_util.TestCase):
     # Construct a random initial velocity.
     v0 = cfd.initial_conditions.filtered_velocity_field(
         jax.random.PRNGKey(seed), grid, max_velocity)
+    velocity_bcs = (grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)),
+                    grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)))
+    v0 = tuple(grids.GridVariable(u, bc) for u, bc in zip(v0, velocity_bcs))
 
     # Choose a time step.
     dt = cfd.equations.stable_time_step(max_velocity, cfl_safety_factor,
@@ -211,7 +226,10 @@ class EquationsTest2D(test_util.TestCase):
                 forcing=fvm_forcing),
             steps=n_steps))
 
-    final_state_fvm = cfd.finite_differences.curl_2d(fvm_rollout_fn(v0)).data
+    # TODO(pnorgaard) update semi_implicit_navier_stokes for GridVariable
+    v = fvm_rollout_fn(tuple(u.array for u in v0))
+    v = tuple(grids.GridVariable(u, bc) for u, bc in zip(v, velocity_bcs))
+    final_state_fvm = cfd.finite_differences.curl_2d(v).data
 
     spectral_rollout_fn = jax.jit(
         cfd.funcutils.repeated(time_stepping.crank_nicolson_rk4(eq, dt),

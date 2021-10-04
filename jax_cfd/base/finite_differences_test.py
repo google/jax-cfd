@@ -37,7 +37,6 @@ class FiniteDifferenceTest(test_util.TestCase):
   @parameterized.named_parameters(
       dict(testcase_name='_central_difference_periodic',
            method=fd.central_difference,
-           grid_type=grids.Grid,
            shape=(3, 3, 3),
            step=(1., 1., 1.),
            expected_offset=0,
@@ -45,7 +44,6 @@ class FiniteDifferenceTest(test_util.TestCase):
            positive_shift=1),
       dict(testcase_name='_backward_difference_periodic',
            method=fd.backward_difference,
-           grid_type=grids.Grid,
            shape=(2, 3, 4),
            step=(.1, .3, 1.),
            expected_offset=-0.5,
@@ -53,7 +51,6 @@ class FiniteDifferenceTest(test_util.TestCase):
            positive_shift=0),
       dict(testcase_name='_forward_difference_periodic',
            method=fd.forward_difference,
-           grid_type=grids.Grid,
            shape=(23, 32, 1),
            step=(.01, 2., .1),
            expected_offset=+0.5,
@@ -61,12 +58,12 @@ class FiniteDifferenceTest(test_util.TestCase):
            positive_shift=1),
       )
   def test_finite_difference_indexing(
-      self, method, grid_type, shape, step, expected_offset, negative_shift,
+      self, method, shape, step, expected_offset, negative_shift,
       positive_shift):
     """Tests finite difference code using explicit indices."""
-    grid = grid_type(shape, step)
-    u = grids.GridArray(
-        jnp.arange(np.prod(shape)).reshape(shape), (0, 0, 0), grid)
+    grid = grids.Grid(shape, step)
+    u = grids.GridVariable.create(
+        jnp.arange(np.prod(shape)).reshape(shape), (0, 0, 0), grid, 'periodic')
     actual_x, actual_y, actual_z = method(u)
 
     x, y, z = jnp.meshgrid(*[jnp.arange(s) for s in shape], indexing='ij')
@@ -93,7 +90,6 @@ class FiniteDifferenceTest(test_util.TestCase):
   @parameterized.named_parameters(
       dict(testcase_name='_central_difference_periodic',
            method=fd.central_difference,
-           grid_type=grids.Grid,
            shape=(100, 100, 100),
            offset=(0, 0, 0),
            f=lambda x, y, z: jnp.cos(x) * jnp.cos(y) * jnp.sin(z),
@@ -103,7 +99,6 @@ class FiniteDifferenceTest(test_util.TestCase):
            atol=1e-3),
       dict(testcase_name='_backward_difference_periodic',
            method=fd.backward_difference,
-           grid_type=grids.Grid,
            shape=(100, 100, 100),
            offset=(0, 0, 0),
            f=lambda x, y, z: jnp.cos(x) * jnp.cos(y) * jnp.sin(z),
@@ -113,7 +108,6 @@ class FiniteDifferenceTest(test_util.TestCase):
            atol=5e-2),
       dict(testcase_name='_forward_difference_periodic',
            method=fd.forward_difference,
-           grid_type=grids.Grid,
            shape=(200, 200, 200),
            offset=(0, 0, 0),
            f=lambda x, y, z: jnp.cos(x) * jnp.cos(y) * jnp.sin(z),
@@ -123,39 +117,36 @@ class FiniteDifferenceTest(test_util.TestCase):
            atol=5e-2),
       )
   def test_finite_difference_analytic(
-      self, method, grid_type, shape, offset, f, gradf, atol):
+      self, method, shape, offset, f, gradf, atol):
     """Tests finite difference code comparing to the analytice solution."""
     step = tuple([2. * jnp.pi / s for s in shape])
-    grid = grid_type(shape, step)
+    grid = grids.Grid(shape, step)
     mesh = grid.mesh()
-    u = grids.GridArray(f(*mesh), offset, grid)
+    u = grids.GridVariable.create(f(*mesh), offset, grid, 'periodic')
     expected_grad = jnp.stack([df(*mesh) for df in gradf])
     actual_grad = [array.data for array in method(u)]
     self.assertAllClose(expected_grad, actual_grad, atol=atol)
 
   @parameterized.named_parameters(
       dict(testcase_name='_2D_constant',
-           grid_type=grids.Grid,
            shape=(20, 20),
            f=lambda x, y: np.ones_like(x),
            g=lambda x, y: np.zeros_like(x),
            atol=1e-3),
       dict(testcase_name='_2D_quadratic',
-           grid_type=grids.Grid,
            shape=(21, 21),
            f=lambda x, y: x * (x - 1.) + y * (y - 1.),
            g=lambda x, y: 4 * np.ones_like(x),
            atol=1e-3),
       dict(testcase_name='_3D_quadratic',
-           grid_type=grids.Grid,
            shape=(13, 13, 13),
            f=lambda x, y, z: x * (x - 1.) + y * (y - 1.) + z * (z - 1.),
            g=lambda x, y, z: 6 * np.ones_like(x),
            atol=1e-3),
       )
-  def test_laplacian(self, grid_type, shape, f, g, atol):
+  def test_laplacian(self, shape, f, g, atol):
     step = tuple([1. / s for s in shape])
-    grid = grid_type(shape, step)
+    grid = grids.Grid(shape, step)
     offset = (0,) * len(shape)
     mesh = grid.mesh(offset)
     u = grids.GridArray(f(*mesh), offset, grid)
@@ -165,30 +156,27 @@ class FiniteDifferenceTest(test_util.TestCase):
 
   @parameterized.named_parameters(
       dict(testcase_name='_2D_constant',
-           grid_type=grids.Grid,
            shape=(20, 20),
            offsets=((0.5, 0), (0, 0.5)),
            f=lambda x, y: (np.ones_like(x), np.ones_like(y)),
            g=lambda x, y: jnp.zeros_like(x),
            atol=1e-3),
       dict(testcase_name='_2D_quadratic',
-           grid_type=grids.Grid,
            shape=(21, 21),
            offsets=((0.5, 0), (0, 0.5)),
            f=lambda x, y: (x * (x - 1.), y * (y - 1.)),
            g=lambda x, y: 2 * x + 2 * y - 2,
            atol=0.1),
       dict(testcase_name='_3D_quadratic',
-           grid_type=grids.Grid,
            shape=(13, 13, 13),
            offsets=((0.5, 0, 0), (0, 0.5, 0), (0, 0, 0.5)),
            f=lambda x, y, z: (x * (x - 1.), y * (y - 1.), z * (z - 1.)),
            g=lambda x, y, z: 2 * x + 2 * y + 2 * z - 3,
            atol=0.25),
       )
-  def test_divergence(self, grid_type, shape, offsets, f, g, atol):
+  def test_divergence(self, shape, offsets, f, g, atol):
     step = tuple([1. / s for s in shape])
-    grid = grid_type(shape, step)
+    grid = grids.Grid(shape, step)
     v = [grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
          for axis, offset in enumerate(offsets)]
     expected_divergence = _trim_boundary(
@@ -232,7 +220,8 @@ class FiniteDifferenceTest(test_util.TestCase):
     grid = grids.Grid(shape, step)
     offsets = grid.cell_faces
     v = [
-        grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
+        grids.GridVariable.create(
+            f(*grid.mesh(offset))[axis], offset, grid, 'periodic')
         for axis, offset in enumerate(offsets)
     ]
     expected_gradient = g(*grid.mesh())
@@ -247,25 +236,26 @@ class FiniteDifferenceTest(test_util.TestCase):
   @parameterized.named_parameters(
       # https://en.wikipedia.org/wiki/Curl_(mathematics)#Examples
       dict(testcase_name='_wikipedia_example_1',
-           grid_type=grids.Grid,
            shape=(20, 20),
            offsets=((0.5, 0), (0, 0.5)),
            f=lambda x, y: (y, -x),
            g=lambda x, y: -2 * np.ones_like(x),
            atol=1e-3),
       dict(testcase_name='_wikipedia_example_2',
-           grid_type=grids.Grid,
            shape=(21, 21),
            offsets=((0.5, 0), (0, 0.5)),
            f=lambda x, y: (np.ones_like(x), -x**2),
            g=lambda x, y: -2 * x,
            atol=1e-3),
       )
-  def test_curl_2d(self, grid_type, shape, offsets, f, g, atol):
+  def test_curl_2d(self, shape, offsets, f, g, atol):
     step = tuple([1. / s for s in shape])
-    grid = grid_type(shape, step)
-    v = [grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
-         for axis, offset in enumerate(offsets)]
+    grid = grids.Grid(shape, step)
+    v = [
+        grids.GridVariable.create(
+            f(*grid.mesh(offset))[axis], offset, grid, 'periodic')
+        for axis, offset in enumerate(offsets)
+    ]
     result_offset = (0.5, 0.5)
     expected_curl = _trim_boundary(
         grids.GridArray(g(*grid.mesh(result_offset)), result_offset, grid))
@@ -275,7 +265,6 @@ class FiniteDifferenceTest(test_util.TestCase):
   @parameterized.named_parameters(
       # https://www.web-formulas.com/Math_Formulas/Linear_Algebra_Curl_of_a_Vector_Field.aspx
       dict(testcase_name='_web_formulas_example_3',
-           grid_type=grids.Grid,
            shape=(13, 13, 13),
            offsets=((0.5, 0, 0), (0, 0.5, 0), (0, 0, 0.5)),
            expected_offsets=((0, 0.5, 0.5), (0.5, 0, 0.5), (0.5, 0.5, 0)),
@@ -284,11 +273,14 @@ class FiniteDifferenceTest(test_util.TestCase):
            atol=1e-3),
       )
   def test_curl_3d(
-      self, grid_type, shape, offsets, expected_offsets, f, g, atol):
+      self, shape, offsets, expected_offsets, f, g, atol):
     step = tuple([1. / s for s in shape])
-    grid = grid_type(shape, step)
-    v = [grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
-         for axis, offset in enumerate(offsets)]
+    grid = grids.Grid(shape, step)
+    v = [
+        grids.GridVariable.create(
+            f(*grid.mesh(offset))[axis], offset, grid, 'periodic')
+        for axis, offset in enumerate(offsets)
+    ]
     expected_curl = [
         _trim_boundary(
             grids.GridArray(g(*grid.mesh(offset))[axis], offset, grid))

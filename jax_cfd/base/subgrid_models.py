@@ -95,9 +95,10 @@ def evm_model(
     acceleration of the velocity field `v`.
   """
   grid = grids.consistent_grid(*v)
+  v_var = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
   s_ij = grids.GridArrayTensor([
-      [0.5 * (finite_differences.forward_difference(v[i], j) +  # pylint: disable=g-complex-comprehension
-              finite_differences.forward_difference(v[j], i))
+      [0.5 * (finite_differences.forward_difference(v_var[i], j) +  # pylint: disable=g-complex-comprehension
+              finite_differences.forward_difference(v_var[j], i))
        for j in range(grid.ndim)]
       for i in range(grid.ndim)])
   viscosity = viscosity_fn(s_ij, v)

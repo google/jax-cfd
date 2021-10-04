@@ -102,7 +102,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            dt=1e-3,
            time_steps=100,
            divergence_atol=1e-4,
-           momentum_atol=1e-4),
+           momentum_atol=2e-4),
       dict(testcase_name='sinusoidal_velocity_fast_diag',
            velocity=sinusoidal_field,
            forcing=None,

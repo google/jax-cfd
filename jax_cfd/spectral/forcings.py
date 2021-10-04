@@ -23,6 +23,6 @@ from jax_cfd.spectral import types as spectral_types
 def kolmogorov_forcing_fn(grid: grids.Grid,
                           state: spectral_types.Array) -> spectral_types.Array:
   """Constant Kolmogorov forcing function."""
-  _, ys = grid.mesh()
+  _, ys = grid.mesh(offset=(0, 0))
   constant_forcing = -4 * jnp.cos(4 * ys)
   return constant_forcing

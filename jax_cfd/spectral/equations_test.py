@@ -13,6 +13,8 @@
 # limitations under the License.
 """Tests for spectral equations."""
 
+from typing import Tuple
+
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
@@ -36,6 +38,14 @@ ALL_TIME_STEPPERS = [
     dict(testcase_name='_' + s.__name__, time_stepper=s)
     for s in ALL_TIME_STEPPERS
 ]
+
+
+def roll(arr, offset: Tuple[int]):
+  """Rolls an n-dim arr by offset."""
+  assert len(offset) == len(arr.shape)
+  for i, o in enumerate(offset):
+    arr = jnp.roll(arr, o, axis=i)
+  return arr
 
 
 class EquationsTest2D(test_util.TestCase):
@@ -140,12 +150,30 @@ class EquationsTest2D(test_util.TestCase):
           density=1.0,
           n_steps=500,
           grid_size=512,
-          atol=0.062))
+          is_forced=False,
+          atol=0.07,
+          ),
+      dict(
+          testcase_name='_forced_turbulence',
+          viscosity=1e-2,
+          cfl_safety_factor=.1,
+          max_velocity=2.0,
+          peak_wavenumber=4,
+          seed=0,
+          density=1.0,
+          n_steps=150,
+          grid_size=512,
+          is_forced=True,
+          atol=0.07,
+          ),
+      )
   def test_compare_to_finite_difference_method(self, viscosity,
                                                cfl_safety_factor, max_velocity,
                                                peak_wavenumber, seed, density,
-                                               n_steps, grid_size, atol):
-    """Compare spectral to jax_cfd's finite volume base method."""
+                                               n_steps, grid_size,
+                                               is_forced,
+                                               atol):
+    """Compare spectral to finite volume."""
 
     grid = cfd.grids.Grid((grid_size, grid_size),
                           domain=((0, 2 * jnp.pi), (0, 2 * jnp.pi)))
@@ -158,6 +186,20 @@ class EquationsTest2D(test_util.TestCase):
     dt = cfd.equations.stable_time_step(max_velocity, cfl_safety_factor,
                                         viscosity, grid)
 
+    if is_forced:
+      fvm_forcing = cfd.forcings.simple_turbulence_forcing(
+          grid,
+          constant_magnitude=1,
+          constant_wavenumber=4,
+          linear_coefficient=-0.1,
+          forcing_type='kolmogorov')
+
+      eq = spectral_equations.ForcedNavierStokes2D(
+          viscosity, grid, smooth=True)
+    else:
+      fvm_forcing = None
+      eq = spectral_equations.NavierStokes2D(viscosity, grid, smooth=True)
+
     # use `repeated` since we only compare the final state
     fvm_rollout_fn = jax.jit(
         cfd.funcutils.repeated(
@@ -166,22 +208,23 @@ class EquationsTest2D(test_util.TestCase):
                 viscosity=viscosity,
                 dt=dt,
                 grid=grid,
-                forcing=None),
+                forcing=fvm_forcing),
             steps=n_steps))
 
     final_state_fvm = cfd.finite_differences.curl_2d(fvm_rollout_fn(v0)).data
 
     spectral_rollout_fn = jax.jit(
-        cfd.funcutils.repeated(
-            time_stepping.crank_nicolson_rk4(
-                spectral_equations.NavierStokes2D(viscosity, grid, 0), dt),
-            steps=n_steps))
+        cfd.funcutils.repeated(time_stepping.crank_nicolson_rk4(eq, dt),
+                               steps=n_steps))
 
     final_state_spectral = jnp.fft.irfftn(
         spectral_rollout_fn(
-            jnp.fft.rfftn(cfd.finite_differences.curl_2d(v0).data)))
+            jnp.fft.rfftn(
+                roll(cfd.finite_differences.curl_2d(v0).data, (1, 1)))))
 
-    self.assertAllClose(final_state_fvm, final_state_spectral, atol=atol)
+    self.assertAllClose(
+        final_state_fvm, roll(final_state_spectral, (-1, -1)), atol=atol)
+
 
 if __name__ == '__main__':
   absltest.main()

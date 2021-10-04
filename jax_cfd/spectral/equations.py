@@ -100,6 +100,6 @@ def ForcedNavierStokes2D(viscosity, grid, smooth):
   return NavierStokes2D(
       viscosity,
       grid,
-      drag=0.01,
+      drag=0.1,
       smooth=smooth,
       forcing_fn=spectral_forcings.kolmogorov_forcing_fn)

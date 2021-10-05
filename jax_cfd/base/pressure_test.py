@@ -88,6 +88,9 @@ class PressureTest(test_util.TestCase):
     v_corrected = pressure.projection(v, solve)
 
     # The corrected velocity should be divergence free.
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    v_corrected = tuple(
+        grids.make_gridvariable_from_gridarray(u) for u in v_corrected)
     div = fd.divergence(v_corrected)
     for u, u_corrected in zip(v, v_corrected):
       np.testing.assert_allclose(u.offset, u_corrected.offset)

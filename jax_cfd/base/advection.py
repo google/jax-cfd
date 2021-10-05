@@ -64,8 +64,10 @@ def _advect_aligned(cs: GridArrayVector, v: GridArrayVector) -> GridArray:
   if len(cs) != len(v):
     raise ValueError('`cs` and `v` must have the same length;'
                      f'got {len(cs)} vs. {len(v)}.')
-  uc = tuple(c * u for c, u in zip(cs, v))
-  return -fd.divergence(uc)
+  flux = tuple(c * u for c, u in zip(cs, v))
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  flux = tuple(grids.make_gridvariable_from_gridarray(f) for f in flux)
+  return -fd.divergence(flux)
 
 
 def advect_general(
@@ -184,8 +186,13 @@ def convect_linear(v: GridArrayVector) -> GridArrayVector:
   # TODO(jamieas): consider a more efficient vectorization of this function.
   # TODO(jamieas): incorporate variable density.
   aligned_v = _align_velocities(v)
-  flux = _velocities_to_flux(aligned_v)
-  return tuple(-fd.divergence(f) for f in flux)
+  fluxes = _velocities_to_flux(aligned_v)
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  fluxes = tuple(
+      tuple(grids.make_gridvariable_from_gridarray(f)
+            for f in flux)
+      for flux in fluxes)
+  return tuple(-fd.divergence(flux) for flux in fluxes)
 
 
 def advect_van_leer(
@@ -227,7 +234,7 @@ def advect_van_leer(
   aligned_v = tuple(interpolation.linear(u, offset)
                     for u, offset in zip(v, offsets))
 
-  fluxes = []
+  flux = []
   for axis, (u, h) in enumerate(zip(aligned_v, c.grid.step)):
     c_center = c.data
     c_left = c.shift(-1, axis=axis).data
@@ -256,9 +263,10 @@ def advect_van_leer(
     pre_factor = 0.5 * (1 - courant_numbers) * abs_velocity
     flux_correction = pre_factor * grids.applied(jnp.where)(
         u > 0, forward_correction, backward_correction)
-    flux = upwind_flux + flux_correction
-    fluxes.append(flux)
-  advection = -fd.divergence(fluxes)
+    flux.append(upwind_flux + flux_correction)
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  flux = tuple(grids.make_gridvariable_from_gridarray(f) for f in flux)
+  advection = -fd.divergence(flux)
   return advection
 
 

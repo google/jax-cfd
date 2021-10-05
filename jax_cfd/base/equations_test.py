@@ -135,6 +135,8 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
     v_initial = velocity(grid)
     v_final = funcutils.repeated(navier_stokes, time_steps)(v_initial)
 
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    v_final = tuple(grids.make_gridvariable_from_gridarray(u) for u in v_final)
     divergence = fd.divergence(v_final)
     self.assertLess(jnp.max(divergence.data), divergence_atol)
 

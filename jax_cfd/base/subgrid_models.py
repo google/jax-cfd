@@ -103,7 +103,10 @@ def evm_model(
       for i in range(grid.ndim)])
   viscosity = viscosity_fn(s_ij, v)
   tau = jax.tree_multimap(lambda x, y: -2. * x * y, viscosity, s_ij)
-  return tuple(-finite_differences.divergence(tau[i, :])
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  return tuple(-finite_differences.divergence(  # pylint: disable=g-complex-comprehension
+      tuple(grids.make_gridvariable_from_gridarray(t)
+            for t in tau[i, :]))
                for i in range(grid.ndim))
 
 
@@ -140,7 +143,9 @@ def implicit_evm_solve_with_diffusion(
 
   def linear_op(v):
     acceleration = configured_evm_model(v)
-    return tuple(v - dt * (acceleration + viscosity * vector_laplacian(v)))
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    v_var = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+    return tuple(v - dt * (acceleration + viscosity * vector_laplacian(v_var)))
 
   # We normally prefer fast diagonalization, but that requires an outer
   # product structure for the linear operation, which doesn't hold here.

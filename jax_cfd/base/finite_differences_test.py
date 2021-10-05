@@ -149,7 +149,7 @@ class FiniteDifferenceTest(test_util.TestCase):
     grid = grids.Grid(shape, step)
     offset = (0,) * len(shape)
     mesh = grid.mesh(offset)
-    u = grids.GridArray(f(*mesh), offset, grid)
+    u = grids.GridVariable.create(f(*mesh), offset, grid, 'periodic')
     expected_laplacian = _trim_boundary(grids.GridArray(g(*mesh), offset, grid))
     actual_laplacian = _trim_boundary(fd.laplacian(u))
     self.assertAllClose(expected_laplacian, actual_laplacian, atol=atol)
@@ -177,7 +177,8 @@ class FiniteDifferenceTest(test_util.TestCase):
   def test_divergence(self, shape, offsets, f, g, atol):
     step = tuple([1. / s for s in shape])
     grid = grids.Grid(shape, step)
-    v = [grids.GridArray(f(*grid.mesh(offset))[axis], offset, grid)
+    v = [grids.GridVariable.create(
+        f(*grid.mesh(offset))[axis], offset, grid, 'periodic')
          for axis, offset in enumerate(offsets)]
     expected_divergence = _trim_boundary(
         grids.GridArray(g(*grid.mesh()), (0,) * grid.ndim, grid))

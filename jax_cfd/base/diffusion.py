@@ -31,6 +31,8 @@ GridArrayVector = grids.GridArrayVector
 
 def diffuse(c: GridArray, nu: float) -> GridArray:
   """Returns the rate of change in a concentration `c` due to diffusion."""
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  c = grids.make_gridvariable_from_gridarray(c)
   return nu * fd.laplacian(c)
 
 
@@ -62,7 +64,9 @@ def solve_cg(v: GridArrayVector,
              maxiter: Optional[int] = None) -> GridArrayVector:
   """Conjugate gradient solve for diffusion."""
   def linear_op(u: GridArray) -> GridArray:
-    return u - dt * nu * fd.laplacian(u)
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    u = grids.make_gridvariable_from_gridarray(u)
+    return u.array - dt * nu * fd.laplacian(u)
 
   def inv(b: GridArray, x0: GridArray) -> GridArray:
     x, _ = jax.scipy.sparse.linalg.cg(

@@ -124,25 +124,21 @@ def forward_difference(u, axis=None):
   return diff / u.grid.step[axis]
 
 
-def laplacian(u: GridArray) -> GridArray:
+def laplacian(u: GridVariable) -> GridArray:
   """Approximates the Laplacian of `u`."""
   scales = np.square(1 / np.array(u.grid.step, dtype=u.dtype))
-  result = -2 * u * np.sum(scales)
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  u = grids.make_gridvariable_from_gridarray(u)
+  result = -2 * u.array * np.sum(scales)
   for axis in range(u.grid.ndim):
     result += stencil_sum(u.shift(-1, axis), u.shift(+1, axis)) * scales[axis]
   return result
 
 
-def divergence(v: Sequence[GridArray]) -> GridArray:
+def divergence(v: Sequence[GridVariable]) -> GridArray:
   """Approximates the divergence of `v` using backward differences."""
   grid = grids.consistent_grid(*v)
   if len(v) != grid.ndim:
     raise ValueError('The length of `v` must be equal to `grid.ndim`.'
                      f'Expected length {grid.ndim}; got {len(v)}.')
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
   differences = [backward_difference(u, axis) for axis, u in enumerate(v)]
   return sum(differences)
 

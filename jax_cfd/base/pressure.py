@@ -56,11 +56,20 @@ def solve_cg(v: Sequence[GridArray],
     A pressure correction `q` such that `div(v - grad(q))` is zero.
   """
   # TODO(jamieas): add functionality for non-uniform density.
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
   rhs = fd.divergence(v)
   if q0 is None:
     q0 = grids.applied(jnp.zeros_like)(rhs)
+
+  def laplacian_with_bcs(array):
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    variable = grids.GridVariable(
+        array, grids.BoundaryConditions(array.grid.boundaries))
+    return fd.laplacian(variable)
+
   q, _ = jax.scipy.sparse.linalg.cg(
-      fd.laplacian, rhs, x0=q0, tol=rtol, atol=atol, maxiter=maxiter)
+      laplacian_with_bcs, rhs, x0=q0, tol=rtol, atol=atol, maxiter=maxiter)
   return q
 
 
@@ -69,8 +78,10 @@ def solve_fast_diag(v: Sequence[GridArray],
                     implementation: Optional[str] = None) -> GridArray:
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
-  rhs = fd.divergence(v)
   grid = grids.consistent_grid(*v)
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+  rhs = fd.divergence(v)
   laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))
   pinv = fast_diagonalization.psuedoinverse(
       laplacians, rhs.dtype,

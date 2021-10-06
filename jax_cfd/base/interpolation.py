@@ -133,7 +133,7 @@ def upwind(
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
     return grids.GridArray(
-        data=u.shift(int(offset_delta), axis).data,
+        data=c.shift(int(offset_delta), axis).data,
         offset=offset, grid=grids.consistent_grid(c, u))
 
   floor = int(np.floor(offset_delta))

@@ -143,6 +143,16 @@ class UpwindInterpolationTest(test_util.TestCase):
            u_axis=0,
            expected_data=lambda: jnp.roll(  # pylint: disable=g-long-lambda
                jnp.arange(10. * 10.).reshape((10, 10)), shift=-2, axis=0)),
+      dict(testcase_name='_2D_integer_offset',
+           grid_shape=(10, 10),
+           grid_step=(1., 1.),
+           c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
+           c_offset=(0.5, 1),
+           u_data=lambda: -1. * jnp.ones((10, 10)),
+           u_offset=(0.5, 0),
+           u_axis=1,
+           expected_data=lambda: jnp.roll(  # pylint: disable=g-long-lambda
+               jnp.arange(10. * 10.).reshape((10, 10)), shift=1, axis=1)),
       )
   def testCorrectness(self, grid_shape, grid_step, c_data, c_offset, u_data,
                       u_offset, u_axis, expected_data):

@@ -160,15 +160,18 @@ def gradient_tensor(v):
   grad = []
   for axis in range(v.grid.ndim):
     offset = v.offset[axis]
-    if offset < 0.5:
-      deriv_fn = forward_difference
-    elif offset > 0.5:
-      deriv_fn = backward_difference
-    else:  # offset == 0.5
-      deriv_fn = central_difference
-
-    derivative = deriv_fn(v, axis)
-    grad.append(interpolation.linear(derivative, v.grid.cell_center))
+    if offset == 0:
+      derivative = forward_difference(v, axis)
+    elif offset == 1:
+      derivative = backward_difference(v, axis)
+    elif offset == 0.5:
+      v_centered = interpolation.linear(v.array, v.grid.cell_center)
+      # TODO(pnorgaard) remove temporary GridVariable hack
+      v_centered = grids.make_gridvariable_from_gridarray(v_centered)
+      derivative = central_difference(v_centered, axis)
+    else:
+      raise ValueError(f'expected offset values in {{0, 0.5, 1}}, got {offset}')
+    grad.append(derivative)
   return GridArrayTensor(grad)
 
 

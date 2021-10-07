@@ -219,20 +219,48 @@ class FiniteDifferenceTest(test_util.TestCase):
   def test_cell_centered_gradient(self, shape, f, g, atol):
     step = tuple([1. / s for s in shape])
     grid = grids.Grid(shape, step)
-    offsets = grid.cell_faces
-    v = [
-        grids.GridVariable.create(
-            f(*grid.mesh(offset))[axis], offset, grid, 'periodic')
-        for axis, offset in enumerate(offsets)
-    ]
-    expected_gradient = g(*grid.mesh())
-    actual_gradient = fd.gradient_tensor(v)
-    for i in range(grid.ndim):
-      for j in range(len(v)):
-        print('i and j are', i, j)
-        expected = _trim_boundary(expected_gradient[i, j])
-        actual = _trim_boundary(actual_gradient[i, j])
-        self.assertAllClose(expected, actual.data, atol=atol)
+
+    with self.subTest('cell center values'):
+      offsets = (grid.cell_center,) * grid.ndim
+      v = [
+          grids.GridVariable.create(
+              f(*grid.mesh(offset))[axis], offset, grid, 'periodic')
+          for axis, offset in enumerate(offsets)
+      ]
+      expected_gradient = g(*grid.mesh())
+      actual_gradient = fd.gradient_tensor(v)
+      for i in range(grid.ndim):
+        for j in range(len(v)):
+          print('i and j are', i, j)
+          expected = _trim_boundary(expected_gradient[i, j])
+          actual = _trim_boundary(actual_gradient[i, j])
+          self.assertAllClose(expected, actual.data, atol=atol)
+
+    with self.subTest('cell face values'):
+      offsets = grid.cell_faces
+      v = [
+          grids.GridVariable.create(
+              f(*grid.mesh(offset))[axis], offset, grid, 'periodic')
+          for axis, offset in enumerate(offsets)
+      ]
+      expected_gradient = g(*grid.mesh())
+      actual_gradient = fd.gradient_tensor(v)
+      for i in range(grid.ndim):
+        for j in range(len(v)):
+          print('i and j are', i, j)
+          expected = _trim_boundary(expected_gradient[i, j])
+          actual = _trim_boundary(actual_gradient[i, j])
+          self.assertAllClose(expected, actual.data, atol=atol)
+
+    with self.subTest('raises'):
+      offsets = ((0.1,) * grid.ndim,) * grid.ndim  # unsupported offset
+      v = [
+          grids.GridVariable.create(
+              f(*grid.mesh(offset))[axis], offset, grid, 'periodic')
+          for axis, offset in enumerate(offsets)
+      ]
+      with self.assertRaisesRegex(ValueError, 'expected offset values'):
+        fd.gradient_tensor(v)
 
   @parameterized.named_parameters(
       # https://en.wikipedia.org/wiki/Curl_(mathematics)#Examples

@@ -114,7 +114,7 @@ class UpwindInterpolationTest(test_util.TestCase):
       interpolation.upwind(c, u_offset, None)
 
   @parameterized.named_parameters(
-      dict(testcase_name='_2D_positive',
+      dict(testcase_name='_2D_positive_velocity',
            grid_shape=(10, 10),
            grid_step=(1., 1.),
            c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
@@ -123,7 +123,7 @@ class UpwindInterpolationTest(test_util.TestCase):
            u_offset=(.5, 1.),
            u_axis=1,
            expected_data=lambda: jnp.arange(10. * 10.).reshape((10, 10))),
-      dict(testcase_name='_2D_negative',
+      dict(testcase_name='_2D_negative_velocity',
            grid_shape=(10, 10),
            grid_step=(1., 1.),
            c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
@@ -133,7 +133,7 @@ class UpwindInterpolationTest(test_util.TestCase):
            u_axis=0,
            expected_data=lambda: jnp.roll(  # pylint: disable=g-long-lambda
                jnp.arange(10. * 10.).reshape((10, 10)), shift=-1, axis=0)),
-      dict(testcase_name='_2D_negative_large_offset',
+      dict(testcase_name='_2D_negative_velocity_large_offset',
            grid_shape=(10, 10),
            grid_step=(1., 1.),
            c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
@@ -163,6 +163,94 @@ class UpwindInterpolationTest(test_util.TestCase):
         u if axis == u_axis else None for axis, _ in enumerate(u_offset)
     )
     final_c = interpolation.upwind(initial_c, u_offset, v)
+    self.assertAllClose(expected_data(), final_c.data)
+    self.assertAllClose(u_offset, final_c.offset)
+
+
+class LaxWendroffInterpolationTest(test_util.TestCase):
+
+  @parameterized.named_parameters(
+      dict(testcase_name='_2D',
+           grid_shape=(10, 10),
+           grid_step=(1., 1.),
+           c_offset=(1., .5),
+           u_offset=(.5, 1.)),
+      dict(testcase_name='_3D',
+           grid_shape=(10, 10, 10),
+           grid_step=(1., 1., 1.),
+           c_offset=(.5, 1., .5),
+           u_offset=(.5, .5, 1.)),
+      )
+  def testRaisesForInvalidOffset(
+      self, grid_shape, grid_step, c_offset, u_offset):
+    """Test that incompatible offsets raise an exception."""
+    grid = grids.Grid(grid_shape, grid_step)
+    c = grids.GridArray(jnp.ones(grid_shape), offset=c_offset, grid=grid)
+    with self.assertRaises(grids.InconsistentOffsetError):
+      interpolation.lax_wendroff(c, u_offset, v=None, dt=0.)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='_2D_positive_velocity_courant=1',
+          grid_shape=(10, 10),
+          grid_step=(1., 1.),
+          c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
+          c_offset=(.5, .5),
+          u_data=lambda: jnp.ones((10, 10)),
+          u_offset=(.5, 1.),
+          u_axis=1,
+          dt=1.,  # courant = u * dt / grid_step = 1
+          expected_data=lambda: jnp.arange(10. * 10.).reshape((10, 10))),
+      dict(
+          testcase_name='_2D_negative_velocity_courant=-1',
+          grid_shape=(10, 10),
+          grid_step=(1., 1.),
+          c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
+          c_offset=(.5, .5),
+          u_data=lambda: -1. * jnp.ones((10, 10)),
+          u_offset=(.5, 1.),
+          u_axis=1,
+          dt=1.,  # courant = u * dt / grid_step = -1
+          expected_data=lambda: jnp.roll(  # pylint: disable=g-long-lambda
+              jnp.arange(10. * 10.).reshape((10, 10)), shift=-1, axis=1)),
+      dict(
+          testcase_name='_2D_positive_velocity_courant=0',
+          grid_shape=(10, 10),
+          grid_step=(1., 1.),
+          c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
+          c_offset=(.5, .5),
+          u_data=lambda: jnp.ones((10, 10)),
+          u_offset=(.5, 1.),
+          u_axis=1,
+          dt=0.,  # courant = u * dt / grid_step = 0
+          # for courant = 1, result is the average of cell and upwind
+          expected_data=lambda: 0.5 * (  # pylint: disable=g-long-lambda
+              jnp.arange(10. * 10.).reshape((10, 10)) + jnp.roll(
+                  jnp.arange(10. * 10.).reshape((10, 10)), shift=-1, axis=1))),
+      dict(
+          testcase_name='_2D_negative_velocity_courant=0',
+          grid_shape=(10, 10),
+          grid_step=(1., 1.),
+          c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
+          c_offset=(.5, .5),
+          u_data=lambda: -1. * jnp.ones((10, 10)),
+          u_offset=(.5, 1.),
+          u_axis=1,
+          dt=0.,  # courant = u * dt / grid_step = 0
+          # for courant = 1, result is the average of cell and upwind
+          expected_data=lambda: 0.5 * (  # pylint: disable=g-long-lambda
+              jnp.arange(10. * 10.).reshape((10, 10)) + jnp.roll(
+                  jnp.arange(10. * 10.).reshape((10, 10)), shift=-1, axis=1))),
+  )
+  def testCorrectness(self, grid_shape, grid_step, c_data, c_offset, u_data,
+                      u_offset, u_axis, dt, expected_data):
+    grid = grids.Grid(grid_shape, grid_step)
+    initial_c = grids.GridArray(c_data(), c_offset, grid)
+    u = grids.GridArray(u_data(), u_offset, grid)
+    v = tuple(
+        u if axis == u_axis else None for axis, _ in enumerate(u_offset)
+    )
+    final_c = interpolation.lax_wendroff(initial_c, u_offset, v, dt)
     self.assertAllClose(expected_data(), final_c.data)
     self.assertAllClose(u_offset, final_c.offset)
 

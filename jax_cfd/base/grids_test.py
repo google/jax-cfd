@@ -357,6 +357,12 @@ class GridTest(test_util.TestCase):
       self.assertEqual(grid.cell_center, (0.5, 0.5))
       self.assertEqual(grid.cell_faces, ((1.0, 0.5), (0.5, 1.0)))
 
+    with self.subTest('2d periodic'):
+      grid = grids.Grid((10, 20), domain=2*np.pi)
+      self.assertEqual(grid.step, (2*np.pi / 10, 2*np.pi / 20))
+      self.assertEqual(grid.domain, ((0., 2*np.pi), (0., 2*np.pi)))
+      self.assertEqual(grid.ndim, 2)
+
     with self.assertRaisesRegex(TypeError, 'cannot provide both'):
       grids.Grid((2,), step=(1.0,), domain=[(0, 2.0)])
     with self.assertRaisesRegex(ValueError, 'length of domain'):

@@ -475,7 +475,7 @@ class Grid:
       self,
       shape: Sequence[int],
       step: Optional[Union[float, Sequence[float]]] = None,
-      domain: Optional[Sequence[Tuple[float, float]]] = None,
+      domain: Optional[Union[float, Sequence[Tuple[float, float]]]] = None,
       boundaries: Union[str, Sequence[str]] = 'periodic',
   ):
     """Construct a grid object."""
@@ -485,13 +485,16 @@ class Grid:
     if step is not None and domain is not None:
       raise TypeError('cannot provide both step and domain')
     elif domain is not None:
-      if len(domain) != self.ndim:
-        raise ValueError('length of domain does not match ndim: '
-                         f'{len(domain)} != {self.ndim}')
-      for bounds in domain:
-        if len(bounds) != 2:
-          raise ValueError(
-              f'domain is not sequence of pairs of numbers: {domain}')
+      if isinstance(domain, float):
+        domain = ((0, domain),) * len(shape)
+      else:
+        if len(domain) != self.ndim:
+          raise ValueError('length of domain does not match ndim: '
+                           f'{len(domain)} != {self.ndim}')
+        for bounds in domain:
+          if len(bounds) != 2:
+            raise ValueError(
+                f'domain is not sequence of pairs of numbers: {domain}')
       domain = tuple((float(lower), float(upper)) for lower, upper in domain)
     else:
       if step is None:

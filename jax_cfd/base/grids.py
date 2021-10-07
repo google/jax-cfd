@@ -374,6 +374,10 @@ def applied(func):
   """
 
   def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
+    for arg in args + tuple(kwargs.values()):
+      if isinstance(arg, GridVariable):
+        raise ValueError('grids.applied() cannot be used with GridVariable')
+
     offset = consistent_offset(*[
         arg for arg in args + tuple(kwargs.values())
         if isinstance(arg, GridArray)
@@ -396,13 +400,15 @@ def applied(func):
 where = applied(jnp.where)
 
 
-def averaged_offset(*arrays: GridArray) -> Tuple[float, ...]:
+def averaged_offset(
+    *arrays: Union[GridArray, GridVariable]) -> Tuple[float, ...]:
   """Returns the averaged offset of the given arrays."""
   offset = np.mean([array.offset for array in arrays], axis=0)
   return tuple(offset.tolist())
 
 
-def control_volume_offsets(c: GridArray) -> Tuple[Tuple[float, ...], ...]:
+def control_volume_offsets(
+    c: Union[GridArray, GridVariable]) -> Tuple[Tuple[float, ...], ...]:
   """Returns offsets for the faces of the control volume centered at `c`."""
   return tuple(
       tuple(o + .5 if i == j else o

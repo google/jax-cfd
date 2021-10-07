@@ -28,7 +28,8 @@ from jax_cfd.base import pressure
 
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
-ConvectFn = Callable[[GridArrayVector], GridArrayVector]
+GridVariableVector = grids.GridVariableVector
+ConvectFn = Callable[[GridVariableVector], GridArrayVector]
 DiffuseFn = Callable[[GridArray, float], GridArray]
 ForcingFn = Callable[[grids.GridArrayVector], grids.GridArrayVector]
 
@@ -92,7 +93,9 @@ def semi_implicit_navier_stokes(
   @jax.named_call
   def navier_stokes_step(v: GridArrayVector) -> GridArrayVector:
     """Computes state at time `t + dt` using first order time integration."""
-    convection = convect(v)
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    convection = convect(
+        tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
     accelerations = [convection]
     if viscosity is not None:
       diffusion_ = tuple(diffuse(u, viscosity / density) for u in v)
@@ -134,7 +137,9 @@ def implicit_diffusion_navier_stokes(
   @jax.named_call
   def navier_stokes_step(v: GridArrayVector) -> GridArrayVector:
     """Computes state at time `t + dt` using first order time integration."""
-    convection = convect(v)
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    convection = convect(
+        tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
     accelerations = [convection]
     if forcing is not None:
       # TODO(shoyer): include time in state?

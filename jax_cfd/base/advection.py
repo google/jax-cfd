@@ -23,17 +23,21 @@ from jax_cfd.base import interpolation
 
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariable = grids.GridVariable
+GridVariableVector = grids.GridVariableVector
 InterpolationFn = interpolation.InterpolationFn
 # TODO(dkochkov) Consider testing if we need operator splitting methods.
 
 
-def _advect_aligned(cs: GridArrayVector, v: GridArrayVector) -> GridArray:
+def _advect_aligned(cs: GridVariableVector, v: GridVariableVector) -> GridArray:
   """Computes fluxes and the associated advection for aligned `cs` and `v`.
 
   The values `cs` should consist of a single quantity `c` that has been
   interpolated to the offset of the components of `v`. The components of `v` and
   `cs` should be located at the faces of a single (possibly offset) grid cell.
   We compute the advection as the divergence of the flux on this control volume.
+
+  The boundary condition on the flux is inherited from the scalar quantity `c`.
 
   A typical example in three dimensions would have
 
@@ -64,15 +68,15 @@ def _advect_aligned(cs: GridArrayVector, v: GridArrayVector) -> GridArray:
   if len(cs) != len(v):
     raise ValueError('`cs` and `v` must have the same length;'
                      f'got {len(cs)} vs. {len(v)}.')
-  flux = tuple(c * u for c, u in zip(cs, v))
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  flux = tuple(grids.make_gridvariable_from_gridarray(f) for f in flux)
+  flux = tuple(c.array * u.array for c, u in zip(cs, v))
+  # Flux inherits boundary conditions from cs
+  flux = tuple(grids.GridVariable(f, c.bc) for f, c in zip(flux, cs))
   return -fd.divergence(flux)
 
 
 def advect_general(
-    c: GridArray,
-    v: GridArrayVector,
+    c: GridVariable,
+    v: GridVariableVector,
     u_interpolation_fn: InterpolationFn,
     c_interpolation_fn: InterpolationFn,
     dt: Optional[float] = None) -> GridArray:
@@ -84,7 +88,8 @@ def advect_general(
        control volume centered on `c`.
     2. Interpolate `c` to the same control volume faces.
     3. Compute the flux `cu` using the aligned values.
-    4. Return the negative divergence of the flux.
+    4. Set the boundary condition on flux, which is inhereited from `c`.
+    5. Return the negative divergence of the flux.
 
   Args:
     c: the quantity to be transported.
@@ -97,74 +102,62 @@ def advect_general(
     The time derivative of `c` due to advection by `v`.
   """
   target_offsets = grids.control_volume_offsets(c)
-
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  c = grids.make_gridvariable_from_gridarray(c)
-  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
-
   aligned_v = tuple(u_interpolation_fn(u, target_offset, v, dt)
                     for u, target_offset in zip(v, target_offsets))
   aligned_c = tuple(c_interpolation_fn(c, target_offset, aligned_v, dt)
                     for target_offset in target_offsets)
-
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  aligned_c = tuple(c.array for c in aligned_c)
-  aligned_v = tuple(u.array for u in aligned_v)
-
-  res = _advect_aligned(aligned_c, aligned_v)
-  return res
+  return _advect_aligned(aligned_c, aligned_v)
 
 
-def advect_linear(c: GridArray,
-                  v: GridArrayVector,
+def advect_linear(c: GridVariable,
+                  v: GridVariableVector,
                   dt: Optional[float] = None) -> GridArray:
   """Computes advection using linear interpolations."""
   return advect_general(c, v, interpolation.linear, interpolation.linear, dt)
 
 
-def advect_upwind(c: GridArray,
-                  v: GridArrayVector,
+def advect_upwind(c: GridVariable,
+                  v: GridVariableVector,
                   dt: Optional[float] = None) -> GridArray:
   """Computes advection using first-order upwind interpolation on `c`."""
   return advect_general(c, v, interpolation.linear, interpolation.upwind, dt)
 
 
-def _align_velocities(v: GridArrayVector) -> Tuple[GridArrayVector]:
+def _align_velocities(v: GridVariableVector) -> Tuple[GridVariableVector]:
   """Returns interpolated components of `v` needed for convection.
 
   Args:
     v: a velocity field.
 
   Returns:
-    A d-tuple of d-tuples of `GridArray`s `aligned_v`, where `d = len(v)`.
+    A d-tuple of d-tuples of `GridVariable`s `aligned_v`, where `d = len(v)`.
     The entry `aligned_v[i][j]` is the component `v[i]` after interpolation to
     the appropriate face of the control volume centered around `v[j]`.
   """
   grid = grids.consistent_grid(*v)
   offsets = tuple(grids.control_volume_offsets(u) for u in v)
-
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
-
   aligned_v = tuple(
-      tuple(interpolation.linear(v[i], offsets[i][j]).array
+      tuple(interpolation.linear(v[i], offsets[i][j])
             for j in range(grid.ndim))
       for i in range(grid.ndim))
   return aligned_v
 
 
 def _velocities_to_flux(
-    aligned_v: Tuple[GridArrayVector]) -> Tuple[GridArrayVector]:
+    aligned_v: Tuple[GridVariableVector]) -> Tuple[GridVariableVector]:
   """Computes the fluxes across the control volume faces for a velocity field.
 
+  This is the flux associated with the nonlinear term `vv` for velocity `v`.
+  The boundary condition on the flux is inherited from `v`.
+
   Args:
-    aligned_v: a d-tuple of d-tuples of `GridArray`s such that the entry
+    aligned_v: a d-tuple of d-tuples of `GridVariable`s such that the entry
     `aligned_v[i][j]` is the component `v[i]` after interpolation to
     the appropriate face of the control volume centered around `v[j]`. This is
     the output of `_align_velocities`.
 
   Returns:
-    A tuple of tuples `flux` of `GridArray`s with the same structure as
+    A tuple of tuples `flux` of `GridVariable`s with the same structure as
     `aligned_v`. The entry `flux[i][j]` is `aligned_v[i][j] * aligned_v[j][i]`.
   """
   ndim = len(aligned_v)
@@ -172,13 +165,16 @@ def _velocities_to_flux(
   for i in range(ndim):
     for j in range(ndim):
       if i <= j:
-        flux[i] += (aligned_v[i][j] * aligned_v[j][i],)
+        bc = grids.consistent_boundary_conditions(
+            aligned_v[i][j], aligned_v[j][i])
+        flux[i] += (GridVariable(aligned_v[i][j].array * aligned_v[j][i].array,
+                                 bc),)
       else:
         flux[i] += (flux[j][i],)
   return tuple(flux)
 
 
-def convect_linear(v: GridArrayVector) -> GridArrayVector:
+def convect_linear(v: GridVariableVector) -> GridArrayVector:
   """Computes convection/self-advection of the velocity field `v`.
 
   This function is conceptually equivalent to
@@ -201,17 +197,12 @@ def convect_linear(v: GridArrayVector) -> GridArrayVector:
   # TODO(jamieas): incorporate variable density.
   aligned_v = _align_velocities(v)
   fluxes = _velocities_to_flux(aligned_v)
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  fluxes = tuple(
-      tuple(grids.make_gridvariable_from_gridarray(f)
-            for f in flux)
-      for flux in fluxes)
   return tuple(-fd.divergence(flux) for flux in fluxes)
 
 
 def advect_van_leer(
-    c: GridArray,
-    v: GridArrayVector,
+    c: GridVariable,
+    v: GridVariableVector,
     dt: float
 ) -> GridArray:
   """Computes advection of a scalar quantity `c` by the velocity field `v`.
@@ -226,7 +217,8 @@ def advect_van_leer(
        control volume centered on `c`. In most cases satisfied by design.
     2. Computes upwind flux for each direction.
     3. Computes higher order flux correction based on neighboring values of `c`.
-    4. Combines fluxes and returns the negative divergence.
+    4. Combines fluxes and assigns flux boundary condition.
+    5. Returns the negative divergence of fluxes.
 
   Args:
     c: the quantity to be transported.
@@ -245,22 +237,15 @@ def advect_van_leer(
   """
   # TODO(dkochkov) reimplement this using apply_limiter method.
   offsets = grids.control_volume_offsets(c)
-
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
-
   aligned_v = tuple(interpolation.linear(u, offset)
                     for u, offset in zip(v, offsets))
-
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  aligned_v = tuple(u.array for u in aligned_v)
-
   flux = []
   for axis, (u, h) in enumerate(zip(aligned_v, c.grid.step)):
     c_center = c.data
     c_left = c.shift(-1, axis=axis).data
     c_right = c.shift(+1, axis=axis).data
-    upwind_flux = grids.applied(jnp.where)(u > 0, u * c_center, u * c_right)
+    upwind_flux = grids.applied(jnp.where)(
+        u.array > 0, u.array * c_center, u.array * c_right)
 
     # Van-Leer Flux correction is computed in steps to avoid `nan`s.
     # Formula for the flux correction df for advection with positive velocity is
@@ -275,27 +260,28 @@ def advect_van_leer(
         safe, diffs_prod / jnp.where(safe, neighbor_diff, 1), 0
     )
     # for negative velocity we simply need to shift the correction along v axis.
-    forward_correction_array = grids.GridArray(
-        forward_correction, u.offset, c.grid)
+    # Cast to GridVariable so that we can apply a shift() operation.
+    forward_correction_array = grids.GridVariable.create(
+        forward_correction, u.offset, u.grid, u.bc.boundaries)
     backward_correction_array = forward_correction_array.shift(+1, axis)
     backward_correction = backward_correction_array.data
-    abs_velocity = abs(u)
+    abs_velocity = abs(u.array)
     courant_numbers = (dt / h) * abs_velocity
     pre_factor = 0.5 * (1 - courant_numbers) * abs_velocity
     flux_correction = pre_factor * grids.applied(jnp.where)(
-        u > 0, forward_correction, backward_correction)
+        u.array > 0, forward_correction, backward_correction)
     flux.append(upwind_flux + flux_correction)
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  flux = tuple(grids.make_gridvariable_from_gridarray(f) for f in flux)
+  # Assign flux boundary condition
+  flux = tuple(GridVariable(f, c.bc) for f in flux)
   advection = -fd.divergence(flux)
   return advection
 
 
 def advect_step_semilagrangian(
-    c: GridArray,
-    v: GridArrayVector,
+    c: GridVariable,
+    v: GridVariableVector,
     dt: float
-) -> GridArray:
+) -> GridVariable:
   """Semi-Lagrangian advection of a scalar quantity.
 
   Note that unlike the other advection functions, this function returns values
@@ -321,25 +307,21 @@ def advect_step_semilagrangian(
   if not all(d[0] == 0 for d in grid.domain):
     raise ValueError(
         f'Grid domains currently must start at zero. Found {grid.domain}')
-
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
-
   coords = [x - dt * interpolation.linear(u, c.offset).data
             for x, u in zip(grid.mesh(c.offset), v)]
   indices = [x / s - o for s, o, x in zip(grid.step, c.offset, coords)]
-  if set(grid.boundaries) != {grids.PERIODIC}:
+  if set(c.bc.boundaries) != {grids.PERIODIC}:
     raise NotImplementedError('non-periodic BCs not yet supported')
   c_advected = grids.applied(jax.scipy.ndimage.map_coordinates)(
-      c, indices, order=1, mode='wrap')
-  return c_advected
+      c.array, indices, order=1, mode='wrap')
+  return GridVariable(c_advected, c.bc)
 
 
 # TODO(dkochkov) Implement advect_with_flux_limiter method.
 # TODO(dkochkov) Consider moving `advect_van_leer` to test based on performance.
 def advect_van_leer_using_limiters(
-    c: GridArray,
-    v: GridArrayVector,
+    c: GridVariable,
+    v: GridVariableVector,
     dt: float
 ) -> GridArray:
   """Implements Van-Leer advection by applying TVD limiter to Lax-Wendroff."""

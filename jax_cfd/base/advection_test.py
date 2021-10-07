@@ -67,7 +67,8 @@ def _total_variation(array, motion_axis):
 
 def _euler_step(advection_method):
   def step(c, v, dt):
-    return c + dt * advection_method(c, v, dt)
+    c_new = c.array + dt * advection_method(c, v, dt)
+    return grids.GridVariable(c_new, c.bc)
   return step
 
 
@@ -147,10 +148,9 @@ class AdvectionTest(test_util.TestCase):
     """Tests advection of a Gaussian concentration on a periodic grid."""
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-
-    v = _unit_velocity(grid, v_sign)
-    c = _gaussian_concentration(grid)
-
+    bc = grids.BoundaryConditions(boundaries=('periodic',) * len(shape))
+    v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid, v_sign))
+    c = grids.GridVariable(_gaussian_concentration(grid), bc)
     dt = cfl_number * min(step)
     advect = functools.partial(method, v=v, dt=dt)
     evolve = jax.jit(funcutils.repeated(advect, num_steps))
@@ -223,19 +223,18 @@ class AdvectionTest(test_util.TestCase):
   ):
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-
-    v = _unit_velocity(grid, v_sign)
-    c_init = _gaussian_concentration(grid)
-
+    bc = grids.BoundaryConditions(boundaries=('periodic',) * len(shape))
+    v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid, v_sign))
+    c = grids.GridVariable(_gaussian_concentration(grid), bc)
     dt = cfl_number * min(step)
     advect = jax.remat(functools.partial(method, v=v, dt=dt))
     evolve = jax.jit(funcutils.repeated(advect, steps=10))
 
-    def objective(c_init):
-      return 0.5 * jnp.sum(evolve(c_init).data ** 2)
+    def objective(c):
+      return 0.5 * jnp.sum(evolve(c).data ** 2)
 
-    gradient = jax.jit(jax.grad(objective))(c_init)
-    self.assertAllClose(c_init, gradient, atol=atol, rtol=rtol)
+    gradient = jax.jit(jax.grad(objective))(c)
+    self.assertAllClose(c, gradient, atol=atol, rtol=rtol)
 
   @parameterized.named_parameters(
       dict(testcase_name='_linear_1D',
@@ -253,7 +252,8 @@ class AdvectionTest(test_util.TestCase):
     """Exercises self-advection, check equality with advection on components."""
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-    v = _cos_velocity(grid)
+    bc = grids.BoundaryConditions(boundaries=('periodic',) * len(shape))
+    v = tuple(grids.GridVariable(u, bc) for u in _cos_velocity(grid))
     self_advected = convection_method(v)
     for u, du in zip(v, self_advected):
       advected_component = advection_method(u, v)
@@ -275,10 +275,9 @@ class AdvectionTest(test_util.TestCase):
     atol = 1e-6
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-
-    v = _unit_velocity(grid)
-    c = _square_concentration(grid)
-
+    bc = grids.BoundaryConditions(boundaries=('periodic',) * len(shape))
+    v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid))
+    c = grids.GridVariable(_square_concentration(grid), bc)
     dt = min(step) / 100.
     num_steps = 300
     ct = c
@@ -293,21 +292,20 @@ class AdvectionTest(test_util.TestCase):
 
   @parameterized.named_parameters(
       dict(testcase_name='van_leers_equivalence_1d',
-           shape=(101,), velocity_sign=1.),
+           shape=(101,), v_sign=1.),
       dict(testcase_name='van_leers_equivalence_3d',
-           shape=(101, 101, 101), velocity_sign=1.),
+           shape=(101, 101, 101), v_sign=1.),
       dict(testcase_name='van_leers_equivalence_1d_negative_v',
-           shape=(101,), velocity_sign=-1.),
+           shape=(101,), v_sign=-1.),
       dict(testcase_name='van_leers_equivalence_3d_negative_v',
-           shape=(101, 101, 101), velocity_sign=-1.),
+           shape=(101, 101, 101), v_sign=-1.),
   )
-  def test_van_leer_same_as_van_leer_using_limiters(self, shape, velocity_sign):
+  def test_van_leer_same_as_van_leer_using_limiters(self, shape, v_sign):
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-
-    v = _unit_velocity(grid, velocity_sign)
-    c = _square_concentration(grid)
-
+    bc = grids.BoundaryConditions(boundaries=('periodic',) * len(shape))
+    v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid, v_sign))
+    c = grids.GridVariable(_gaussian_concentration(grid), bc)
     dt = min(step) / 100.
     num_steps = 100
     advect_vl = jax.jit(

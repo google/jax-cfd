@@ -41,7 +41,8 @@ class LinearInterpolationTest(test_util.TestCase):
   def testRaisesForInvalidOffset(self, shape, step, offset):
     """Test that incompatible offsets raise an exception."""
     grid = grids.Grid(shape, step)
-    u = grids.GridArray(jnp.ones(shape), jnp.zeros(shape), grid)
+    u = grids.GridVariable.create(
+        jnp.ones(shape), jnp.zeros(shape), grid, 'periodic')
     with self.assertRaises(ValueError):
       interpolation.linear(u, offset)
 
@@ -72,7 +73,8 @@ class LinearInterpolationTest(test_util.TestCase):
 
     initial_mesh = grid.mesh(offset=initial_offset)
     initial_axes = grid.axes(offset=initial_offset)
-    initial_u = grids.GridArray(f(initial_mesh), initial_offset, grid)
+    initial_u = grids.GridVariable.create(
+        f(initial_mesh), initial_offset, grid, 'periodic')
 
     final_mesh = grid.mesh(offset=final_offset)
     final_u = interpolation.linear(initial_u, final_offset)
@@ -109,7 +111,8 @@ class UpwindInterpolationTest(test_util.TestCase):
       self, grid_shape, grid_step, c_offset, u_offset):
     """Test that incompatible offsets raise an exception."""
     grid = grids.Grid(grid_shape, grid_step)
-    c = grids.GridArray(jnp.ones(grid_shape), offset=c_offset, grid=grid)
+    c = grids.GridVariable.create(
+        jnp.ones(grid_shape), c_offset, grid, 'periodic')
     with self.assertRaises(grids.InconsistentOffsetError):
       interpolation.upwind(c, u_offset, None)
 
@@ -157,8 +160,8 @@ class UpwindInterpolationTest(test_util.TestCase):
   def testCorrectness(self, grid_shape, grid_step, c_data, c_offset, u_data,
                       u_offset, u_axis, expected_data):
     grid = grids.Grid(grid_shape, grid_step)
-    initial_c = grids.GridArray(c_data(), c_offset, grid)
-    u = grids.GridArray(u_data(), u_offset, grid)
+    initial_c = grids.GridVariable.create(c_data(), c_offset, grid, 'periodic')
+    u = grids.GridVariable.create(u_data(), u_offset, grid, 'periodic')
     v = tuple(
         u if axis == u_axis else None for axis, _ in enumerate(u_offset)
     )
@@ -185,7 +188,8 @@ class LaxWendroffInterpolationTest(test_util.TestCase):
       self, grid_shape, grid_step, c_offset, u_offset):
     """Test that incompatible offsets raise an exception."""
     grid = grids.Grid(grid_shape, grid_step)
-    c = grids.GridArray(jnp.ones(grid_shape), offset=c_offset, grid=grid)
+    c = grids.GridVariable.create(
+        jnp.ones(grid_shape), c_offset, grid, 'periodic')
     with self.assertRaises(grids.InconsistentOffsetError):
       interpolation.lax_wendroff(c, u_offset, v=None, dt=0.)
 
@@ -245,13 +249,47 @@ class LaxWendroffInterpolationTest(test_util.TestCase):
   def testCorrectness(self, grid_shape, grid_step, c_data, c_offset, u_data,
                       u_offset, u_axis, dt, expected_data):
     grid = grids.Grid(grid_shape, grid_step)
-    initial_c = grids.GridArray(c_data(), c_offset, grid)
-    u = grids.GridArray(u_data(), u_offset, grid)
+    initial_c = grids.GridVariable.create(c_data(), c_offset, grid, 'periodic')
+    u = grids.GridVariable.create(u_data(), u_offset, grid, 'periodic')
     v = tuple(
         u if axis == u_axis else None for axis, _ in enumerate(u_offset)
     )
     final_c = interpolation.lax_wendroff(initial_c, u_offset, v, dt)
     self.assertAllClose(expected_data(), final_c.data)
+    self.assertAllClose(u_offset, final_c.offset)
+
+
+class ApplyTvdLimiterTest(test_util.TestCase):
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='_case_where_lax_wendroff_is_same_as_upwind',
+          interpolation_fn=interpolation.lax_wendroff,
+          limiter=interpolation.van_leer_limiter,
+          grid_shape=(10, 10),
+          grid_step=(1., 1.),
+          c_data=lambda: jnp.arange(10. * 10.).reshape((10, 10)),
+          c_offset=(.5, .5),
+          u_data=lambda: jnp.ones((10, 10)),
+          u_offset=(.5, 1.),
+          u_axis=1,
+          dt=1.,
+          expected_fn=interpolation.upwind),
+  )
+  def testCorrectness(self, interpolation_fn, limiter, grid_shape, grid_step,
+                      c_data, c_offset, u_data, u_offset, u_axis, dt,
+                      expected_fn):
+    c_interpolation_fn = interpolation.apply_tvd_limiter(
+        interpolation_fn, limiter)
+    grid = grids.Grid(grid_shape, grid_step)
+    initial_c = grids.GridVariable.create(c_data(), c_offset, grid, 'periodic')
+    u = grids.GridVariable.create(u_data(), u_offset, grid, 'periodic')
+    v = tuple(
+        u if axis == u_axis else None for axis, _ in enumerate(u_offset)
+    )
+    final_c = c_interpolation_fn(initial_c, u_offset, v, dt)
+    expected = expected_fn(initial_c, u_offset, v, dt)
+    self.assertAllClose(expected, final_c)
     self.assertAllClose(u_offset, final_c.offset)
 
 

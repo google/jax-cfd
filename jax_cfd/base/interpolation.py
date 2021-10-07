@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Functions for interpolating `GridArray`s."""
+"""Functions for interpolating `GridVariables`s."""
 
 from typing import Callable, Optional, Tuple, Union
 
@@ -24,15 +24,37 @@ import numpy as np
 Array = Union[np.ndarray, jnp.DeviceArray]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariable = grids.GridVariable
+GridVariableVector = grids.GridVariableVector
 InterpolationFn = Callable[
-    [GridArray, Tuple[float, ...], GridArrayVector, float],
-    GridArray]
+    [GridVariable, Tuple[float, ...], GridVariableVector, float],
+    GridVariable]
 FluxLimiter = Callable[[grids.Array], grids.Array]
 
 
-def _linear_along_axis(c: grids.GridArray,
+# TODO(pnorgaard) Remove this after GridVariable migration
+def wrap_for_gridarray(interp_fn: InterpolationFn):
+  """Converts an interpolation on GridVariable to one on GridArray."""
+  # Works by "promoting" GridArray args to GridVariable, calling interpolation,
+  # then extracting the GridArray from the returned GridVariable.
+
+  def wrapped(
+      c: GridArray,
+      offset: Tuple[float, ...],
+      v: Optional[GridArrayVector] = None,
+      dt: Optional[float] = None,
+      ) -> GridArray:
+    c = grids.make_gridvariable_from_gridarray(c)
+    if v is not None:
+      v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+    return interp_fn(c, offset, v, dt).array
+
+  return wrapped
+
+
+def _linear_along_axis(c: GridVariable,
                        offset: float,
-                       axis: int) -> grids.GridArray:
+                       axis: int) -> GridVariable:
   """Linear interpolation of `c` to `offset` along a single specified `axis`."""
   offset_delta = offset - c.offset[axis]
 
@@ -45,9 +67,11 @@ def _linear_along_axis(c: grids.GridArray,
 
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
-    return grids.GridArray(
+    return GridVariable.create(
         data=c.shift(int(offset_delta), axis).data,
-        offset=new_offset, grid=c.grid)
+        offset=new_offset,
+        grid=c.grid,
+        boundaries=c.bc.boundaries)
 
   floor = int(np.floor(offset_delta))
   ceil = int(np.ceil(offset_delta))
@@ -55,22 +79,26 @@ def _linear_along_axis(c: grids.GridArray,
   ceil_weight = 1. - floor_weight
   data = (floor_weight * c.shift(floor, axis).data +
           ceil_weight * c.shift(ceil, axis).data)
-  return grids.GridArray(data=data, offset=new_offset, grid=c.grid)
+  return GridVariable.create(
+      data=data,
+      offset=new_offset,
+      grid=c.grid,
+      boundaries=c.bc.boundaries)
 
 
 def linear(
-    c: grids.GridArray,
+    c: GridVariable,
     offset: Tuple[float, ...],
-    v: Optional[Tuple[grids.GridArray, ...]] = None,
+    v: Optional[GridVariableVector] = None,
     dt: Optional[float] = None
-) -> grids.GridArray:
+) -> grids.GridVariable:
   """Multi-linear interpolation of `c` to `offset`.
 
   Args:
-    c: an `GridArray`.
-    offset: a tuple of floats describing the offset to which we will interpolate
-      `c`. Must have the same length as `c.offset`.
-    v: a tuple of `GridArray`s representing velocity field. Not used.
+    c: quantitity to be interpolated.
+    offset: offset to which we will interpolate `c`. Must have the same length
+      as `c.offset`.
+    v: velocity field. Not used.
     dt: size of the time step. Not used.
 
   Returns:
@@ -88,11 +116,11 @@ def linear(
 
 
 def upwind(
-    c: grids.GridArray,
+    c: GridVariable,
     offset: Tuple[float, ...],
-    v: Tuple[grids.GridArray, ...],
+    v: GridVariableVector,
     dt: Optional[float] = None
-) -> grids.GridArray:
+) -> GridVariable:
   """Upwind interpolation of `c` to `offset` based on velocity field `v`.
 
   Interpolates values of `c` to `offset` in two steps:
@@ -101,17 +129,17 @@ def upwind(
      the previous (next) cell along that axis correspondingly.
 
   Args:
-    c: an `GridArray`, the quantitity to be interpolated.
-    offset: a tuple of floats describing the offset to which we will interpolate
-      `c`. Must have the same length as `c.offset` and differ in at most one
-      entry.
-    v: a tuple of `GridArray`s representing velocity field with offsets at
-      faces of `c`. One of the components must have the same offset as `offset`.
+    c: quantitity to be interpolated.
+    offset: offset to which `c` will be interpolated. Must have the same
+      length as `c.offset` and differ in at most one entry.
+    v: velocity field with offsets at faces of `c`. One of the components
+      must have the same offset as `offset`.
     dt: size of the time step. Not used.
 
   Returns:
-    An `GridArray` that containins the values of `c` after interpolation to
+    A `GridVariable` that containins the values of `c` after interpolation to
     `offset`.
+
   Raises:
     InconsistentOffsetError: if `offset` and `c.offset` differ in more than one
     entry.
@@ -132,23 +160,30 @@ def upwind(
 
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
-    return grids.GridArray(
+    return GridVariable.create(
         data=c.shift(int(offset_delta), axis).data,
-        offset=offset, grid=grids.consistent_grid(c, u))
+        offset=offset,
+        grid=grids.consistent_grid(c, u),
+        boundaries=c.bc.boundaries)
 
   floor = int(np.floor(offset_delta))
   ceil = int(np.ceil(offset_delta))
-  return grids.applied(jnp.where)(
-      u > 0, c.shift(floor, axis).data, c.shift(ceil, axis).data
+  array = grids.applied(jnp.where)(
+      u.array > 0, c.shift(floor, axis).data, c.shift(ceil, axis).data
   )
+  return grids.GridVariable.create(
+      data=array.data,
+      offset=offset,
+      grid=grids.consistent_grid(c, u),
+      boundaries=c.bc.boundaries)
 
 
 def lax_wendroff(
-    c: grids.GridArray,
+    c: GridVariable,
     offset: Tuple[float, ...],
-    v: Optional[Tuple[grids.GridArray, ...]] = None,
+    v: Optional[GridVariableVector] = None,
     dt: Optional[float] = None
-) -> grids.GridArray:
+) -> GridVariable:
   """Lax_Wendroff interpolation of `c` to `offset` based on velocity field `v`.
 
   Interpolates values of `c` to `offset` in two steps:
@@ -165,16 +200,15 @@ def lax_wendroff(
   a flux limiter. See https://en.wikipedia.org/wiki/Flux_limiter
 
   Args:
-    c: an `GridArray`, the quantitity to be interpolated.
-    offset: a tuple of floats describing the offset to which we will interpolate
-      `c`. Must have the same length as `c.offset` and differ in at most one
-      entry.
-    v: a tuple of `GridArray`s representing velocity field with offsets at
-      faces of `c`. One of the components must have the same offset as `offset`.
+    c: quantitity to be interpolated.
+    offset: offset to which we will interpolate `c`. Must have the same
+      length as `c.offset` and differ in at most one entry.
+    v: velocity field with offsets at faces of `c`. One of the components must
+      have the same offset as `offset`.
     dt: size of the time step. Not used.
 
   Returns:
-    An `GridArray` that containins the values of `c` after interpolation to
+    A `GridVariable` that containins the values of `c` after interpolation to
     `offset`.
   Raises:
     InconsistentOffsetError: if `offset` and `c.offset` differ in more than one
@@ -203,7 +237,12 @@ def lax_wendroff(
   negative_u_case = (
       c.shift(ceil, axis).data - 0.5 * (1 + courant_numbers) *
       (c.shift(ceil, axis).data - c.shift(floor, axis).data))
-  return grids.where(u > 0, positive_u_case, negative_u_case)
+  array = grids.where(u.array > 0, positive_u_case, negative_u_case)
+  return grids.GridVariable.create(
+      data=array.data,
+      offset=offset,
+      grid=grids.consistent_grid(c, u),
+      boundaries=c.bc.boundaries)
 
 
 def safe_div(x, y, default_numerator=1):
@@ -242,7 +281,13 @@ def apply_tvd_limiter(
     Interpolation method that uses a combination of high and low order methods
     to produce monotonic interpolation method.
   """
-  def tvd_interpolation(c, offset, v, dt):
+
+  def tvd_interpolation(
+      c: GridVariable,
+      offset: Tuple[float, ...],
+      v: GridVariableVector,
+      dt: float,
+  ) -> GridVariable:
     """Interpolated `c` to offset `offset`."""
     for axis, axis_offset in enumerate(offset):
       interpolation_offset = tuple([
@@ -271,17 +316,21 @@ def apply_tvd_limiter(
         negative_u_phi = grids.GridArray(
             limiter(negative_u_r), c_low.offset, c.grid)
         u = v[axis]
-        phi = grids.applied(jnp.where)(u > 0, positive_u_phi, negative_u_phi)
-        c_interpolated = c_low - (c_low - c_high) * phi
-        c = grids.GridArray(c_interpolated.data, interpolation_offset, c.grid)
+        phi = grids.applied(jnp.where)(
+            u.array > 0, positive_u_phi, negative_u_phi)
+        c_interpolated = c_low.array - (c_low.array - c_high.array) * phi
+        c = grids.GridVariable.create(
+            c_interpolated.data, interpolation_offset, c.grid, c.bc.boundaries)
     return c
 
   return tvd_interpolation
 
 
+# TODO(pnorgaard) Consider changing c to GridVariable
+# Not required since no .shift() method is used
 def point_interpolation(
     point: Array,
-    c: grids.GridArray,
+    c: GridArray,
     order: int = 1,
     mode: str = 'nearest',
     cval: float = 0.0,

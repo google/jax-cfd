@@ -52,6 +52,8 @@ def learned_scalar_viscosity(
 ) -> ViscosityFn:
   """Constructs an learned, scalar-valued viscosity model."""
   interpolate = interpolate_module(grid, dt, physics_specs)
+  # TODO(pnorgaard) Remove wrap_for_gridarray after GridVariable refactor
+  interpolate = interpolations.interpolation.wrap_for_gridarray(interpolate)
 
   def viscosity_fn(
       s_ij: grids.GridArrayTensor,

@@ -165,9 +165,7 @@ def gradient_tensor(v):
     elif offset == 1:
       derivative = backward_difference(v, axis)
     elif offset == 0.5:
-      v_centered = interpolation.linear(v.array, v.grid.cell_center)
-      # TODO(pnorgaard) remove temporary GridVariable hack
-      v_centered = grids.make_gridvariable_from_gridarray(v_centered)
+      v_centered = interpolation.linear(v, v.grid.cell_center)
       derivative = central_difference(v_centered, axis)
     else:
       raise ValueError(f'expected offset values in {{0, 0.5, 1}}, got {offset}')

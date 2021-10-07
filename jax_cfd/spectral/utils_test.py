@@ -61,6 +61,10 @@ class NavierStokesHelpersTest(test_util.TestCase):
     vorticity_hat = jnp.fft.rfftn(vorticity.data)
     uhat, vhat = velocity_solve(vorticity_hat)
 
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    u = grids.make_gridvariable_from_gridarray(u)
+    v = grids.make_gridvariable_from_gridarray(v)
+
     self.assertAllClose(
         jnp.fft.irfftn(uhat),
         interpolation.linear(u, vorticity.offset).data,

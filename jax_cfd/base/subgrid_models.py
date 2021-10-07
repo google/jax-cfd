@@ -58,6 +58,9 @@ def smagorinsky_viscosity(
     tensor of GridArray's containing values of the eddy viscosity at the
       same grid offsets as the strain tensor `s_ij`.
   """
+  # TODO(pnorgaard) Remove wrap_for_gridarray after GridVariable refactor
+  interpolate_fn = interpolation.wrap_for_gridarray(interpolate_fn)
+
   grid = grids.consistent_grid(*s_ij.ravel(), *v)
   s_ij_offsets = [array.offset for array in s_ij.ravel()]
   unique_offsets = list(set(s_ij_offsets))

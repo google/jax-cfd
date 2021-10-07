@@ -97,10 +97,20 @@ def advect_general(
     The time derivative of `c` due to advection by `v`.
   """
   target_offsets = grids.control_volume_offsets(c)
+
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  c = grids.make_gridvariable_from_gridarray(c)
+  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+
   aligned_v = tuple(u_interpolation_fn(u, target_offset, v, dt)
                     for u, target_offset in zip(v, target_offsets))
   aligned_c = tuple(c_interpolation_fn(c, target_offset, aligned_v, dt)
                     for target_offset in target_offsets)
+
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  aligned_c = tuple(c.array for c in aligned_c)
+  aligned_v = tuple(u.array for u in aligned_v)
+
   res = _advect_aligned(aligned_c, aligned_v)
   return res
 
@@ -132,8 +142,12 @@ def _align_velocities(v: GridArrayVector) -> Tuple[GridArrayVector]:
   """
   grid = grids.consistent_grid(*v)
   offsets = tuple(grids.control_volume_offsets(u) for u in v)
+
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+
   aligned_v = tuple(
-      tuple(interpolation.linear(v[i], offsets[i][j])
+      tuple(interpolation.linear(v[i], offsets[i][j]).array
             for j in range(grid.ndim))
       for i in range(grid.ndim))
   return aligned_v
@@ -231,8 +245,15 @@ def advect_van_leer(
   """
   # TODO(dkochkov) reimplement this using apply_limiter method.
   offsets = grids.control_volume_offsets(c)
+
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+
   aligned_v = tuple(interpolation.linear(u, offset)
                     for u, offset in zip(v, offsets))
+
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  aligned_v = tuple(u.array for u in aligned_v)
 
   flux = []
   for axis, (u, h) in enumerate(zip(aligned_v, c.grid.step)):
@@ -300,6 +321,9 @@ def advect_step_semilagrangian(
   if not all(d[0] == 0 for d in grid.domain):
     raise ValueError(
         f'Grid domains currently must start at zero. Found {grid.domain}')
+
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
 
   coords = [x - dt * interpolation.linear(u, c.offset).data
             for x, u in zip(grid.mesh(c.offset), v)]

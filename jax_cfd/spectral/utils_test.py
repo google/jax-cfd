@@ -26,6 +26,22 @@ from jax_cfd.base import test_util
 from jax_cfd.spectral import utils
 
 
+class ThreeOverTwoRuleTest1D(test_util.TestCase):
+
+  def test_rfft_padding_and_truncation(self):
+    # This test is essentially recreating Figure 4 of go/uecker
+    n = 8
+    grid = grids.Grid((n,), domain=((0, 2 * jnp.pi),))
+    xs, = grid.axes()
+    u = jnp.cos(3 * xs)
+    uhat = jnp.fft.rfft(u)
+    k, = uhat.shape
+    uhat_squared = utils.truncated_rfft(utils.padded_irfft(uhat)**2)
+    assert len(uhat_squared) == k
+    u_squared = jnp.fft.irfft(uhat_squared)
+    self.assertAllClose(.5, u_squared, atol=1e-4)
+
+
 class NavierStokesHelpersTest(test_util.TestCase):
 
   @parameterized.named_parameters(

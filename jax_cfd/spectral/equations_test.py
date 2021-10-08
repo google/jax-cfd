@@ -48,11 +48,44 @@ def roll(arr, offset: Tuple[int]):
   return arr
 
 
+class EquationsTest1D(test_util.TestCase):
+
+  def test_ks_equation(self):
+    """Test that the KS equation (1) does not explode and (2) conserves momentum."""
+    size = 128
+    outer_steps = 2100
+
+    length = 10. * jnp.pi
+    grid = cfd.grids.Grid((size,), domain=((0, length),))
+    dx, = grid.step
+    dt = dx / length
+
+    # TODO(dresdner) make a parameterized test
+    for smooth in [True, False]:
+      step_fn = time_stepping.backward_forward_euler(
+          spectral_equations.KuramotoSivashinsky(grid, smooth=smooth), dt)
+      rollout_fn = jax.jit(cfd.funcutils.trajectory(step_fn, outer_steps))
+
+      xs, = grid.axes()
+      v0 = jnp.cos((1 / length) * xs)
+      v0 = jnp.fft.rfft(v0)
+      _, trajectory = jax.device_get(rollout_fn(v0))
+
+      real_space_trajectory = jnp.fft.irfft(trajectory).real
+      # ensure no explosion
+      self.assertTrue(jnp.all(real_space_trajectory < 1e5))
+
+      # conservation of momentum: momentum does not change over time
+      initial_momentum = real_space_trajectory[0].sum()
+      self.assertAllClose(
+          initial_momentum, jnp.sum(real_space_trajectory, axis=1), atol=1e-3)
+
+
 class EquationsTest2D(test_util.TestCase):
 
   @parameterized.named_parameters(ALL_TIME_STEPPERS)
   def test_forced_turbulence(self, time_stepper):
-    # make sure it runs for 100 steps without failing
+    """Check that forced turbulence runs for 100 steps without blowing up."""
     grid = grids.Grid((128, 128), domain=((0, 2 * jnp.pi), (0, 2 * jnp.pi)))
     v0 = cfd.initial_conditions.filtered_velocity_field(
         jax.random.PRNGKey(42), grid, 7, 4)
@@ -77,6 +110,7 @@ class EquationsTest2D(test_util.TestCase):
     self.assertTrue(jnp.all(~jnp.isnan(trajectory)))
 
   def test_viscosity(self):
+    """Test that higher viscosity results in faster decay."""
     grid = grids.Grid((128, 128), domain=((0, 2 * jnp.pi), (0, 2 * jnp.pi)))
     v0 = cfd.initial_conditions.filtered_velocity_field(
         jax.random.PRNGKey(42), grid, 7, 4)
@@ -118,6 +152,7 @@ class EquationsTest2D(test_util.TestCase):
           atol=1e-3),)
   def test_accuracy(self, problem, equation, time_stepper, max_courant_number,
                     time, atol):
+    """Check numerical accuracy of our solvers to known analytic solutions."""
     # This closely emulates a test in jax cfd:
     # https://source.corp.google.com/piper///depot/google3/third_party/py/jax_cfd/base/validation_test.py;l=113
     v0 = problem.velocity(0.)

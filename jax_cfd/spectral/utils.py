@@ -21,6 +21,38 @@ from jax_cfd.base import grids
 from jax_cfd.spectral import types as spectral_types
 
 
+def truncated_rfft(u: spectral_types.Array) -> spectral_types.Array:
+  """Applies the 2/3 rule by truncating higher Fourier modes.
+
+  Args:
+    u: the real-space representation of the input signal
+
+  Returns:
+    Downsampled version of `u` in rfft-space.
+  """
+  uhat = jnp.fft.rfft(u)
+  k, = uhat.shape
+  final_size = int(2 / 3 * k) + 1
+  return 2 / 3 * uhat[:final_size]
+
+
+def padded_irfft(uhat: spectral_types.Array) -> spectral_types.Array:
+  """Applies the 3/2 rule by padding with zeros.
+
+  Args:
+    uhat: the rfft representation of a signal
+
+  Returns:
+    An upsampled signal in real space which 3/2 times larger than the input
+    signal `uhat`.
+  """
+  n, = uhat.shape
+  final_shape = int(3 / 2 * n)
+  smoothed = jnp.pad(uhat, (0, final_shape - n))
+  assert smoothed.shape == (final_shape,), "incorrect padded shape"
+  return 1.5 * jnp.fft.irfft(smoothed)
+
+
 def circular_filter_2d(grid: grids.Grid) -> spectral_types.Array:
   """Circular filter which roughly matches the 2/3 rule but is smoother.
 

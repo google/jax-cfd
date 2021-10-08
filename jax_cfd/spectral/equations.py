@@ -26,6 +26,45 @@ from jax_cfd.spectral import utils as spectral_utils
 
 
 @dataclasses.dataclass
+class KuramotoSivashinsky(time_stepping.ImplicitExplicitODE):
+  """Kuramoto–Sivashinsky (KS) equation split in implicit and explicit parts.
+
+  The KS equation is
+    u_t = - u_xx - u_xxxx - 1/2 * (u ** 2)_x
+
+  Implicit parts are the linear terms and explicit parts are the non-linear
+  terms.
+
+  Attributes:
+    grid: underlying grid of the process
+    smooth: smooth the non-linear term using the 3/2-rule
+  """
+  grid: grids.Grid
+  smooth: bool = True
+
+  def __post_init__(self):
+    self.kx, = self.grid.rfft_axes()
+    self.two_pi_i_k = 2j * jnp.pi * self.kx
+    self.linear_term = -self.two_pi_i_k ** 2 - self.two_pi_i_k ** 4
+    self.rfft = spectral_utils.truncated_rfft if self.smooth else jnp.fft.rfft
+    self.irfft = spectral_utils.padded_irfft if self.smooth else jnp.fft.irfft
+
+  def explicit_terms(self, uhat):
+    """Non-linear parts of the equation, namely `- 1/2 * (u ** 2)_x`."""
+    uhat_squared = self.rfft(jnp.square(self.irfft(uhat)))
+    return -0.5 * self.two_pi_i_k * uhat_squared
+
+  def implicit_terms(self, uhat):
+    """Linear parts of the equation, namely `- u_xx - u_xxxx`."""
+    return self.linear_term * uhat
+
+  def implicit_solve(self, uhat, time_step):
+    """Solves for `implicit_terms`, implicitly."""
+    # TODO(dresdner) the same for all linear terms. generalize/refactor?
+    return 1 / (1 - time_step * self.linear_term) * uhat
+
+
+@dataclasses.dataclass
 class NavierStokes2D(time_stepping.ImplicitExplicitODE):
   """Breaks the Navier-Stokes equation into implicit and explicit parts.
 

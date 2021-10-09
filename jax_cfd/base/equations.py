@@ -28,9 +28,10 @@ from jax_cfd.base import pressure
 
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariable = grids.GridVariable
 GridVariableVector = grids.GridVariableVector
 ConvectFn = Callable[[GridVariableVector], GridArrayVector]
-DiffuseFn = Callable[[GridArray, float], GridArray]
+DiffuseFn = Callable[[GridVariable, float], GridArray]
 ForcingFn = Callable[[grids.GridArrayVector], grids.GridArrayVector]
 
 
@@ -98,7 +99,11 @@ def semi_implicit_navier_stokes(
         tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
     accelerations = [convection]
     if viscosity is not None:
-      diffusion_ = tuple(diffuse(u, viscosity / density) for u in v)
+      # TODO(pnorgaard) remove temporary GridVariable hack
+      diffusion_ = tuple(
+          diffuse(
+              grids.make_gridvariable_from_gridarray(u), viscosity / density)
+          for u in v)
       accelerations.append(diffusion_)
     if forcing is not None:
       # TODO(shoyer): include time in state?
@@ -148,6 +153,8 @@ def implicit_diffusion_navier_stokes(
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
     v = pressure_projection(v, pressure_solve)
-    v = diffusion_solve(v, viscosity, dt)
+    v = diffusion_solve(
+        tuple(grids.make_gridvariable_from_gridarray(u) for u in v),
+        viscosity, dt)
     return v
   return navier_stokes_step

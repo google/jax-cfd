@@ -458,6 +458,14 @@ def consistent_boundary_conditions(*arrays: GridVariable) -> BoundaryConditions:
   return bc
 
 
+def has_periodic_boundary_conditions(*arrays: GridVariable) -> bool:
+  """Returns True if arrays have periodic BC in every dimension, else False."""
+  for array in arrays:
+    if any(b != PERIODIC for b in array.bc.boundaries):
+      return False
+  return True
+
+
 @dataclasses.dataclass(init=False, frozen=True)
 class Grid:
   """Describes the size, shape and boundary conditions for an Arakawa C-Grid.

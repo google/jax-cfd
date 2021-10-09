@@ -28,11 +28,11 @@ class DiffusionTest(test_util.TestCase):
   def test_explicit_diffusion(self):
     nu = 1.
     shape = (101, 101, 101)
-    offset = (0, 0, 0)
+    offset = (0.5, 0.5, 0.5)
     step = (1., 1., 1.)
     grid = grids.Grid(shape, step)
 
-    c = grids.GridArray(jnp.ones(shape), offset, grid)
+    c = grids.GridVariable.create(jnp.ones(shape), offset, grid, 'periodic')
     diffused = diffusion.diffuse(c, nu)
     expected = grids.GridArray(jnp.zeros_like(diffused.data), offset, grid)
     self.assertAllClose(expected, diffused)
@@ -45,12 +45,14 @@ class DiffusionTest(test_util.TestCase):
     nu = 1.
     dt = 0.1
     shape = (100, 100)
-    offset = (0, 0)
     grid = grids.Grid(shape, step=1)
-    v = 2 * (grids.GridArray(jnp.ones(shape), offset, grid),)
-    diffused = solve(v, nu, dt)
-    self.assertAllClose(v[0], diffused[0], atol=atol)
-    self.assertAllClose(v[1], diffused[1], atol=atol)
+    v = (grids.GridVariable.create(jnp.ones(shape), (1, 0.5), grid, 'periodic'),
+         grids.GridVariable.create(jnp.ones(shape), (0.5, 1), grid, 'periodic'))
+    actual = solve(v, nu, dt)
+    expected = (grids.GridArray(jnp.ones(shape), (1, 0.5), grid),
+                grids.GridArray(jnp.ones(shape), (0.5, 1), grid))
+    self.assertAllClose(expected[0], actual[0], atol=atol)
+    self.assertAllClose(expected[1], actual[1], atol=atol)
 
 
 if __name__ == '__main__':

@@ -293,6 +293,24 @@ class GridVariableTest(test_util.TestCase):
       variable_3 = grids.GridVariable.create(data, offset, grid, 'periodic')
       self.assertArrayEqual(variable_1, variable_3)
 
+  def test_has_periodic_boundary_conditions(self):
+    grid = grids.Grid((10, 10))
+    array = grids.GridArray(np.zeros((10, 10)), (0.5, 0.5), grid)
+    periodic_bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))
+    nonperiodic_bc = grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET))
+
+    with self.subTest('returns True'):
+      c = grids.GridVariable(array, periodic_bc)
+      v = (grids.GridVariable(array, periodic_bc),
+           grids.GridVariable(array, periodic_bc))
+      self.assertTrue(grids.has_periodic_boundary_conditions(c, *v))
+
+    with self.subTest('returns False'):
+      c = grids.GridVariable(array, periodic_bc)
+      v = (grids.GridVariable(array, periodic_bc),
+           grids.GridVariable(array, nonperiodic_bc))
+      self.assertFalse(grids.has_periodic_boundary_conditions(c, *v))
+
 
 class GridArrayTensorTest(test_util.TestCase):
 

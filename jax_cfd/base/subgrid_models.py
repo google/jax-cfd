@@ -153,6 +153,12 @@ def implicit_evm_solve_with_diffusion(
   # We normally prefer fast diagonalization, but that requires an outer
   # product structure for the linear operation, which doesn't hold here.
   # TODO(shoyer): consider adding a preconditioner
+  # TODO(pnorgaard) Fix incompatibility between smagorinsky and diffusion.py
+  # This code is invoking the diffusion_solve in
+  #  equations.implicit_diffusion_navier_stokes(), which passes in GridVariable
+  #  args those are supported by diffusion.py. Here it is wrapping a method
+  #  in subgrid_models.py which does not support GridVariable.
+  v = tuple(u.array if isinstance(u, grids.GridVariable) else u for u in v)
   v_prime, _ = jax.scipy.sparse.linalg.cg(linear_op, v, **cg_kwargs)
   return v_prime
 

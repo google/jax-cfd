@@ -27,14 +27,18 @@ import numpy as np
 
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariable = grids.GridVariable
+GridVariableVector = grids.GridVariableVector
 InterpolationFn = interpolation.InterpolationFn
-ViscosityFn = Callable[[grids.GridArrayTensor, GridArrayVector],
+ViscosityFn = Callable[[grids.GridArrayTensor, GridVariableVector],
                        grids.GridArrayTensor]
+
+# TODO(pnorgaard) Refactor subgrid_models to interpolate, then differentiate
 
 
 def smagorinsky_viscosity(
     s_ij: grids.GridArrayTensor,
-    v: GridArrayVector,
+    v: GridVariableVector,
     dt: Optional[float] = None,
     cs: float = 0.2,
     interpolate_fn: InterpolationFn = interpolation.linear
@@ -60,6 +64,18 @@ def smagorinsky_viscosity(
   """
   # TODO(pnorgaard) Remove wrap_for_gridarray after GridVariable refactor
   interpolate_fn = interpolation.wrap_for_gridarray(interpolate_fn)
+  # TODO(pnorgaard) remove temporary GridVariable hack
+  v = tuple(u.array for u in v)
+  # Present implementation:
+  #   - s_ij is a GridArrayTensor
+  #   - v is converted to a GridArrayVector
+  #   - interpolation method is wrapped to use GridArrays and implicitly
+  #     periodic boudnary conditions.
+  #
+  # This should be revised so that s_ij is computed by first interpolating
+  # velocity and then computing s_ij via finite differences, producing
+  # a `GridVariableTensor`. Then no wrapper or GridArray/GridVariable
+  # conversion hacks are needed.
 
   grid = grids.consistent_grid(*s_ij.ravel(), *v)
   s_ij_offsets = [array.offset for array in s_ij.ravel()]
@@ -79,7 +95,7 @@ def smagorinsky_viscosity(
 
 
 def evm_model(
-    v: GridArrayVector,
+    v: GridVariableVector,
     viscosity_fn: ViscosityFn,
 ) -> GridArrayVector:
   """Computes acceleration due to eddy viscosity turbulence model.
@@ -98,12 +114,16 @@ def evm_model(
     acceleration of the velocity field `v`.
   """
   grid = grids.consistent_grid(*v)
-  v_var = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
   s_ij = grids.GridArrayTensor([
-      [0.5 * (finite_differences.forward_difference(v_var[i], j) +  # pylint: disable=g-complex-comprehension
-              finite_differences.forward_difference(v_var[j], i))
+      [0.5 * (finite_differences.forward_difference(v[i], j) +  # pylint: disable=g-complex-comprehension
+              finite_differences.forward_difference(v[j], i))
        for j in range(grid.ndim)]
       for i in range(grid.ndim)])
+  if not isinstance(s_ij, grids.GridArrayTensor):
+    raise ValueError(f'Expected s_ij to be GridArrayTensor, got {type(s_ij)}')
+  for u in v:
+    if not isinstance(u, GridVariable):
+      raise ValueError(f'Expected u to be type GridVariable, got {type(u)}')
   viscosity = viscosity_fn(s_ij, v)
   tau = jax.tree_multimap(lambda x, y: -2. * x * y, viscosity, s_ij)
   # TODO(pnorgaard) remove temporary GridVariable hack
@@ -115,7 +135,7 @@ def evm_model(
 
 # TODO(dkochkov) remove when b/160947162 is resolved.
 def implicit_evm_solve_with_diffusion(
-    v: GridArrayVector,
+    v: GridVariableVector,
     viscosity: float,
     dt: float,
     configured_evm_model: Callable,  # pylint: disable=g-bare-generic
@@ -144,10 +164,12 @@ def implicit_evm_solve_with_diffusion(
 
   vector_laplacian = np.vectorize(finite_differences.laplacian)
 
+  # TODO(pnorgaard) Resolve the use of v here, which conflicts with scope of
+  # the arg v from the outer function.
   def linear_op(v):
-    acceleration = configured_evm_model(v)
     # TODO(pnorgaard) remove temporary GridVariable hack
     v_var = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+    acceleration = configured_evm_model(v_var)
     return tuple(v - dt * (acceleration + viscosity * vector_laplacian(v_var)))
 
   # We normally prefer fast diagonalization, but that requires an outer
@@ -158,7 +180,7 @@ def implicit_evm_solve_with_diffusion(
   #  equations.implicit_diffusion_navier_stokes(), which passes in GridVariable
   #  args those are supported by diffusion.py. Here it is wrapping a method
   #  in subgrid_models.py which does not support GridVariable.
-  v = tuple(u.array if isinstance(u, grids.GridVariable) else u for u in v)
+  v = tuple(u.array for u in v)
   v_prime, _ = jax.scipy.sparse.linalg.cg(linear_op, v, **cg_kwargs)
   return v_prime
 

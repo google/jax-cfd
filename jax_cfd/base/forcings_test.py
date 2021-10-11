@@ -29,7 +29,8 @@ def _make_zero_velocity_field(grid):
   ndim = grid.ndim
   offsets = (np.eye(ndim) + np.ones([ndim, ndim])) / 2.
   return tuple(
-      grids.GridArray(jnp.zeros(grid.shape), tuple(offset), grid)
+      grids.GridVariable.create(
+          jnp.zeros(grid.shape), tuple(offset), grid, 'periodic')
       for ax, offset in enumerate(offsets))
 
 
@@ -73,7 +74,7 @@ class ForcingsTest(test_util.TestCase):
         force = force_fn(v)
         # Check that offset and grid match velocity input
         for d in range(ndim):
-          self.assertAllClose(0 * force[d], v[d])
+          self.assertAllClose(0 * force[d], v[d].array)
 
   def test_sum_forcings(self):
     grid = grids.Grid((16, 16))
@@ -125,8 +126,9 @@ class ForcingsTest(test_util.TestCase):
                                    expected_force_function):
     grid = grids.Grid((grid_size,) * ndim,
                       domain=((0, 1),) * ndim)
-    velocity = tuple(grids.GridArray(u, offset, grid) for u, offset in
-                     zip(velocity_function(*grid.mesh()), grid.cell_faces))
+    velocity = tuple(
+        grids.GridVariable.create(u, offset, grid, 'periodic')
+        for u, offset in zip(velocity_function(*grid.mesh()), grid.cell_faces))
     expected_force = expected_force_function(*grid.mesh())
     actual_force = forcings.filtered_linear_forcing(
         lower_wavenumber, upper_wavenumber, coefficient, grid)(velocity)

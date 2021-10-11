@@ -77,7 +77,7 @@ def central_difference(u, axis=None):
     axis = range(u.grid.ndim)
   if not isinstance(axis, int):
     return tuple(central_difference(u, a) for a in axis)
-  diff = stencil_sum(u.shift(+1, axis), -u.shift(-1, axis))
+  diff = stencil_sum(u.shift(+1, axis), -1 * u.shift(-1, axis))
   return diff / (2 * u.grid.step[axis])
 
 
@@ -120,7 +120,7 @@ def forward_difference(u, axis=None):
     axis = range(u.grid.ndim)
   if not isinstance(axis, int):
     return tuple(forward_difference(u, a) for a in axis)
-  diff = stencil_sum(u.shift(+1, axis), -u.array)
+  diff = stencil_sum(u.shift(+1, axis), -1 * u.array)
   return diff / u.grid.step[axis]
 
 

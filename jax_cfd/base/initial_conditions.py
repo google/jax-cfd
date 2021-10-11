@@ -27,6 +27,8 @@ import numpy as np
 Array = Union[np.ndarray, jnp.DeviceArray]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariable = grids.GridVariable
+GridVariableVector = grids.GridVariableVector
 
 
 def wrap_velocities(v, grid: grids.Grid) -> GridArrayVector:
@@ -83,8 +85,11 @@ def filtered_velocity_field(
         filter_utils.filter(spectral_density, noise, grid))
   filtered = wrap_velocities(velocity_components, grid)
 
-  def project_and_normalize(v):
+  def project_and_normalize(v: GridArrayVector):
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
     v = pressure.projection(v)
+    v = tuple(u.array for u in v)  # strip boundary conditiosn
     vmax = _max_speed(v)
     v = tuple(maximum_velocity * u / vmax for u in v)
     return v
@@ -97,7 +102,7 @@ def filtered_velocity_field(
 def initial_velocity_field(
     velocity_fns: Tuple[Callable[..., Array], ...],
     grid: grids.Grid,
-    iterations: Optional[int] = None) -> GridArrayVector:
+    iterations: Optional[int] = None) -> GridVariableVector:
   """Given velocity functions on arrays, returns the velocity field on the grid.
 
   Typical usage example:
@@ -116,8 +121,11 @@ def initial_velocity_field(
   Returns:
     Velocity components defined with expected offsets on the grid.
   """
-  velocity = tuple(grid.eval_on_mesh(v_fn, offset)
-                   for v_fn, offset in zip(velocity_fns, grid.cell_faces))
+  # TODO(pnorgaard) Migrate boundary conditions to an input arg
+  u_bc = grids.BoundaryConditions((grids.PERIODIC,) * grid.ndim)
+  v = tuple(
+      grids.GridVariable(grid.eval_on_mesh(v_fn, offset), u_bc)
+      for v_fn, offset in zip(velocity_fns, grid.cell_faces))
   if iterations is not None:
-    velocity = funcutils.repeated(pressure.projection, iterations)(velocity)
-  return velocity
+    v = funcutils.repeated(pressure.projection, iterations)(v)
+  return v

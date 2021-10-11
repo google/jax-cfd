@@ -14,7 +14,7 @@
 
 """Functions for computing and applying pressure."""
 
-from typing import Callable, Optional, Sequence
+from typing import Callable, Optional
 
 import jax.numpy as jnp
 import jax.scipy.sparse.linalg
@@ -27,13 +27,19 @@ from jax_cfd.base import grids
 Array = grids.Array
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariable = grids.GridVariable
+GridVariableVector = grids.GridVariableVector
+BoundaryConditions = grids.BoundaryConditions
 
 # Specifying the full signatures of Callable would get somewhat onerous
 # pylint: disable=g-bare-generic
 
 
-def solve_cg(v: Sequence[GridArray],
-             q0: Optional[GridArray] = None,
+# TODO(pnorgaard) Implement bicgstab for non-symmetric operators
+
+
+def solve_cg(v: GridVariableVector,
+             q0: Optional[GridVariable] = None,
              rtol: float = 1e-6,
              atol: float = 1e-6,
              maxiter: Optional[int] = None) -> GridArray:
@@ -56,31 +62,38 @@ def solve_cg(v: Sequence[GridArray],
     A pressure correction `q` such that `div(v - grad(q))` is zero.
   """
   # TODO(jamieas): add functionality for non-uniform density.
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+  if not grids.has_periodic_boundary_conditions(*v):
+    raise ValueError('solve_cg() expects periodic BC')
   rhs = fd.divergence(v)
-  if q0 is None:
-    q0 = grids.applied(jnp.zeros_like)(rhs)
 
-  def laplacian_with_bcs(array):
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    variable = grids.GridVariable(
-        array, grids.BoundaryConditions(array.grid.boundaries))
+  if q0 is None:
+    grid = grids.consistent_grid(*v)
+    q0 = grids.GridVariable.create(
+        jnp.zeros_like(rhs.data), grid.cell_center, grid, grids.PERIODIC)
+  q_bc = q0.bc
+
+  def laplacian_with_bcs(array: GridArray) -> GridArray:
+    variable = grids.GridVariable(array, q_bc)
     return fd.laplacian(variable)
 
   q, _ = jax.scipy.sparse.linalg.cg(
-      laplacian_with_bcs, rhs, x0=q0, tol=rtol, atol=atol, maxiter=maxiter)
+      laplacian_with_bcs,
+      rhs,
+      x0=q0.array,
+      tol=rtol,
+      atol=atol,
+      maxiter=maxiter)
   return q
 
 
-def solve_fast_diag(v: Sequence[GridArray],
-                    q0: Optional[GridArray] = None,
+def solve_fast_diag(v: GridVariableVector,
+                    q0: Optional[GridVariable] = None,
                     implementation: Optional[str] = None) -> GridArray:
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
+  if not grids.has_periodic_boundary_conditions(*v):
+    raise ValueError('solve_fast_diag() expects periodic BC')
   grid = grids.consistent_grid(*v)
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
   rhs = fd.divergence(v)
   laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))
   pinv = fast_diagonalization.psuedoinverse(
@@ -90,13 +103,14 @@ def solve_fast_diag(v: Sequence[GridArray],
 
 
 def projection(
-    v: GridArrayVector,
+    v: GridVariableVector,
     solve: Callable = solve_fast_diag,
-) -> GridArrayVector:
+) -> GridVariableVector:
   """Apply pressure projection to make a velocity field divergence free."""
+  # TODO(pnorgaard) Include arg for different q boundary conditions
   q = solve(v)
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  q = grids.make_gridvariable_from_gridarray(q)
+  q = grids.GridVariable.create(q.data, q.offset, q.grid, grids.PERIODIC)
   q_grad = fd.forward_difference(q)
-  projected = tuple(u - q_g for u, q_g in zip(v, q_grad))
-  return projected
+  v_projected = tuple(
+      grids.GridVariable(u.array - q_g, u.bc) for u, q_g in zip(v, q_grad))
+  return v_projected

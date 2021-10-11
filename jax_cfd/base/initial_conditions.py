@@ -27,6 +27,9 @@ import numpy as np
 Array = Union[np.ndarray, jnp.DeviceArray]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariable = grids.GridVariable
+GridVariableVector = grids.GridVariableVector
+BoundaryConditions = grids.BoundaryConditions
 
 
 def wrap_velocities(v, grid: grids.Grid) -> GridArrayVector:
@@ -52,7 +55,7 @@ def filtered_velocity_field(
     maximum_velocity: float = 1,
     peak_wavenumber: float = 3,
     iterations: int = 3,
-) -> GridArrayVector:
+) -> GridVariableVector:
   """Create divergence-free velocity fields with appropriate spectral filtering.
 
   Args:
@@ -64,7 +67,8 @@ def filtered_velocity_field(
     iterations: the number of repeated pressure projection and normalization
       iterations to apply.
   Returns:
-    A divergence free velocity field with the given maximum velocity.
+    A divergence free velocity field with the given maximum velocity. Associates
+    periodic boundary conditions with the velocity field components.
   """
   # Log normal distribution peaked at `peak_wavenumber`. Note that we have to
   # divide by `k ** (ndim - 1)` to account for the volume of the
@@ -81,23 +85,27 @@ def filtered_velocity_field(
     noise = jax.random.normal(k, grid.shape)
     velocity_components.append(
         filter_utils.filter(spectral_density, noise, grid))
-  filtered = wrap_velocities(velocity_components, grid)
+  velocity = wrap_velocities(velocity_components, grid)
+  u_bc = grids.BoundaryConditions((grids.PERIODIC,) * grid.ndim)
+  velocity = tuple(grids.GridVariable(u, u_bc) for u in velocity)
 
-  def project_and_normalize(v):
+  def project_and_normalize(v: GridVariableVector):
     v = pressure.projection(v)
     vmax = _max_speed(v)
-    v = tuple(maximum_velocity * u / vmax for u in v)
+    v = tuple(
+        grids.GridVariable(maximum_velocity * u.array / vmax, u.bc) for u in v)
     return v
   # Due to numerical precision issues, we repeatedly normalize and project the
   # velocity field. This ensures that it is divergence-free and achieves the
   # specified maximum velocity.
-  return funcutils.repeated(project_and_normalize, iterations)(filtered)
+  return funcutils.repeated(project_and_normalize, iterations)(velocity)
 
 
 def initial_velocity_field(
     velocity_fns: Tuple[Callable[..., Array], ...],
     grid: grids.Grid,
-    iterations: Optional[int] = None) -> GridArrayVector:
+    boundary_conditions: Optional[Tuple[BoundaryConditions, ...]] = None,
+    iterations: Optional[int] = None) -> GridVariableVector:
   """Given velocity functions on arrays, returns the velocity field on the grid.
 
   Typical usage example:
@@ -107,17 +115,23 @@ def initial_velocity_field(
     v0 = initial_velocity_field((x_velocity_fn, y_velocity_fn), grid, 5)
 
   Args:
-    velocity_fns: Functions for computing each velocity component. These should
+    velocity_fns: functions for computing each velocity component. These should
       takes the args (x, y, ...) and return an array of the same shape.
     grid: the grid on which the velocity field is defined.
+    boundary_conditions: the boundary conditions to associate with each velocity
+      component. If unspecified, uses periodic boundary conditions.
     iterations: if specified, the number of iterations of applied projection
       onto an incompressible velocity field.
 
   Returns:
     Velocity components defined with expected offsets on the grid.
   """
-  velocity = tuple(grid.eval_on_mesh(v_fn, offset)
-                   for v_fn, offset in zip(velocity_fns, grid.cell_faces))
+  if boundary_conditions is None:
+    boundary_conditions = (
+        grids.BoundaryConditions((grids.PERIODIC,) * grid.ndim),) * grid.ndim
+  v = tuple(
+      grids.GridVariable(grid.eval_on_mesh(v_fn, offset), bc) for v_fn, offset,
+      bc in zip(velocity_fns, grid.cell_faces, boundary_conditions))
   if iterations is not None:
-    velocity = funcutils.repeated(pressure.projection, iterations)(velocity)
-  return velocity
+    v = funcutils.repeated(pressure.projection, iterations)(v)
+  return v

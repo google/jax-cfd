@@ -66,8 +66,10 @@ class InitialConditionsTest(test_util.TestCase):
     y_velocity_fn = lambda x, y: jnp.zeros_like(x)
     v0 = ic.initial_velocity_field((x_velocity_fn, y_velocity_fn), grid)
     expected_v0 = (
-        grids.GridArray(jnp.ones((10, 10)), offset=(1, 0.5), grid=grid),
-        grids.GridArray(jnp.zeros((10, 10)), offset=(0.5, 1), grid=grid))
+        grids.GridVariable.create(
+            jnp.ones((10, 10)), (1, 0.5), grid, 'periodic'),
+        grids.GridVariable.create(
+            jnp.zeros((10, 10)), (0.5, 1), grid, 'periodic'))
     for d in range(len(v0)):
       self.assertArrayEqual(expected_v0[d], v0[d])
 
@@ -86,16 +88,11 @@ class InitialConditionsTest(test_util.TestCase):
     with self.subTest('corrected'):
       v0 = ic.initial_velocity_field((x_velocity_fn, y_velocity_fn),
                                      grid, iterations=5)
-      # TODO(pnorgaard) remove temporary GridVariable hack
-      v0 = tuple(grids.make_gridvariable_from_gridarray(u) for u in v0)
       self.assertAllClose(fd.divergence(v0).data, 0, atol=1e-7)
 
     with self.subTest('not corrected'):
       v0_uncorrected = ic.initial_velocity_field((x_velocity_fn, y_velocity_fn),
                                                  grid, iterations=None)
-      # TODO(pnorgaard) remove temporary GridVariable hack
-      v0_uncorrected = tuple(
-          grids.make_gridvariable_from_gridarray(u) for u in v0_uncorrected)
       self.assertGreater(abs(fd.divergence(v0_uncorrected).data).max(), 0.1)
 
 

@@ -113,7 +113,9 @@ def semi_implicit_navier_stokes(
       accelerations.append(tuple(f_i / density for f_i in force))
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
+    v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
     v = pressure_projection(v, pressure_solve)
+    v = tuple(u.array for u in v)
     return v
   return navier_stokes_step
 
@@ -152,9 +154,8 @@ def implicit_diffusion_navier_stokes(
       accelerations.append(tuple(f_i / density for f_i in f))
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
+    v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
     v = pressure_projection(v, pressure_solve)
-    v = diffusion_solve(
-        tuple(grids.make_gridvariable_from_gridarray(u) for u in v),
-        viscosity, dt)
+    v = diffusion_solve(v, viscosity, dt)
     return v
   return navier_stokes_step

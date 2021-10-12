@@ -4,7 +4,7 @@ All modules are functions that return `pressure_solve` method that has the same
 signature as baseline methods e.g. `pressure.solve_fast_diag`.
 """
 import functools
-from typing import Callable, Optional, Sequence
+from typing import Callable, Optional
 
 import gin
 
@@ -13,8 +13,10 @@ from jax_cfd.base import pressure
 
 
 GridArray = grids.GridArray
+GridVariable = grids.GridVariable
+GridVariableVector = grids.GridVariableVector
 PressureSolveFn = Callable[
-    [Sequence[GridArray], Optional[GridArray]], GridArray]
+    [GridVariableVector, Optional[GridVariable]], GridArray]
 PressureModule = Callable[..., PressureSolveFn]
 
 

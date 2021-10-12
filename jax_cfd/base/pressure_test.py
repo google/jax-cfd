@@ -78,6 +78,7 @@ class PressureTest(test_util.TestCase):
       self, shape, solve, step, seed):
     """Returned velocity should be divergence free."""
     grid = grids.Grid(shape, step)
+    bc = grids.BoundaryConditions((grids.PERIODIC,) * len(shape))
 
     # The uncorrected velocity is a 1 + a small amount of noise in each
     # dimension.
@@ -85,12 +86,12 @@ class PressureTest(test_util.TestCase):
     v = tuple(
         grids.GridArray(1. + .3 * jax.random.normal(k, shape), offset, grid)
         for k, offset in zip(ks[:len(shape)], _offsets(len(shape))))
+    v = tuple(grids.GridVariable(u, bc) for u in v)
     v_corrected = pressure.projection(v, solve)
 
     # The corrected velocity should be divergence free.
     # TODO(pnorgaard) remove temporary GridVariable hack
-    v_corrected = tuple(
-        grids.make_gridvariable_from_gridarray(u) for u in v_corrected)
+    v_corrected = tuple(grids.GridVariable(u, bc) for u in v_corrected)
     div = fd.divergence(v_corrected)
     for u, u_corrected in zip(v, v_corrected):
       np.testing.assert_allclose(u.offset, u_corrected.offset)

@@ -31,15 +31,15 @@ class Problem(metaclass=abc.ABCMeta):
 
   @property
   def grid(self):
-    return self._grid
+    return self._grid  # pytype: disable=attribute-error  # bind-properties
 
   @property
   def density(self):
-    return self._density
+    return self._density  # pytype: disable=attribute-error  # bind-properties
 
   @property
   def viscosity(self):
-    return self._viscosity
+    return self._viscosity  # pytype: disable=attribute-error  # bind-properties
 
   def force(self,
             offsets: Optional[Offsets] = None) -> Optional[GridArrayVector]:

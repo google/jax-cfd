@@ -14,11 +14,50 @@
 
 """Implicit-explicit time stepping routines for ODEs."""
 
-from typing import Callable, Sequence
-import jax.numpy as jnp
+import operator
+from typing import Callable, Sequence, TypeVar
+from jax import tree_util
 
-# TODO(shoyer): generalize the interface to handle pytrees.
-TimeStepFn = Callable[[jnp.ndarray], jnp.ndarray]
+
+PyTreeState = TypeVar("PyTreeState")
+TimeStepFn = Callable[[PyTreeState], PyTreeState]
+
+
+class _InfixArithmeticWrapper:
+  """A pytree wrapper to support basic infix arithmetic."""
+
+  def __init__(self, pytree):
+    self.pytree = pytree
+
+  def __add__(self, other):
+    if isinstance(other, _InfixArithmeticWrapper):
+      result = tree_util.tree_map(operator.add, self.pytree, other.pytree)
+    else:
+      result = tree_util.tree_map(lambda x: x + other, self.pytree)
+    return _InfixArithmeticWrapper(result)
+
+  __radd__ = __add__
+
+  def __mul__(self, other):
+    if isinstance(other, _InfixArithmeticWrapper):
+      result = tree_util.tree_map(operator.mul, self.pytree, other.pytree)
+    else:
+      result = tree_util.tree_map(lambda x: x * other, self.pytree)
+    return _InfixArithmeticWrapper(result)
+
+  __rmul__ = __mul__
+
+
+def _pytree_to_infix(func):
+  def wrapper(state):
+    return func(_InfixArithmeticWrapper(state)).pytree
+  return wrapper
+
+
+def _infix_to_pytree(func):
+  def wrapper(state, *aux_args):
+    return _InfixArithmeticWrapper(func(state.pytree, *aux_args))
+  return wrapper
 
 
 class ImplicitExplicitODE:
@@ -35,17 +74,17 @@ class ImplicitExplicitODE:
   This simplifies solves but isn't strictly necessary.
   """
 
-  def explicit_terms(self, state: jnp.ndarray) -> jnp.ndarray:
+  def explicit_terms(self, state: PyTreeState) -> PyTreeState:
     """Evaluates explicit terms in the ODE."""
     raise NotImplementedError
 
-  def implicit_terms(self, state: jnp.ndarray) -> jnp.ndarray:
+  def implicit_terms(self, state: PyTreeState) -> PyTreeState:
     """Evaluates implicit terms in the ODE."""
     raise NotImplementedError
 
   def implicit_solve(
-      self, state: jnp.ndarray, step_size: float,
-  ) -> jnp.ndarray:
+      self, state: PyTreeState, step_size: float,
+  ) -> PyTreeState:
     """Solves `y - step_size * implicit_terms(y) = x` for y."""
     raise NotImplementedError
 
@@ -64,9 +103,15 @@ def backward_forward_euler(
   Returns:
     Function that performs a time step.
   """
+  # pylint: disable=invalid-name
+  dt = time_step
+  F = _infix_to_pytree(equation.explicit_terms)
+  G_inv = _infix_to_pytree(equation.implicit_solve)
+
+  @_pytree_to_infix
   def step_fn(u0):
-    g = u0 + time_step * equation.explicit_terms(u0)
-    u1 = equation.implicit_solve(g, time_step)
+    g = u0 + dt * F(u0)
+    u1 = G_inv(g, dt)
     return u1
   return step_fn
 
@@ -92,10 +137,11 @@ def crank_nicolson_rk2(
   """
   # pylint: disable=invalid-name
   dt = time_step
-  F = equation.explicit_terms
-  G = equation.implicit_terms
-  G_inv = equation.implicit_solve
+  F = _infix_to_pytree(equation.explicit_terms)
+  G = _infix_to_pytree(equation.implicit_terms)
+  G_inv = _infix_to_pytree(equation.implicit_solve)
 
+  @_pytree_to_infix
   def step_fn(u0):
     g = u0 + 0.5 * dt * G(u0)
     h1 = F(u0)
@@ -144,13 +190,14 @@ def low_storage_runge_kutta_crank_nicolson(
   β = betas
   γ = gammas
   dt = time_step
-  F = equation.explicit_terms
-  G = equation.implicit_terms
-  G_inv = equation.implicit_solve
+  F = _infix_to_pytree(equation.explicit_terms)
+  G = _infix_to_pytree(equation.implicit_terms)
+  G_inv = _infix_to_pytree(equation.implicit_solve)
 
   if len(alphas) - 1 != len(betas) != len(gammas):
     raise ValueError("number of RK coefficients does not match")
 
+  @_pytree_to_infix
   def step_fn(u):
     h = 0
     for k in range(len(β)):

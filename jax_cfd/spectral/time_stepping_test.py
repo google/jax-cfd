@@ -19,6 +19,7 @@ from absl.testing import parameterized
 import jax
 from jax.config import config
 import jax.numpy as jnp
+from jax import tree_util
 from jax_cfd.base import funcutils
 from jax_cfd.spectral import time_stepping
 import numpy as np
@@ -183,6 +184,18 @@ class TimeSteppingTest(parameterized.TestCase):
             funcutils.repeated(semi_implicit_step, inner_steps), outer_steps)
         _, actual = integrator(initial_state)
         np.testing.assert_allclose(expected, actual, atol=atol, rtol=0)
+
+  def test_pytree_state(self):
+    equation = CustomODE(
+        explicit_terms=lambda x: tree_util.tree_map(jnp.zeros_like, x),
+        implicit_terms=lambda x: tree_util.tree_map(jnp.zeros_like, x),
+        implicit_solve=lambda x, eta: x,
+    )
+    u0 = {'x': 1.0, 'y': 1.0}
+    for time_stepper in ALL_TIME_STEPPERS:
+      with self.subTest(time_stepper.__name__):
+        u1 = time_stepper(equation, 1.0)(u0)
+        self.assertEqual(u0, u1)
 
 
 if __name__ == '__main__':

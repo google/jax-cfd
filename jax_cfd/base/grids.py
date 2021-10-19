@@ -499,7 +499,7 @@ class Grid:
     if step is not None and domain is not None:
       raise TypeError('cannot provide both step and domain')
     elif domain is not None:
-      if isinstance(domain, float):
+      if isinstance(domain, (int, float)):
         domain = ((0, domain),) * len(shape)
       else:
         if len(domain) != self.ndim:

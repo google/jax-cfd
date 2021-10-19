@@ -339,6 +339,10 @@ class GridTest(test_util.TestCase):
       self.assertEqual(grid.cell_center, (0.5,))
       self.assertEqual(grid.cell_faces, ((1.0,),))
 
+    with self.subTest('1d domain scalar size'):
+      grid = grids.Grid((10,), domain=10)
+      self.assertEqual(grid.domain, ((0.0, 10.0),))
+
     with self.subTest('2d'):
       grid = grids.Grid(
           (10, 10),

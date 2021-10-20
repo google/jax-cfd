@@ -61,7 +61,7 @@ def solve_cg(v: GridVariableVector,
              dt: float,
              rtol: float = 1e-6,
              atol: float = 1e-6,
-             maxiter: Optional[int] = None) -> GridArrayVector:
+             maxiter: Optional[int] = None) -> GridVariableVector:
   """Conjugate gradient solve for diffusion."""
   if not grids.has_periodic_boundary_conditions(*v):
     raise ValueError('solve_cg() expects periodic BC')
@@ -82,13 +82,13 @@ def solve_cg(v: GridVariableVector,
 
     return cg(u.array, u.array)
 
-  return tuple(solve_component(u) for u in v)
+  return tuple(grids.GridVariable(solve_component(u), u.bc) for u in v)
 
 
 def solve_fast_diag(v: GridVariableVector,
                     nu: float,
                     dt: float,
-                    implementation: Optional[str] = None) -> GridArrayVector:
+                    implementation: Optional[str] = None) -> GridVariableVector:
   """Solve for diffusion using the fast diagonalization approach."""
   # We reuse eigenvectors from the Laplacian and transform the eigenvalues
   # because this is better conditioned than directly diagonalizing 1 - ν Δt ∇²
@@ -110,4 +110,5 @@ def solve_fast_diag(v: GridVariableVector,
 
   # Compute (1 - ν Δt ∇²)⁻¹ u as u + (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²) u, for less error
   # when ν Δt is small.
-  return tuple(u.array + grids.applied(op)(u.array) for u in v)
+  return tuple(grids.GridVariable(u.array + grids.applied(op)(u.array), u.bc)
+               for u in v)

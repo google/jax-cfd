@@ -23,6 +23,7 @@ import numpy as np
 
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariableVector = grids.GridVariableVector
 Offsets = Sequence[Sequence[float]]
 
 
@@ -49,7 +50,7 @@ class Problem(metaclass=abc.ABCMeta):
   @abc.abstractmethod
   def velocity(self,
                t: float,
-               offsets: Optional[Offsets] = None) -> GridArrayVector:
+               offsets: Optional[Offsets] = None) -> GridVariableVector:
     pass
 
 
@@ -78,7 +79,7 @@ class TaylorGreen(Problem):
   def velocity(
       self,
       t: float = 0,
-      offsets: Optional[Offsets] = None) -> GridArrayVector:
+      offsets: Optional[Offsets] = None) -> GridVariableVector:
     """Returns an analytic solution for velocity at time `t`."""
     if offsets is None:
       offsets = self.grid.cell_faces
@@ -86,14 +87,18 @@ class TaylorGreen(Problem):
     scale = jnp.exp(-2 * self.viscosity * t)
 
     ux, uy = self.grid.mesh(offsets[0])
-    u = grids.GridArray(
+    u = grids.GridVariable.create(
         data=scale * jnp.cos(self._kx * ux) * jnp.sin(self._ky * uy),
-        offset=offsets[0], grid=self.grid)
+        offset=offsets[0],
+        grid=self.grid,
+        boundaries='periodic')
 
     vx, vy = self.grid.mesh(offsets[1])
-    v = grids.GridArray(
+    v = grids.GridVariable.create(
         data=-scale * jnp.sin(self._kx * vx) * jnp.cos(self._ky * vy),
-        offset=offsets[1], grid=self.grid)
+        offset=offsets[1],
+        grid=self.grid,
+        boundaries='periodic')
 
     return (u, v)
 

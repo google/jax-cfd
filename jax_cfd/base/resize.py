@@ -23,6 +23,8 @@ Array = grids.Array
 Field = Tuple[Array, ...]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariable = grids.GridVariable
+GridVariableVector = grids.GridVariableVector
 
 
 def downsample_staggered_velocity_component(u: Array, direction: int,
@@ -70,7 +72,7 @@ def downsample_staggered_velocity_component(u: Array, direction: int,
 def downsample_staggered_velocity(
     source_grid: grids.Grid,
     destination_grid: grids.Grid,
-    velocity: Union[Field, GridArrayVector],
+    velocity: Union[Field, GridArrayVector, GridVariableVector],
 ):
   """Downsamples each component of `v` by `factor`."""
   factor = destination_grid.step[0] / source_grid.step[0]
@@ -78,7 +80,18 @@ def downsample_staggered_velocity(
   assert round(factor) == factor, factor
   result = []
   for j, u in enumerate(velocity):
-    if isinstance(u, GridArray):
+    if isinstance(u, GridVariable):
+      def downsample(u: GridVariable, direction: int,
+                     factor: int) -> GridVariable:
+        if u.grid != source_grid:
+          raise grids.InconsistentGridError(
+              f'source_grid for downsampling is {source_grid}, but u is defined'
+              f' on {u.grid}')
+        array = downsample_staggered_velocity_component(u.data, direction,
+                                                        round(factor))
+        grid_array = GridArray(array, offset=u.offset, grid=destination_grid)
+        return GridVariable(grid_array, bc=u.bc)
+    elif isinstance(u, GridArray):
       def downsample(u: GridArray, direction: int, factor: int) -> GridArray:
         if u.grid != source_grid:
           raise grids.InconsistentGridError(

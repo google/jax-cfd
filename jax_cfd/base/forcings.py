@@ -38,15 +38,15 @@ def taylor_green_forcing(
   """Constant driving forced in the form of Taylor-Green vorcities."""
   u, v = validation_problems.TaylorGreen(
       shape=grid.shape[:2], kx=k, ky=k).velocity()
-  u, v = u * scale, v * scale
+  # Put force on same offset, grid as velocity components
   if grid.ndim == 2:
-    u = grids.GridArray(u.data, u.offset, grid)  # associate with input grid
-    v = grids.GridArray(v.data, v.offset, grid)
+    u = grids.GridArray(u.data * scale, u.offset, grid)
+    v = grids.GridArray(v.data * scale, v.offset, grid)
     f = (u, v)
   elif grid.ndim == 3:
     # append z-dimension to u,v arrays
-    u_data = jnp.broadcast_to(jnp.expand_dims(u.data, -1), grid.shape)
-    v_data = jnp.broadcast_to(jnp.expand_dims(v.data, -1), grid.shape)
+    u_data = jnp.broadcast_to(jnp.expand_dims(u.data * scale, -1), grid.shape)
+    v_data = jnp.broadcast_to(jnp.expand_dims(v.data * scale, -1), grid.shape)
     u = grids.GridArray(u_data, (1, 0.5, 0.5), grid)
     v = grids.GridArray(v_data, (0.5, 1, 0.5), grid)
     w = grids.GridArray(jnp.zeros_like(u.data), (0.5, 0.5, 1), grid)

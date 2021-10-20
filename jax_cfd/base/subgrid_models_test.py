@@ -192,11 +192,7 @@ class SubgridModelsTest(test_util.TestCase):
     implicit_eq = subgrid_models.implicit_smagorinsky_navier_stokes(**kwargs)
 
     v_initial = velocity(grid)
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    v_0 = tuple(u.array for u in v_initial)
-    v_final = funcutils.repeated(explicit_eq, time_steps)(v_0)
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    v_final = tuple(grids.make_gridvariable_from_gridarray(u) for u in v_final)
+    v_final = funcutils.repeated(explicit_eq, time_steps)(v_initial)
     # TODO(dkochkov) consider adding more thorough tests for these models.
     with self.subTest('divergence free'):
       divergence = fd.divergence(v_final)
@@ -215,10 +211,7 @@ class SubgridModelsTest(test_util.TestCase):
       self.assertAllClose(expected_momentum, final_momentum, atol=momentum_atol)
 
     with self.subTest('explicit-implicit consistency'):
-      v_final_2 = funcutils.repeated(implicit_eq, time_steps)(v_0)
-      # TODO(pnorgaard) remove temporary GridVariable hack
-      v_final_2 = tuple(
-          grids.make_gridvariable_from_gridarray(u) for u in v_final_2)
+      v_final_2 = funcutils.repeated(implicit_eq, time_steps)(v_initial)
       for axis in range(grid.ndim):
         self.assertAllClose(v_final[axis], v_final_2[axis], atol=1e-4,
                             err_msg=f'axis={axis}')

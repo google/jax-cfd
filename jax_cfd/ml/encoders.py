@@ -28,14 +28,16 @@ def aligned_array_encoder(
     physics_specs: physics_specifications.BasePhysicsSpecs,
     data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
 ) -> EncodeFn:
-  """Generates encoder that wraps last data slice as GridArrays."""
+  """Generates encoder that wraps last data slice as GridVariables."""
   del dt, physics_specs  # unused.
   data_offsets = data_offsets or grid.cell_faces
   slice_last_fn = lambda x: array_utils.slice_along_axis(x, 0, -1)
 
+  # TODO(pnorgaard) Make the encoder/decoder/network configurable for BC
   def encode_fn(inputs):
-    return tuple(grids.GridArray(slice_last_fn(x), offset, grid)
-                 for x, offset in zip(inputs, data_offsets))
+    return tuple(
+        grids.GridVariable.create(slice_last_fn(x), offset, grid, 'periodic')
+        for x, offset in zip(inputs, data_offsets))
 
   return encode_fn
 

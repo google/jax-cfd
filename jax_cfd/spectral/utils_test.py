@@ -70,16 +70,9 @@ class NavierStokesHelpersTest(test_util.TestCase):
         jax.random.PRNGKey(42), grid, maximum_velocity=7, peak_wavenumber=1)
 
     velocity_solve = utils.vorticity_to_velocity(grid)
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    vorticity = finite_differences.curl_2d(
-        (grids.make_gridvariable_from_gridarray(u),
-         grids.make_gridvariable_from_gridarray(v)))
+    vorticity = finite_differences.curl_2d((u, v))
     vorticity_hat = jnp.fft.rfftn(vorticity.data)
     uhat, vhat = velocity_solve(vorticity_hat)
-
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    u = grids.make_gridvariable_from_gridarray(u)
-    v = grids.make_gridvariable_from_gridarray(v)
 
     self.assertAllClose(
         jnp.fft.irfftn(uhat),

@@ -161,8 +161,13 @@ class GridArrayTest(test_util.TestCase):
 class BoundaryConditionsTest(test_util.TestCase):
 
   def test_typical_usage(self):
-    bc = grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET))
-    self.assertEqual(bc.boundaries, ('periodic', 'dirichlet'))
+    with self.subTest('string'):
+      bc = grids.BoundaryConditions('periodic')
+      self.assertEqual(bc.boundaries, ('periodic',))
+
+    with self.subTest('sequence'):
+      bc = grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET))
+      self.assertEqual(bc.boundaries, ('periodic', 'dirichlet'))
 
   def test_raises(self):
     with self.assertRaisesRegex(ValueError, 'Invalid boundary condition'):

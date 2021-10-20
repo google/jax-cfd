@@ -212,9 +212,11 @@ class BoundaryConditions:
   """
   boundaries: Tuple[str, ...]
 
-  def __init__(self, boundaries: Union[str, Tuple[str]] = 'periodic'):
+  def __init__(self, boundaries: Union[str, Sequence[str]] = 'periodic'):
     if isinstance(boundaries, str):
       boundaries = (boundaries,)
+    else:
+      boundaries = tuple(boundaries)
     invalid_boundaries = [b for b in boundaries if b not in VALID_BOUNDARIES]
     if invalid_boundaries:
       raise ValueError(f'Invalid boundary condition: {invalid_boundaries}')

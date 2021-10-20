@@ -32,7 +32,7 @@ GridVariable = grids.GridVariable
 GridVariableVector = grids.GridVariableVector
 ConvectFn = Callable[[GridVariableVector], GridArrayVector]
 DiffuseFn = Callable[[GridVariable, float], GridArray]
-ForcingFn = Callable[[grids.GridArrayVector], grids.GridArrayVector]
+ForcingFn = Callable[[GridVariableVector], GridArrayVector]
 
 
 def sum_fields(*args):
@@ -107,10 +107,12 @@ def semi_implicit_navier_stokes(
       accelerations.append(diffusion_)
     if forcing is not None:
       # TODO(shoyer): include time in state?
-      force = forcing(v)
+      # TODO(pnorgaard) remove temporary GridVariable hack
+      force = forcing(
+          tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
       assert isinstance(force, tuple)
       assert isinstance(force[0], grids.GridArray)
-      accelerations.append(tuple(f_i / density for f_i in force))
+      accelerations.append(tuple(f / density for f in force))
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
     v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
@@ -125,10 +127,10 @@ def implicit_diffusion_navier_stokes(
     viscosity: float,
     dt: float,
     grid: grids.Grid,
-    convect: Optional[Callable] = None,
+    convect: Optional[ConvectFn] = None,
     diffusion_solve: Callable = diffusion.solve_fast_diag,
     pressure_solve: Callable = pressure.solve_fast_diag,
-    forcing: Optional[Callable] = None,
+    forcing: Optional[ForcingFn] = None,
 ) -> Callable:
   """Returns a function that performs a time step of Navier Stokes."""
   del grid  # TODO(pnorgaard) refactor out grid arg
@@ -150,8 +152,10 @@ def implicit_diffusion_navier_stokes(
     accelerations = [convection]
     if forcing is not None:
       # TODO(shoyer): include time in state?
-      f = forcing(v)
-      accelerations.append(tuple(f_i / density for f_i in f))
+      # TODO(pnorgaard) remove temporary GridVariable hack
+      force = forcing(
+          tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
+      accelerations.append(tuple(f / density for f in force))
     v_t = sum_fields(*accelerations)
     v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
     v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)

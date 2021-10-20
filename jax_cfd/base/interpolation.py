@@ -44,9 +44,17 @@ def wrap_for_gridarray(interp_fn: InterpolationFn):
       v: Optional[GridArrayVector] = None,
       dt: Optional[float] = None,
       ) -> GridArray:
+    if not isinstance(c, grids.GridArray):
+      raise ValueError(f'expected c to be a GridArray, got {type(c)}')
     c = grids.make_gridvariable_from_gridarray(c)
+
     if v is not None:
+      for u in v:
+        if not isinstance(u, grids.GridArray):
+          raise ValueError(
+              f'expected components of v to be GridArrays, got {type(u)}')
       v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+
     return interp_fn(c, offset, v, dt).array
 
   return wrapped

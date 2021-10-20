@@ -27,8 +27,9 @@ from jax_cfd.base import grids
 from jax_cfd.base import validation_problems
 
 Array = grids.Array
-GridArray = grids.GridArray
-ForcingFn = Callable[[grids.GridArrayVector], grids.GridArrayVector]
+GridArrayVector = grids.GridArrayVector
+GridVariableVector = grids.GridVariableVector
+ForcingFn = Callable[[GridVariableVector], GridArrayVector]
 
 
 def taylor_green_forcing(
@@ -106,17 +107,16 @@ def linear_forcing(grid, coefficient: float) -> ForcingFn:
   del grid
 
   def forcing(v):
-    return tuple(coefficient * u for u in v)
+    return tuple(coefficient * u.array for u in v)
   return forcing
 
 
 def no_forcing(grid):
   """Zero-valued forcing field for unforced simulations."""
-  offsets = grid.cell_faces
+  del grid
 
   def forcing(v):
-    return tuple(grids.GridArray(jnp.zeros_like(u.data), o, grid)
-                 for u, o in zip(v, offsets))
+    return tuple(0 * u.array for u in v)
   return forcing
 
 
@@ -193,7 +193,7 @@ def filtered_forcing(
   def forcing(v):
     filter_ = grids.applied(
         functools.partial(filter_utils.filter, spectral_density, grid=grid))
-    return tuple(filter_(u) for u in v)
+    return tuple(filter_(u.array) for u in v)
   return forcing
 
 

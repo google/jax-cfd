@@ -356,6 +356,9 @@ GridVariableVector = Tuple[GridVariable, ...]
 # TODO(pnorgaard) Remove this function when GridVariable update is done.
 def make_gridvariable_from_gridarray(array: GridArray) -> GridVariable:
   """Returns GriVariable with BC set by `array.grid.boundaries`."""
+  # Additional check when pytype doesn't catch this.
+  if not isinstance(array, GridArray):
+    raise ValueError(f'expected GridArray, got {type(array)}')
   bc = BoundaryConditions(array.grid.boundaries)
   return GridVariable(array, bc)
 

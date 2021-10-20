@@ -28,17 +28,23 @@ from jax_cfd.base import test_util
 import numpy as np
 
 
-def sinusoidal_field(grid: grids.Grid):
-  """Returns a divergence-free flow on `grid`."""
+def zero_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:
+  """Returns an all-zero periodic velocity fields."""
+  return tuple(grids.GridVariable.create(
+      jnp.zeros(grid.shape), o, grid, 'periodic') for o in grid.cell_faces)
+
+
+def sinusoidal_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:
+  """Returns a divergence-free velocity flow on `grid`."""
   mesh_size = jnp.array(grid.shape) * jnp.array(grid.step)
   vs = tuple(jnp.sin(2. * np.pi * g / s)
              for g, s in zip(grid.mesh(), mesh_size))
-  return tuple(grids.GridArray(v, o, grid)
+  return tuple(grids.GridVariable.create(v, o, grid, 'periodic')
                for v, o in zip(vs[1:] + vs[:1], grid.cell_faces))
 
 
-def gaussian_field(grid: grids.Grid):
-  """Returns a 'Gaussian-shaped' field in the 'x' direction."""
+def gaussian_force_field(grid: grids.Grid) -> grids.GridArrayVector:
+  """Returns a 'Gaussian-shaped' force field in the 'x' direction."""
   mesh = grid.mesh()
   mesh_size = jnp.array(grid.shape) * jnp.array(grid.step)
   offsets = grid.cell_faces
@@ -51,26 +57,20 @@ def gaussian_field(grid: grids.Grid):
   return tuple(v)
 
 
-def gaussian_forcing(v):
+def gaussian_forcing(v: grids.GridVariableVector) -> grids.GridArrayVector:
   """Returns Gaussian field forcing."""
   grid = grids.consistent_grid(*v)
-  return gaussian_field(grid)
+  return gaussian_force_field(grid)
 
 
-def zero_field(grid: grids.Grid):
-  """Returns an all-zero field."""
-  return tuple(grids.GridArray(jnp.zeros(grid.shape), o, grid)
-               for o in grid.cell_faces)
-
-
-def momentum(v: grids.GridArrayVector, density: float):
+def momentum(v: grids.GridVariableVector, density: float):
   """Returns the momentum due to velocity field `v`."""
   grid = grids.consistent_grid(*v)
   return jnp.array([u.data for u in v]).sum() * density * jnp.array(
       grid.step).prod()
 
 
-def _convect_upwind(v: grids.GridArrayVector):
+def _convect_upwind(v: grids.GridVariableVector) -> grids.GridArrayVector:
   return tuple(advection.advect_upwind(u, v) for u in v)
 
 
@@ -78,8 +78,12 @@ class SubgridModelsTest(test_util.TestCase):
 
   def test_smagorinsky_viscosity(self):
     grid = grids.Grid((3, 3))
-    v = (grids.GridArray(jnp.zeros(grid.shape), offset=(1, 0.5), grid=grid),
-         grids.GridArray(jnp.zeros(grid.shape), offset=(0.5, 1), grid=grid))
+    v = (
+        grids.GridVariable.create(
+            jnp.zeros(grid.shape), (1, 0.5), grid, 'periodic'),
+        grids.GridVariable.create(
+            jnp.zeros(grid.shape), (0.5, 1), grid, 'periodic'),
+    )
     c00 = grids.GridArray(jnp.zeros(grid.shape), offset=(0, 0), grid=grid)
     c01 = grids.GridArray(jnp.zeros(grid.shape), offset=(0, 1), grid=grid)
     c10 = grids.GridArray(jnp.zeros(grid.shape), offset=(1, 0), grid=grid)
@@ -94,23 +98,27 @@ class SubgridModelsTest(test_util.TestCase):
     self.assertAllClose(viscosity[1, 0], c10)
     self.assertAllClose(viscosity[1, 1], c11)
 
-  def test_env_model(self):
+  def test_evm_model(self):
     grid = grids.Grid((3, 3))
-    v = (grids.GridArray(jnp.zeros(grid.shape), offset=(1, 0.5), grid=grid),
-         grids.GridArray(jnp.zeros(grid.shape), offset=(0.5, 1), grid=grid))
+    v = (
+        grids.GridVariable.create(
+            jnp.zeros(grid.shape), (1, 0.5), grid, 'periodic'),
+        grids.GridVariable.create(
+            jnp.zeros(grid.shape), (0.5, 1), grid, 'periodic'),
+    )
     viscosity_fn = functools.partial(
         subgrid_models.smagorinsky_viscosity, dt=1.0, cs=0.2)
     acceleration = subgrid_models.evm_model(v, viscosity_fn)
     self.assertIsInstance(acceleration, tuple)
     self.assertLen(acceleration, 2)
-    self.assertAllClose(acceleration[0], v[0])
-    self.assertAllClose(acceleration[1], v[1])
+    self.assertAllClose(acceleration[0], v[0].array)
+    self.assertAllClose(acceleration[1], v[1].array)
 
   @parameterized.named_parameters(
       dict(
           testcase_name='sinusoidal_velocity_base',
           cs=0.0,
-          velocity=sinusoidal_field,
+          velocity=sinusoidal_velocity_field,
           forcing=None,
           shape=(100, 100),
           step=(1., 1.),
@@ -125,7 +133,7 @@ class SubgridModelsTest(test_util.TestCase):
       dict(
           testcase_name='gaussian_force_upwind_with_subgrid_model',
           cs=0.12,
-          velocity=zero_field,
+          velocity=zero_velocity_field,
           forcing=gaussian_forcing,
           shape=(40, 40, 40),
           step=(1., 1., 1.),
@@ -140,7 +148,7 @@ class SubgridModelsTest(test_util.TestCase):
       dict(
           testcase_name='sinusoidal_velocity_with_subgrid_model',
           cs=0.12,
-          velocity=sinusoidal_field,
+          velocity=sinusoidal_velocity_field,
           forcing=None,
           shape=(100, 100),
           step=(1., 1.),
@@ -184,13 +192,14 @@ class SubgridModelsTest(test_util.TestCase):
     implicit_eq = subgrid_models.implicit_smagorinsky_navier_stokes(**kwargs)
 
     v_initial = velocity(grid)
-    v_final = funcutils.repeated(explicit_eq, time_steps)(v_initial)
-
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    v_0 = tuple(u.array for u in v_initial)
+    v_final = funcutils.repeated(explicit_eq, time_steps)(v_0)
+    # TODO(pnorgaard) remove temporary GridVariable hack
+    v_final = tuple(grids.make_gridvariable_from_gridarray(u) for u in v_final)
     # TODO(dkochkov) consider adding more thorough tests for these models.
     with self.subTest('divergence free'):
-      # TODO(pnorgaard) remove temporary GridVariable hack
-      divergence = fd.divergence(tuple(
-          grids.make_gridvariable_from_gridarray(u) for u in v_final))
+      divergence = fd.divergence(v_final)
       self.assertLess(jnp.max(divergence.data), divergence_atol)
 
     with self.subTest('conservation of momentum'):
@@ -198,7 +207,7 @@ class SubgridModelsTest(test_util.TestCase):
       final_momentum = momentum(v_final, density)
       if forcing is not None:
         expected_change = (
-            jnp.array([f_i.data for f_i in forcing(v_initial)]).sum() *
+            jnp.array([f.data for f in forcing(v_initial)]).sum() *
             jnp.array(grid.step).prod() * dt * time_steps)
       else:
         expected_change = 0
@@ -206,7 +215,10 @@ class SubgridModelsTest(test_util.TestCase):
       self.assertAllClose(expected_momentum, final_momentum, atol=momentum_atol)
 
     with self.subTest('explicit-implicit consistency'):
-      v_final_2 = funcutils.repeated(implicit_eq, time_steps)(v_initial)
+      v_final_2 = funcutils.repeated(implicit_eq, time_steps)(v_0)
+      # TODO(pnorgaard) remove temporary GridVariable hack
+      v_final_2 = tuple(
+          grids.make_gridvariable_from_gridarray(u) for u in v_final_2)
       for axis in range(grid.ndim):
         self.assertAllClose(v_final[axis], v_final_2[axis], atol=1e-4,
                             err_msg=f'axis={axis}')

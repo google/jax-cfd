@@ -140,7 +140,7 @@ def implicit_evm_solve_with_diffusion(
     dt: float,
     configured_evm_model: Callable,  # pylint: disable=g-bare-generic
     cg_kwargs: Optional[Mapping[str, Any]] = None
-) -> GridArrayVector:
+) -> GridVariableVector:
   """Implicit solve for eddy viscosity model combined with diffusion.
 
   This method is intended to be used with `implicit_diffusion_navier_stokes` to
@@ -180,9 +180,10 @@ def implicit_evm_solve_with_diffusion(
   #  equations.implicit_diffusion_navier_stokes(), which passes in GridVariable
   #  args those are supported by diffusion.py. Here it is wrapping a method
   #  in subgrid_models.py which does not support GridVariable.
-  v = tuple(u.array for u in v)
-  v_prime, _ = jax.scipy.sparse.linalg.cg(linear_op, v, **cg_kwargs)
-  return v_prime
+  v_prime, _ = jax.scipy.sparse.linalg.cg(linear_op, tuple(u.array for u in v),
+                                          **cg_kwargs)
+  return tuple(
+      grids.GridVariable(u_prime, u.bc) for u_prime, u in zip(v_prime, v))
 
 
 def explicit_smagorinsky_navier_stokes(dt, cs, forcing, **kwargs):

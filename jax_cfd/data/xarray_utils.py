@@ -32,6 +32,10 @@ import numpy as np
 import pandas
 import xarray
 
+Array = grids.Array
+GridArray = grids.GridArray
+GridVariable = grids.GridVariable
+
 # pytype complains about valid operations with xarray (e.g., see b/153704639),
 # so it isn't worth the trouble of running it.
 # pytype: skip-file
@@ -55,7 +59,7 @@ XR_STABLE_TIME_STEP_ATTR_NAME = 'stable_time_step'
 
 
 def velocity_trajectory_to_xarray(
-    trajectory: Tuple[Union[grids.Array, grids.GridArray], ...],
+    trajectory: Tuple[Union[Array, GridArray, GridVariable], ...],
     grid: grids.Grid = None,
     time: np.ndarray = None,
     attrs: Dict[str, Any] = None,
@@ -74,7 +78,7 @@ def velocity_trajectory_to_xarray(
   for component in range(dimension):
     name = XR_VELOCITY_NAMES[component]
     data = trajectory[component]
-    if isinstance(data, grids.GridArray):
+    if isinstance(data, GridArray) or isinstance(data, GridVariable):
       data = data.data
     var_attrs = {}
     if grid is not None:
@@ -85,7 +89,7 @@ def velocity_trajectory_to_xarray(
     name = XR_SCALAR_NAMES[component - dimension]
     data = trajectory[component]
     var_attrs = {}
-    if isinstance(data, grids.GridArray):
+    if isinstance(data, GridArray) or isinstance(data, GridVariable):
       var_attrs[XR_OFFSET_NAME] = data.offset
       data = data.data
     data_vars[prefix_name + name] = xarray.Variable(dims, data, var_attrs)

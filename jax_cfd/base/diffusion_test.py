@@ -49,8 +49,7 @@ class DiffusionTest(test_util.TestCase):
     v = (grids.GridVariable.create(jnp.ones(shape), (1, 0.5), grid, 'periodic'),
          grids.GridVariable.create(jnp.ones(shape), (0.5, 1), grid, 'periodic'))
     actual = solve(v, nu, dt)
-    expected = (grids.GridArray(jnp.ones(shape), (1, 0.5), grid),
-                grids.GridArray(jnp.ones(shape), (0.5, 1), grid))
+    expected = v
     self.assertAllClose(expected[0], actual[0], atol=atol)
     self.assertAllClose(expected[1], actual[1], atol=atol)
 

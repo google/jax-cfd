@@ -87,5 +87,29 @@ class ResizeTest(test_util.TestCase):
         resize.downsample_staggered_velocity(source_grid,
                                              destination_grid, velocity)
 
+    with self.subTest('GridVariableVector'):
+      velocity = (grids.GridVariable.create(u, (1, 0), source_grid, 'periodic'),
+                  grids.GridVariable.create(u, (0, 1), source_grid, 'periodic'))
+      actual = resize.downsample_staggered_velocity(source_grid,
+                                                    destination_grid, velocity)
+      expected_aligned = (
+          grids.GridVariable.create(
+              expected[0], (1, 0), destination_grid, 'periodic'),
+          grids.GridVariable.create(
+              expected[1], (0, 1), destination_grid, 'periodic'),
+      )
+      self.assertAllClose(expected_aligned[0], actual[0])
+      self.assertAllClose(expected_aligned[1], actual[1])
+
+    with self.subTest('GridVariableVector: Inconsistent Grids'):
+      with self.assertRaisesRegex(grids.InconsistentGridError,
+                                  'source_grid for downsampling'):
+        different_grid = grids.Grid((4, 4), domain=[(-2, 2), (0, 1)])
+        velocity = (
+            grids.GridVariable.create(u, (1, 0), different_grid, 'periodic'),
+            grids.GridVariable.create(u, (0, 1), different_grid, 'periodic'))
+        resize.downsample_staggered_velocity(source_grid,
+                                             destination_grid, velocity)
+
 if __name__ == '__main__':
   absltest.main()

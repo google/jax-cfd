@@ -92,6 +92,9 @@ def modular_navier_stokes_model(
   def navier_stokes_step_fn(state):
     """Advances Navier-Stokes state forward in time."""
     v = state
+    for u in v:
+      if not isinstance(u, grids.GridVariable):
+        raise ValueError(f"Expected GridVariable type, got {type(u)}")
     convection = convection_module(grid, dt, physics_specs, v=v)
     accelerations = [
         acceleration_module(grid, dt, physics_specs, v=v)
@@ -144,9 +147,11 @@ def time_derivative_network_model(
     modules = [module(grid, dt, physics_specs) for module in derivative_modules]
 
     def time_derivative_fn(x):
-      v = array_utils.split_axis(x, axis=-1)
-      v = (grids.GridVariable.create(u, o, grid, "periodic")
-           for u, o in zip(v, grid.cell_faces))
+      v = array_utils.split_axis(x, axis=-1)  # Tuple[DeviceArray, ...]
+      v = tuple(grids.GridArray(u, o, grid) for u, o in zip(v, grid.cell_faces))
+      # TODO(pnorgaard) Explicitly specify boundary conditions for ML model
+      bc = grids.periodic_boundary_conditions(grid.ndim)
+      v = tuple(grids.GridVariable(u, bc) for u in v)
       forcing_scalars = jnp.stack(
           [a.data for a in active_forcing_fn(v)], axis=-1)
       # TODO(dkochkov) consider conditioning on the forcing terms.

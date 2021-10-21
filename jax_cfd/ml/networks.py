@@ -30,7 +30,8 @@ def split_to_aligned_field(
 
   def process(inputs):
     split_inputs = array_utils.split_axis(inputs, -1)
-    return tuple(grids.GridArray(x, offset, grid)
+    # TODO(pnorgaard) Make the encoder/decoder/network configurable for BC
+    return tuple(grids.GridVariable.create(x, offset, grid, 'periodic')
                  for x, offset in zip(split_inputs, data_offsets))
 
   return hk.to_module(process)()

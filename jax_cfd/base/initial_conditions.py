@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Prepare initial conditions for simulations."""
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -29,12 +29,17 @@ GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
 GridVariable = grids.GridVariable
 GridVariableVector = grids.GridVariableVector
+BoundaryConditions = grids.BoundaryConditions
 
 
-def wrap_velocities(v, grid: grids.Grid) -> GridArrayVector:
+def wrap_velocities(
+    v: Sequence[Array],
+    grid: grids.Grid,
+    bcs: Sequence[BoundaryConditions],
+) -> GridVariableVector:
   """Wrap velocity arrays for input into simulations."""
-  return tuple(grids.GridArray(u, offset, grid)
-               for u, offset in zip(v, grid.cell_faces))
+  return tuple(grids.GridVariable(grids.GridArray(u, offset, grid), bc)
+               for u, offset, bc in zip(v, grid.cell_faces, bcs))
 
 
 def _log_normal_pdf(x, mode, variance=.25):
@@ -54,7 +59,7 @@ def filtered_velocity_field(
     maximum_velocity: float = 1,
     peak_wavenumber: float = 3,
     iterations: int = 3,
-) -> GridArrayVector:
+) -> GridVariableVector:
   """Create divergence-free velocity fields with appropriate spectral filtering.
 
   Args:
@@ -66,7 +71,8 @@ def filtered_velocity_field(
     iterations: the number of repeated pressure projection and normalization
       iterations to apply.
   Returns:
-    A divergence free velocity field with the given maximum velocity.
+    A divergence free velocity field with the given maximum velocity. Associates
+    periodic boundary conditions with the velocity field components.
   """
   # Log normal distribution peaked at `peak_wavenumber`. Note that we have to
   # divide by `k ** (ndim - 1)` to account for the volume of the
@@ -79,29 +85,30 @@ def filtered_velocity_field(
   #     spectral_density, noise, grid), grid)
   keys = jax.random.split(rng_key, grid.ndim)
   velocity_components = []
+  boundary_conditions = []
   for k in keys:
     noise = jax.random.normal(k, grid.shape)
     velocity_components.append(
         filter_utils.filter(spectral_density, noise, grid))
-  filtered = wrap_velocities(velocity_components, grid)
+    boundary_conditions.append(grids.periodic_boundary_conditions(grid.ndim))
+  velocity = wrap_velocities(velocity_components, grid, boundary_conditions)
 
-  def project_and_normalize(v: GridArrayVector):
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+  def project_and_normalize(v: GridVariableVector):
     v = pressure.projection(v)
-    v = tuple(u.array for u in v)  # strip boundary conditiosn
     vmax = _max_speed(v)
-    v = tuple(maximum_velocity * u / vmax for u in v)
+    v = tuple(
+        grids.GridVariable(maximum_velocity * u.array / vmax, u.bc) for u in v)
     return v
   # Due to numerical precision issues, we repeatedly normalize and project the
   # velocity field. This ensures that it is divergence-free and achieves the
   # specified maximum velocity.
-  return funcutils.repeated(project_and_normalize, iterations)(filtered)
+  return funcutils.repeated(project_and_normalize, iterations)(velocity)
 
 
 def initial_velocity_field(
     velocity_fns: Tuple[Callable[..., Array], ...],
     grid: grids.Grid,
+    boundary_conditions: Optional[Tuple[BoundaryConditions, ...]] = None,
     iterations: Optional[int] = None) -> GridVariableVector:
   """Given velocity functions on arrays, returns the velocity field on the grid.
 
@@ -112,20 +119,23 @@ def initial_velocity_field(
     v0 = initial_velocity_field((x_velocity_fn, y_velocity_fn), grid, 5)
 
   Args:
-    velocity_fns: Functions for computing each velocity component. These should
+    velocity_fns: functions for computing each velocity component. These should
       takes the args (x, y, ...) and return an array of the same shape.
     grid: the grid on which the velocity field is defined.
+    boundary_conditions: the boundary conditions to associate with each velocity
+      component. If unspecified, uses periodic boundary conditions.
     iterations: if specified, the number of iterations of applied projection
       onto an incompressible velocity field.
 
   Returns:
     Velocity components defined with expected offsets on the grid.
   """
-  # TODO(pnorgaard) Migrate boundary conditions to an input arg
-  u_bc = grids.BoundaryConditions((grids.PERIODIC,) * grid.ndim)
+  if boundary_conditions is None:
+    boundary_conditions = (
+        grids.BoundaryConditions((grids.PERIODIC,) * grid.ndim),) * grid.ndim
   v = tuple(
-      grids.GridVariable(grid.eval_on_mesh(v_fn, offset), u_bc)
-      for v_fn, offset in zip(velocity_fns, grid.cell_faces))
+      grids.GridVariable(grid.eval_on_mesh(v_fn, offset), bc) for v_fn, offset,
+      bc in zip(velocity_fns, grid.cell_faces, boundary_conditions))
   if iterations is not None:
     v = funcutils.repeated(pressure.projection, iterations)(v)
   return v

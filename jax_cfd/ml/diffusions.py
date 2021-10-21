@@ -32,7 +32,8 @@ GridArrayVector = grids.GridArrayVector
 GridVariable = grids.GridVariable
 GridVariableVector = grids.GridVariableVector
 DiffuseFn = Callable[[GridVariable, float], GridArray]
-DiffusionSolveFn = Callable[[GridVariableVector, float, float], GridArrayVector]
+DiffusionSolveFn = Callable[[GridVariableVector, float, float],
+                            GridVariableVector]
 DiffuseModule = Callable[..., DiffuseFn]
 DiffusionSolveModule = Callable[..., DiffusionSolveFn]
 ViscosityModule = viscosities.ViscosityModule

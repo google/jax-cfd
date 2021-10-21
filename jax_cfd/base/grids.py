@@ -223,6 +223,11 @@ class BoundaryConditions:
     object.__setattr__(self, 'boundaries', boundaries)
 
 
+def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
+  """Returns periodic BCs for a variable with `ndim` spatial dimension."""
+  return BoundaryConditions((PERIODIC,) * ndim)
+
+
 @register_pytree_node_class
 @dataclasses.dataclass
 class GridVariable:
@@ -250,6 +255,9 @@ class GridVariable:
   bc: BoundaryConditions
 
   def __post_init__(self):
+    if not isinstance(self.array, GridArray):  # frequently missed by pytype
+      raise ValueError(
+          f'Expected array type to be GridArray, got {type(self.array)}')
     if len(self.bc.boundaries) != self.grid.ndim:
       raise ValueError(
           'Incompatible dimension between grid and bc, grid dimension = '

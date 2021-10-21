@@ -56,7 +56,7 @@ def stable_time_step(
   return dt
 
 
-def dynamic_time_step(v: GridArrayVector,
+def dynamic_time_step(v: GridVariableVector,
                       max_courant_number: float,
                       viscosity: float,
                       grid: grids.Grid,
@@ -76,9 +76,9 @@ def semi_implicit_navier_stokes(
     diffuse: DiffuseFn = diffusion.diffuse,
     pressure_solve: Callable = pressure.solve_fast_diag,
     forcing: Optional[ForcingFn] = None,
-) -> Callable:
+) -> Callable[[GridVariableVector], GridVariableVector]:
   """Returns a function that performs a time step of Navier Stokes."""
-  del grid  # TODO(pnorgaard) refactor out grid arg
+  del grid  # unused
 
   if convect is None:
     def convect(v):  # pylint: disable=function-redefined
@@ -92,32 +92,25 @@ def semi_implicit_navier_stokes(
   # TODO(jamieas): Consider a scheme where pressure calculations and
   # advection/diffusion are staggered in time.
   @jax.named_call
-  def navier_stokes_step(v: GridArrayVector) -> GridArrayVector:
+  def navier_stokes_step(v: GridVariableVector) -> GridVariableVector:
     """Computes state at time `t + dt` using first order time integration."""
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    convection = convect(
-        tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
+    # Collect the acceleration terms
+    convection = convect(v)
     accelerations = [convection]
     if viscosity is not None:
-      # TODO(pnorgaard) remove temporary GridVariable hack
-      diffusion_ = tuple(
-          diffuse(
-              grids.make_gridvariable_from_gridarray(u), viscosity / density)
-          for u in v)
+      diffusion_ = tuple(diffuse(u, viscosity / density) for u in v)
       accelerations.append(diffusion_)
     if forcing is not None:
       # TODO(shoyer): include time in state?
-      # TODO(pnorgaard) remove temporary GridVariable hack
-      force = forcing(
-          tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
-      assert isinstance(force, tuple)
-      assert isinstance(force[0], grids.GridArray)
+      force = forcing(v)
       accelerations.append(tuple(f / density for f in force))
-    v_t = sum_fields(*accelerations)
-    v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
-    v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+    dvdt = sum_fields(*accelerations)
+    # Update v by taking a time step
+    v = tuple(
+        grids.GridVariable(u.array + dudt * dt, u.bc)
+        for u, dudt in zip(v, dvdt))
+    # Pressure projection to incompressible velocity field
     v = pressure_projection(v, pressure_solve)
-    v = tuple(u.array for u in v)
     return v
   return navier_stokes_step
 
@@ -131,9 +124,9 @@ def implicit_diffusion_navier_stokes(
     diffusion_solve: Callable = diffusion.solve_fast_diag,
     pressure_solve: Callable = pressure.solve_fast_diag,
     forcing: Optional[ForcingFn] = None,
-) -> Callable:
+) -> Callable[[GridVariableVector], GridVariableVector]:
   """Returns a function that performs a time step of Navier Stokes."""
-  del grid  # TODO(pnorgaard) refactor out grid arg
+  del grid  # unused
   if convect is None:
     def convect(v):  # pylint: disable=function-redefined
       return tuple(
@@ -144,22 +137,22 @@ def implicit_diffusion_navier_stokes(
   diffusion_solve = jax.named_call(diffusion_solve, name='diffusion')
 
   @jax.named_call
-  def navier_stokes_step(v: GridArrayVector) -> GridArrayVector:
+  def navier_stokes_step(v: GridVariableVector) -> GridVariableVector:
     """Computes state at time `t + dt` using first order time integration."""
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    convection = convect(
-        tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
+    convection = convect(v)
     accelerations = [convection]
     if forcing is not None:
       # TODO(shoyer): include time in state?
-      # TODO(pnorgaard) remove temporary GridVariable hack
-      force = forcing(
-          tuple(grids.make_gridvariable_from_gridarray(u) for u in v))
-      accelerations.append(tuple(f / density for f in force))
-    v_t = sum_fields(*accelerations)
-    v = tuple(u + u_t * dt for u, u_t in zip(v, v_t))
-    v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+      f = forcing(v)
+      accelerations.append(tuple(f / density for f in f))
+    dvdt = sum_fields(*accelerations)
+    # Update v by taking a time step
+    v = tuple(
+        grids.GridVariable(u.array + dudt * dt, u.bc)
+        for u, dudt in zip(v, dvdt))
+    # Pressure projection to incompressible velocity field
     v = pressure_projection(v, pressure_solve)
+    # Solve for implicit diffusion
     v = diffusion_solve(v, viscosity, dt)
     return v
   return navier_stokes_step

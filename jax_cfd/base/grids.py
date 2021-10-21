@@ -85,55 +85,6 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
   def shape(self) -> Tuple[int, ...]:
     return self.data.shape
 
-  def shift(
-      self,
-      offset: int,
-      axis: int,
-  ) -> GridArray:
-    """Shift this GridArray by `offset`.
-
-    Args:
-      offset: positive or negative integer offset to shift.
-      axis: axis to shift along.
-
-    Returns:
-      A copy of this GridArray, shifted by `offset`. The returned `GridArray`
-      has offset `u.offset + offset`.
-    """
-    return self.grid.shift(self, offset, axis)
-
-  def pad(
-      self,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Pad this GridArray by `padding`.
-
-    Args:
-      padding: left and right padding along this axis.
-      axis: axis to pad along.
-
-    Returns:
-      Padded GridArray, elongated along the indicated axis.
-    """
-    return self.grid.pad(self, padding, axis)
-
-  def trim(
-      self,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Trim padding from this GridArray.
-
-    Args:
-      padding: left and right padding along this axis.
-      axis: axis to trim along.
-
-    Returns:
-      Trimmed GridArray, shrunk along the indicated axis.
-    """
-    return self.grid.trim(self, padding, axis)
-
   _HANDLED_TYPES = (numbers.Number, np.ndarray, jnp.DeviceArray,
                     jax.ShapedArray, jax.core.Tracer)
 
@@ -222,6 +173,79 @@ class BoundaryConditions:
       raise ValueError(f'Invalid boundary condition: {invalid_boundaries}')
     object.__setattr__(self, 'boundaries', boundaries)
 
+  def shift(
+      self,
+      u: GridArray,
+      offset: int,
+      axis: int,
+  ) -> GridArray:
+    """Shift an GridArray by `offset`.
+
+    Args:
+      u: an `GridArray` object.
+      offset: positive or negative integer offset to shift.
+      axis: axis to shift along.
+
+    Returns:
+      A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
+      `u.offset + offset`.
+    """
+    padding = (-offset, 0) if offset < 0 else (0, offset)
+    padded = self.pad(u, padding, axis)
+    trimmed = self.trim(padded, padding[::-1], axis)
+    return trimmed
+
+  def pad(
+      self,
+      u: GridArray,
+      padding: Tuple[int, int],
+      axis: int,
+  ) -> GridArray:
+    """Pad an GridArray by `padding`.
+
+    Args:
+      u: an `GridArray` object.
+      padding: left and right padding along this axis.
+      axis: axis to pad along.
+
+    Returns:
+      Padded array, elongated along the indicated axis.
+    """
+    if self.boundaries[axis] == PERIODIC:
+      pad_kwargs = dict(mode='wrap')
+    else:
+      assert self.boundaries[axis] == DIRICHLET
+      pad_kwargs = dict(mode='constant')
+
+    offset = list(u.offset)
+    offset[axis] -= padding[0]
+    full_padding = [(0, 0)] * u.data.ndim
+    full_padding[axis] = padding
+    data = jnp.pad(u.data, full_padding, **pad_kwargs)
+    return GridArray(data, tuple(offset), u.grid)
+
+  def trim(
+      self,
+      u: GridArray,
+      padding: Tuple[int, int],
+      axis: int,
+  ) -> GridArray:
+    """Trim padding from an GridArray.
+
+    Args:
+      u: an `GridArray` object.
+      padding: left and right padding along this axis.
+      axis: axis to trim along.
+
+    Returns:
+      Trimmed array, shrunk along the indicated axis.
+    """
+    slice_size = u.data.shape[axis] - sum(padding)
+    data = lax.dynamic_slice_in_dim(u.data, padding[0], slice_size, axis)
+    offset = list(u.offset)
+    offset[axis] += padding[0]
+    return GridArray(data, tuple(offset), u.grid)
+
 
 def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
   """Returns periodic BCs for a variable with `ndim` spatial dimension."""
@@ -309,7 +333,6 @@ class GridVariable:
   def grid(self) -> Grid:
     return self.array.grid
 
-  # TODO(pnorgaard) refactor shift/pad/trim out of Grid
   def shift(
       self,
       offset: int,
@@ -325,7 +348,7 @@ class GridVariable:
       A copy of the encapsulated GridArray, shifted by `offset`. The returned
       GridArray has offset `u.offset + offset`.
     """
-    return self.array.grid.shift(self.array, offset, axis)
+    return self.bc.shift(self.array, offset, axis)
 
   def pad(
       self,
@@ -341,7 +364,7 @@ class GridVariable:
     Returns:
       A copy of the encapsulated GridArray, padded along the indicated axis.
     """
-    return self.array.grid.pad(self.array, padding, axis)
+    return self.bc.pad(self.array, padding, axis)
 
   def trim(
       self,
@@ -357,20 +380,10 @@ class GridVariable:
     Returns:
       A copy of the encapsulated GridArray, trimmed along the indicated axis.
     """
-    return self.array.grid.trim(self.array, padding, axis)
+    return self.bc.trim(self.array, padding, axis)
 
 
 GridVariableVector = Tuple[GridVariable, ...]
-
-
-# TODO(pnorgaard) Remove this function when GridVariable update is done.
-def make_gridvariable_from_gridarray(array: GridArray) -> GridVariable:
-  """Returns GriVariable with BC set by `array.grid.boundaries`."""
-  # Additional check when pytype doesn't catch this.
-  if not isinstance(array, GridArray):
-    raise ValueError(f'expected GridArray, got {type(array)}')
-  bc = BoundaryConditions(array.grid.boundaries)
-  return GridVariable(array, bc)
 
 
 def applied(func):
@@ -669,76 +682,3 @@ class Grid:
       offset = self.cell_center
     return GridArray(fn(*self.mesh(offset)), offset, self)
 
-  # TODO(pnorgaard) Refactor shift/pad/trim out of Grid
-  def shift(
-      self,
-      u: GridArray,
-      offset: int,
-      axis: int,
-  ) -> GridArray:
-    """Shift an GridArray by `offset`.
-
-    Args:
-      u: an `GridArray` object.
-      offset: positive or negative integer offset to shift.
-      axis: axis to shift along.
-
-    Returns:
-      A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
-      `u.offset + offset`.
-    """
-    padding = (-offset, 0) if offset < 0 else (0, offset)
-    padded = self.pad(u, padding, axis)
-    trimmed = self.trim(padded, padding[::-1], axis)
-    return trimmed
-
-  def pad(
-      self,
-      u: GridArray,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Pad an GridArray by `padding`.
-
-    Args:
-      u: an `GridArray` object.
-      padding: left and right padding along this axis.
-      axis: axis to pad along.
-
-    Returns:
-      Padded array, elongated along the indicated axis.
-    """
-    if self.boundaries[axis] == PERIODIC:
-      pad_kwargs = dict(mode='wrap')
-    else:
-      assert self.boundaries[axis] == DIRICHLET
-      pad_kwargs = dict(mode='constant')
-
-    offset = list(u.offset)
-    offset[axis] -= padding[0]
-    full_padding = [(0, 0)] * u.data.ndim
-    full_padding[axis] = padding
-    data = jnp.pad(u.data, full_padding, **pad_kwargs)
-    return GridArray(data, tuple(offset), self)
-
-  def trim(
-      self,
-      u: GridArray,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Trim padding from an GridArray.
-
-    Args:
-      u: an `GridArray` object.
-      padding: left and right padding along this axis.
-      axis: axis to trim along.
-
-    Returns:
-      Trimmed array, shrunk along the indicated axis.
-    """
-    slice_size = u.data.shape[axis] - sum(padding)
-    data = lax.dynamic_slice_in_dim(u.data, padding[0], slice_size, axis)
-    offset = list(u.offset)
-    offset[axis] += padding[0]
-    return GridArray(data, tuple(offset), self)

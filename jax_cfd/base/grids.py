@@ -85,55 +85,6 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
   def shape(self) -> Tuple[int, ...]:
     return self.data.shape
 
-  def shift(
-      self,
-      offset: int,
-      axis: int,
-  ) -> GridArray:
-    """Shift this GridArray by `offset`.
-
-    Args:
-      offset: positive or negative integer offset to shift.
-      axis: axis to shift along.
-
-    Returns:
-      A copy of this GridArray, shifted by `offset`. The returned `GridArray`
-      has offset `u.offset + offset`.
-    """
-    return self.grid.shift(self, offset, axis)
-
-  def pad(
-      self,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Pad this GridArray by `padding`.
-
-    Args:
-      padding: left and right padding along this axis.
-      axis: axis to pad along.
-
-    Returns:
-      Padded GridArray, elongated along the indicated axis.
-    """
-    return self.grid.pad(self, padding, axis)
-
-  def trim(
-      self,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Trim padding from this GridArray.
-
-    Args:
-      padding: left and right padding along this axis.
-      axis: axis to trim along.
-
-    Returns:
-      Trimmed GridArray, shrunk along the indicated axis.
-    """
-    return self.grid.trim(self, padding, axis)
-
   _HANDLED_TYPES = (numbers.Number, np.ndarray, jnp.DeviceArray,
                     jax.ShapedArray, jax.core.Tracer)
 
@@ -361,16 +312,6 @@ class GridVariable:
 
 
 GridVariableVector = Tuple[GridVariable, ...]
-
-
-# TODO(pnorgaard) Remove this function when GridVariable update is done.
-def make_gridvariable_from_gridarray(array: GridArray) -> GridVariable:
-  """Returns GriVariable with BC set by `array.grid.boundaries`."""
-  # Additional check when pytype doesn't catch this.
-  if not isinstance(array, GridArray):
-    raise ValueError(f'expected GridArray, got {type(array)}')
-  bc = BoundaryConditions(array.grid.boundaries)
-  return GridVariable(array, bc)
 
 
 def applied(func):

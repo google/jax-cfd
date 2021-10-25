@@ -62,33 +62,36 @@ def smagorinsky_viscosity(
     tensor of GridArray's containing values of the eddy viscosity at the
       same grid offsets as the strain tensor `s_ij`.
   """
-  # TODO(pnorgaard) Remove wrap_for_gridarray after GridVariable refactor
-  interpolate_fn = interpolation.wrap_for_gridarray(interpolate_fn)
-  # TODO(pnorgaard) remove temporary GridVariable hack
-  v = tuple(u.array for u in v)
   # Present implementation:
   #   - s_ij is a GridArrayTensor
-  #   - v is converted to a GridArrayVector
-  #   - interpolation method is wrapped to use GridArrays and implicitly
-  #     periodic boudnary conditions.
+  #   - v is converted to a GridVariableVector
+  #   - interpolation method is wrapped so that interpolated quanity is a
+  #     GridArray (rather than GridVariable), using periodic BC.
   #
   # This should be revised so that s_ij is computed by first interpolating
   # velocity and then computing s_ij via finite differences, producing
   # a `GridVariableTensor`. Then no wrapper or GridArray/GridVariable
   # conversion hacks are needed.
+  if not grids.has_periodic_boundary_conditions(*v):
+    raise ValueError('smagorinsky_viscosity only valid for periodic BC.')
+  bc = grids.consistent_boundary_conditions(*v)
+
+  def wrapped_interp_fn(c, offset, v, dt):
+    return interpolate_fn(grids.GridVariable(c, bc), offset, v, dt).array
 
   grid = grids.consistent_grid(*s_ij.ravel(), *v)
+  bc = grids.periodic_boundary_conditions(grid.ndim)
   s_ij_offsets = [array.offset for array in s_ij.ravel()]
   unique_offsets = list(set(s_ij_offsets))
   cell_center = grid.cell_center
-  interpolate_to_center = lambda x: interpolate_fn(x, cell_center, v, dt)
+  interpolate_to_center = lambda x: wrapped_interp_fn(x, cell_center, v, dt)
   centered_s_ij = np.vectorize(interpolate_to_center)(s_ij)
   # geometric average
   cutoff = np.prod(np.array(grid.step))**(1 / grid.ndim)
   viscosity = (cs * cutoff)**2 * np.sqrt(
       2 * np.trace(centered_s_ij.dot(centered_s_ij)))
   viscosities_dict = {
-      offset: interpolate_fn(viscosity, offset, v, dt).data
+      offset: wrapped_interp_fn(viscosity, offset, v, dt).data
       for offset in unique_offsets}
   viscosities = [viscosities_dict[offset] for offset in s_ij_offsets]
   return jax.tree_unflatten(jax.tree_util.tree_structure(s_ij), viscosities)
@@ -113,22 +116,19 @@ def evm_model(
   Returns:
     acceleration of the velocity field `v`.
   """
+  if not grids.has_periodic_boundary_conditions(*v):
+    raise ValueError('evm_model only valid for periodic BC.')
   grid = grids.consistent_grid(*v)
+  bc = grids.periodic_boundary_conditions(grid.ndim)
   s_ij = grids.GridArrayTensor([
       [0.5 * (finite_differences.forward_difference(v[i], j) +  # pylint: disable=g-complex-comprehension
               finite_differences.forward_difference(v[j], i))
        for j in range(grid.ndim)]
       for i in range(grid.ndim)])
-  if not isinstance(s_ij, grids.GridArrayTensor):
-    raise ValueError(f'Expected s_ij to be GridArrayTensor, got {type(s_ij)}')
-  for u in v:
-    if not isinstance(u, GridVariable):
-      raise ValueError(f'Expected u to be type GridVariable, got {type(u)}')
   viscosity = viscosity_fn(s_ij, v)
   tau = jax.tree_multimap(lambda x, y: -2. * x * y, viscosity, s_ij)
-  # TODO(pnorgaard) remove temporary GridVariable hack
   return tuple(-finite_differences.divergence(  # pylint: disable=g-complex-comprehension
-      tuple(grids.make_gridvariable_from_gridarray(t)
+      tuple(grids.GridVariable(t, bc)  # use velocity bc to compute diverence
             for t in tau[i, :]))
                for i in range(grid.ndim))
 
@@ -162,24 +162,22 @@ def implicit_evm_solve_with_diffusion(
   cg_kwargs.setdefault('tol', 1e-6)
   cg_kwargs.setdefault('atol', 1e-6)
 
+  if not grids.has_periodic_boundary_conditions(*v):
+    raise ValueError(
+        'implicit_evm_solve_with_diffusion only valid for periodic BC.')
+  bc = grids.consistent_boundary_conditions(*v)
   vector_laplacian = np.vectorize(finite_differences.laplacian)
 
-  # TODO(pnorgaard) Resolve the use of v here, which conflicts with scope of
   # the arg v from the outer function.
-  def linear_op(v):
-    # TODO(pnorgaard) remove temporary GridVariable hack
-    v_var = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
+  def linear_op(velocity):
+    v_var = tuple(grids.GridVariable(u, bc) for u in velocity)
     acceleration = configured_evm_model(v_var)
-    return tuple(v - dt * (acceleration + viscosity * vector_laplacian(v_var)))
+    return tuple(
+        velocity - dt * (acceleration + viscosity * vector_laplacian(v_var)))
 
   # We normally prefer fast diagonalization, but that requires an outer
   # product structure for the linear operation, which doesn't hold here.
   # TODO(shoyer): consider adding a preconditioner
-  # TODO(pnorgaard) Fix incompatibility between smagorinsky and diffusion.py
-  # This code is invoking the diffusion_solve in
-  #  equations.implicit_diffusion_navier_stokes(), which passes in GridVariable
-  #  args those are supported by diffusion.py. Here it is wrapping a method
-  #  in subgrid_models.py which does not support GridVariable.
   v_prime, _ = jax.scipy.sparse.linalg.cg(linear_op, tuple(u.array for u in v),
                                           **cg_kwargs)
   return tuple(

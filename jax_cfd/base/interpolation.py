@@ -32,34 +32,6 @@ InterpolationFn = Callable[
 FluxLimiter = Callable[[grids.Array], grids.Array]
 
 
-# TODO(pnorgaard) Remove this after GridVariable migration
-def wrap_for_gridarray(interp_fn: InterpolationFn):
-  """Converts an interpolation on GridVariable to one on GridArray."""
-  # Works by "promoting" GridArray args to GridVariable, calling interpolation,
-  # then extracting the GridArray from the returned GridVariable.
-
-  def wrapped(
-      c: GridArray,
-      offset: Tuple[float, ...],
-      v: Optional[GridArrayVector] = None,
-      dt: Optional[float] = None,
-      ) -> GridArray:
-    if not isinstance(c, grids.GridArray):
-      raise ValueError(f'expected c to be a GridArray, got {type(c)}')
-    c = grids.make_gridvariable_from_gridarray(c)
-
-    if v is not None:
-      for u in v:
-        if not isinstance(u, grids.GridArray):
-          raise ValueError(
-              f'expected components of v to be GridArrays, got {type(u)}')
-      v = tuple(grids.make_gridvariable_from_gridarray(u) for u in v)
-
-    return interp_fn(c, offset, v, dt).array
-
-  return wrapped
-
-
 def _linear_along_axis(c: GridVariable,
                        offset: float,
                        axis: int) -> GridVariable:

@@ -173,6 +173,123 @@ class BoundaryConditionsTest(test_util.TestCase):
     with self.assertRaisesRegex(ValueError, 'Invalid boundary condition'):
       grids.BoundaryConditions(('not_a_valid_bc',))
 
+  @parameterized.parameters(
+      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(0,)),
+      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(1,)),
+      dict(
+          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(-1,)),
+      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(5,)),
+      dict(
+          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(13,)),
+      dict(
+          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(31,)),
+      dict(
+          backend=np,
+          shape=(11, 12, 17),
+          initial_offset=(-0.5, -1.0, 1.0),
+          step=0.1,
+          offset=(-236, 10001, 3)),
+      dict(
+          backend=np,
+          shape=(121,),
+          initial_offset=(-0.5,),
+          step=1,
+          offset=(31,)),
+      dict(
+          backend=np,
+          shape=(11, 12, 17),
+          initial_offset=(0.5, 0.0, 1.0),
+          step=0.1,
+          offset=(-236, 10001, 3)),
+  )
+  def test_shift(self, backend, shape, initial_offset, step, offset):
+    """Test that `shift` returns the expected values."""
+    grid = grids.Grid(shape, step)
+    data = backend.arange(np.prod(shape)).reshape(shape)
+    array = grids.GridArray(data, initial_offset, grid)
+    bc = grids.periodic_boundary_conditions(grid.ndim)
+
+    shifted_array = array
+    for axis, o in enumerate(offset):
+      shifted_array = bc.shift(shifted_array, o, axis)
+
+    shifted_indices = [(jnp.arange(s) + o) % s for s, o in zip(shape, offset)]
+    shifted_mesh = jnp.meshgrid(*shifted_indices, indexing='ij')
+    expected_offset = tuple(i + o for i, o in zip(initial_offset, offset))
+    expected = grids.GridArray(data[tuple(shifted_mesh)], expected_offset, grid)
+
+    self.assertArrayEqual(shifted_array, expected)
+
+  @parameterized.parameters(
+      dict(
+          grid=grids.Grid((3,)),
+          boundaries='periodic',
+          inputs=np.array([1, 2, 3]),
+          padding=(0, 0),
+          expected_array=np.array([1, 2, 3]),
+          expected_offset=(0,),
+      ),
+      dict(
+          grid=grids.Grid((3,)),
+          boundaries='periodic',
+          inputs=np.array([1, 2, 3]),
+          padding=(0, 1),
+          expected_array=np.array([1, 2, 3, 1]),
+          expected_offset=(0,),
+      ),
+      dict(
+          grid=grids.Grid((3,)),
+          boundaries='periodic',
+          inputs=np.array([1, 2, 3]),
+          padding=(1, 1),
+          expected_array=np.array([3, 1, 2, 3, 1]),
+          expected_offset=(-1,),
+      ),
+      dict(
+          grid=grids.Grid((3,)),
+          boundaries='dirichlet',
+          inputs=np.array([1, 2, 3]),
+          padding=(1, 1),
+          expected_array=np.array([0, 1, 2, 3, 0]),
+          expected_offset=(-1,),
+      ),
+  )
+  def test_pad(self, grid, boundaries, inputs, padding, expected_array,
+               expected_offset):
+    array = grids.GridArray(inputs, (0,), grid)
+    bc = grids.BoundaryConditions(boundaries)
+    actual = bc.pad(array, padding, axis=0)
+    expected = grids.GridArray(expected_array, expected_offset, grid)
+    self.assertArrayEqual(actual, expected)
+
+  @parameterized.parameters(
+      dict(
+          inputs=np.array([1, 2, 3]),
+          padding=(0, 0),
+          expected_array=np.array([1, 2, 3]),
+          expected_offset=(0,),
+      ),
+      dict(
+          inputs=np.array([1, 2, 3, 4]),
+          padding=(1, 1),
+          expected_array=np.array([2, 3]),
+          expected_offset=(1,),
+      ),
+      dict(
+          inputs=np.arange(10),
+          padding=(2, 3),
+          expected_array=np.arange(2, 7),
+          expected_offset=(2,),
+      ),
+  )
+  def test_trim(self, inputs, padding, expected_array, expected_offset):
+    grid = grids.Grid(inputs.data.shape)
+    array = grids.GridArray(inputs, (0,), grid)
+    bc = grids.periodic_boundary_conditions(grid.ndim)
+    actual = bc.trim(array, padding, axis=0)
+    expected = grids.GridArray(expected_array, expected_offset, grid)
+    self.assertArrayEqual(actual, expected)
+
 
 class GridVariableTest(test_util.TestCase):
 
@@ -249,7 +366,7 @@ class GridVariableTest(test_util.TestCase):
       ),
   )
   def test_shift_pad_trim(self, shape, boundaries, padding, axis):
-    grid = grids.Grid(shape, boundaries=boundaries)
+    grid = grids.Grid(shape)
     data = np.random.randint(0, 10, shape)
     array = grids.GridArray(data, offset=(0.5,) * len(shape), grid=grid)
     bc = grids.BoundaryConditions(boundaries)
@@ -257,15 +374,15 @@ class GridVariableTest(test_util.TestCase):
 
     with self.subTest('shift'):
       self.assertArrayEqual(
-          u.shift(offset=1, axis=axis), grid.shift(array, 1, axis))
+          u.shift(offset=1, axis=axis), bc.shift(array, 1, axis))
 
     with self.subTest('pad'):
       self.assertArrayEqual(
-          u.pad(padding, axis), grid.pad(array, padding, axis))
+          u.pad(padding, axis), bc.pad(array, padding, axis))
 
     with self.subTest('trim'):
       self.assertArrayEqual(
-          u.trim(padding, axis), grid.trim(array, padding, axis))
+          u.trim(padding, axis), bc.trim(array, padding, axis))
 
     with self.subTest('raises exception'):
       with self.assertRaisesRegex(
@@ -508,114 +625,6 @@ class GridTest(test_util.TestCase):
     expected = grids.GridArray(expected_array, expected_offset, grid)
     actual = grid.eval_on_mesh(fn, offset)
     self.assertArrayEqual(expected, actual)
-
-  @parameterized.parameters(
-      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(0,)),
-      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(1,)),
-      dict(
-          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(-1,)),
-      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(5,)),
-      dict(
-          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(13,)),
-      dict(
-          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(31,)),
-      dict(
-          backend=np,
-          shape=(11, 12, 17),
-          initial_offset=(-0.5, -1.0, 1.0),
-          step=0.1,
-          offset=(-236, 10001, 3)),
-      dict(
-          backend=np,
-          shape=(121,),
-          initial_offset=(-0.5,),
-          step=1,
-          offset=(31,)),
-      dict(
-          backend=np,
-          shape=(11, 12, 17),
-          initial_offset=(0.5, 0.0, 1.0),
-          step=0.1,
-          offset=(-236, 10001, 3)),
-  )
-  def test_shift(self, backend, shape, initial_offset, step, offset):
-    """Test that `shift` returns the expected values."""
-    grid = grids.Grid(shape, step)
-    data = backend.arange(np.prod(shape)).reshape(shape)
-    u = grids.GridArray(data, initial_offset, grid)
-    shifted_u = u
-    for axis, o in enumerate(offset):
-      shifted_u = grid.shift(shifted_u, o, axis)
-
-    shifted_indices = [(jnp.arange(s) + o) % s for s, o in zip(shape, offset)]
-    shifted_mesh = jnp.meshgrid(*shifted_indices, indexing='ij')
-    expected_offset = tuple(i + o for i, o in zip(initial_offset, offset))
-    expected = grids.GridArray(data[tuple(shifted_mesh)], expected_offset, grid)
-
-    self.assertArrayEqual(shifted_u, expected)
-
-  @parameterized.parameters(
-      dict(
-          grid=grids.Grid((3,), boundaries='periodic'),
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 0),
-          expected_array=np.array([1, 2, 3]),
-          expected_offset=(0,),
-      ),
-      dict(
-          grid=grids.Grid((3,), boundaries='periodic'),
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 1),
-          expected_array=np.array([1, 2, 3, 1]),
-          expected_offset=(0,),
-      ),
-      dict(
-          grid=grids.Grid((3,), boundaries='periodic'),
-          inputs=np.array([1, 2, 3]),
-          padding=(1, 1),
-          expected_array=np.array([3, 1, 2, 3, 1]),
-          expected_offset=(-1,),
-      ),
-      dict(
-          grid=grids.Grid((3,), boundaries='dirichlet'),
-          inputs=np.array([1, 2, 3]),
-          padding=(1, 1),
-          expected_array=np.array([0, 1, 2, 3, 0]),
-          expected_offset=(-1,),
-      ),
-  )
-  def test_pad(self, grid, inputs, padding, expected_array, expected_offset):
-    array = grids.GridArray(inputs, (0,), grid)
-    actual = grid.pad(array, padding, axis=0)
-    expected = grids.GridArray(expected_array, expected_offset, grid)
-    self.assertArrayEqual(actual, expected)
-
-  @parameterized.parameters(
-      dict(
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 0),
-          expected_array=np.array([1, 2, 3]),
-          expected_offset=(0,),
-      ),
-      dict(
-          inputs=np.array([1, 2, 3, 4]),
-          padding=(1, 1),
-          expected_array=np.array([2, 3]),
-          expected_offset=(1,),
-      ),
-      dict(
-          inputs=np.arange(10),
-          padding=(2, 3),
-          expected_array=np.arange(2, 7),
-          expected_offset=(2,),
-      ),
-  )
-  def test_trim(self, inputs, padding, expected_array, expected_offset):
-    grid = grids.Grid(inputs.data.shape)
-    array = grids.GridArray(inputs, (0,), grid)
-    actual = grid.trim(array, padding, axis=0)
-    expected = grids.GridArray(expected_array, expected_offset, grid)
-    self.assertArrayEqual(actual, expected)
 
   def test_spectral_axes(self):
     length = 42.

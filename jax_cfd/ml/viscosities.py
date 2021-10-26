@@ -1,7 +1,7 @@
 """Models for closure terms and effective viscosities."""
 
 import functools
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import gin
 import haiku as hk
@@ -51,9 +51,19 @@ def learned_scalar_viscosity(
     tower_factory: Callable[..., Any] = towers.forward_tower_factory,
 ) -> ViscosityFn:
   """Constructs an learned, scalar-valued viscosity model."""
-  interpolate = interpolate_module(grid, dt, physics_specs)
-  # TODO(pnorgaard) Remove wrap_for_gridarray after GridVariable refactor
-  interpolate = interpolations.interpolation.wrap_for_gridarray(interpolate)
+  def interpolate(
+      c: GridArray,
+      offset: Tuple[float, ...],
+      v: Optional[GridArrayVector] = None,
+      dt: Optional[float] = None,
+      ) -> grids.GridArray:
+    """Interpolation method wrapped for GridArray using periodic BC."""
+    bc = grids.periodic_boundary_conditions(grid.ndim)
+    c_bc = grids.GridVariable(c, bc)
+    v_bc = tuple(grids.GridVariable(u, bc) for u in v)
+    interp_var = interpolate_module(grid, dt, physics_specs)(
+        c_bc, offset, v_bc, dt)
+    return interp_var.array
 
   def viscosity_fn(
       s_ij: grids.GridArrayTensor,

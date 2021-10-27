@@ -25,7 +25,6 @@ import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 import numpy as np
 
-# TODO(pnorgaard): refactor shift(), pad(), trim() out of Grid.
 # TODO(jamieas): consider moving common types to a separate module.
 # TODO(shoyer): consider adding jnp.ndarray?
 Array = Union[np.ndarray, jnp.DeviceArray]
@@ -333,7 +332,6 @@ class GridVariable:
   def grid(self) -> Grid:
     return self.array.grid
 
-  # TODO(pnorgaard) refactor shift/pad/trim out of Grid
   def shift(
       self,
       offset: int,

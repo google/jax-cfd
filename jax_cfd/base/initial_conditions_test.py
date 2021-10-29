@@ -22,6 +22,7 @@ import jax.numpy as jnp
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 from jax_cfd.base import initial_conditions as ic
+from jax_cfd.base import pressure
 from jax_cfd.base import test_util
 import numpy as np
 
@@ -79,29 +80,50 @@ class InitialConditionsTest(test_util.TestCase):
         self.assertArrayEqual(expected_v0[d], v0_corrected[d])
 
   @parameterized.parameters(
-      dict(boundary_conditions=(
-          grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC)),
-          grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))),
+      dict(
+          velocity_bc=(
+              grids.BoundaryConditions((grids.DIRICHLET, grids.DIRICHLET)),
+              grids.BoundaryConditions((grids.DIRICHLET, grids.DIRICHLET))),
+          pressure_solve=pressure.solve_cg,
           ),
-      dict(boundary_conditions=None),  # Use default boundary conditions
-  )
-  def test_initial_velocity_field_with_projection(self, boundary_conditions):
-    grid = grids.Grid((100, 100), step=1.0)
-    random_noise = 0.2 * np.random.rand(100, 100)
-    x_velocity_fn = lambda x, y: jnp.ones_like(x)
-    y_velocity_fn = lambda x, y: jnp.zeros_like(x) + random_noise
+      dict(
+          velocity_bc=(
+              grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET)),
+              grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET))),
+          pressure_solve=pressure.solve_cg,
+          ),
+      dict(velocity_bc=None,  # default is all periodic BC.
+           pressure_solve=pressure.solve_fast_diag,
+          ),
+      )
+  def test_initial_velocity_field_with_projection(self, velocity_bc,
+                                                  pressure_solve):
+    grid = grids.Grid((20, 20), step=0.1)
+    # Use a mask to make the random noise zero on the boundaries, consistent
+    # with Dirichlet BC (and still valid for periodic BC).
+    masks = grids.domain_interior_masks(grid)
+
+    def x_velocity_fn(x, y):
+      return jnp.zeros_like(x + y) + 0.2 * np.random.normal(
+          size=grid.shape) * masks[0]
+
+    def y_velocity_fn(x, y):
+      return jnp.zeros_like(x + y) + 0.2 * np.random.normal(
+          size=grid.shape) * masks[1]
 
     with self.subTest('corrected'):
       v0_corrected = ic.initial_velocity_field((x_velocity_fn, y_velocity_fn),
                                                grid,
-                                               boundary_conditions,
+                                               velocity_bc,
+                                               pressure_solve,
                                                iterations=5)
-      self.assertAllClose(fd.divergence(v0_corrected).data, 0, atol=1e-7)
+      self.assertAllClose(fd.divergence(v0_corrected).data, 0, atol=1e-5)
 
     with self.subTest('not corrected'):
       v0_uncorrected = ic.initial_velocity_field((x_velocity_fn, y_velocity_fn),
                                                  grid,
-                                                 boundary_conditions,
+                                                 velocity_bc,
+                                                 pressure_solve,
                                                  iterations=None)
       self.assertGreater(abs(fd.divergence(v0_uncorrected).data).max(), 0.1)
 

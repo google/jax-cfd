@@ -670,9 +670,37 @@ class GridTest(test_util.TestCase):
     grid = grids.Grid(shape, domain=(domain))
 
     xs1, xs2, xs3 = grid.rfft_axes()
-    assert grid_size == len(xs1) == len(xs2)
-    assert grid_size // 2 + 1 == len(xs3)
+    self.assertEqual(len(xs1), grid_size)
+    self.assertEqual(len(xs2), grid_size)
+    self.assertEqual(len(xs3), grid_size // 2 + 1)
 
+  def test_domain_interior_masks(self):
+    with self.subTest('1d'):
+      grid = grids.Grid((5,))
+      expected = [[1, 1, 1, 1, 0]]
+      self.assertAllClose(grids.domain_interior_masks(grid), expected)
+
+    with self.subTest('2d'):
+      grid = grids.Grid((3, 3))
+      expected = ([[1, 1, 1],
+                   [1, 1, 1],
+                   [0, 0, 0]],
+                  [[1, 1, 0],
+                   [1, 1, 0],
+                   [1, 1, 0]])
+      self.assertAllClose(grids.domain_interior_masks(grid), expected)
+
+    with self.subTest('3d'):
+      grid = grids.Grid((3, 4, 5))
+      actual = grids.domain_interior_masks(grid)
+      self.assertLen(actual, 3)
+      # masks are zero on the outer edge, 1 on the interior
+      self.assertAllClose(actual[0][:-1, :, :], 1)
+      self.assertAllClose(actual[0][-1, :, :], 0)
+      self.assertAllClose(actual[1][:, :-1, :], 1)
+      self.assertAllClose(actual[1][:, -1, :], 0)
+      self.assertAllClose(actual[2][:, :, :-1], 1)
+      self.assertAllClose(actual[2][:, :, -1], 0)
 
 if __name__ == '__main__':
   absltest.main()

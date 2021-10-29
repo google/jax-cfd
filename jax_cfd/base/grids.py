@@ -142,7 +142,8 @@ jax.tree_util.register_pytree_node(
 # JAX-CFD code.
 PERIODIC = 'periodic'
 DIRICHLET = 'dirichlet'
-VALID_BOUNDARIES = (PERIODIC, DIRICHLET)
+NEUMANN = 'neumann'
+VALID_BOUNDARIES = (PERIODIC, DIRICHLET, NEUMANN)
 
 
 # TODO(pnorgaard) Generalize BC implementation
@@ -212,9 +213,12 @@ class BoundaryConditions:
     """
     if self.boundaries[axis] == PERIODIC:
       pad_kwargs = dict(mode='wrap')
-    else:
-      assert self.boundaries[axis] == DIRICHLET
+    elif self.boundaries[axis] == DIRICHLET:
       pad_kwargs = dict(mode='constant')
+    elif self.boundaries[axis] == NEUMANN:
+      pad_kwargs = dict(mode='edge')
+    else:
+      raise ValueError('invalid boundary type')
 
     offset = list(u.offset)
     offset[axis] -= padding[0]
@@ -668,3 +672,17 @@ class Grid:
     if offset is None:
       offset = self.cell_center
     return GridArray(fn(*self.mesh(offset)), offset, self)
+
+
+def domain_interior_masks(grid: Grid):
+  """Returns cell face arrays with 1 on the interior, 0 on the boundary."""
+  masks = []
+  for offset in grid.cell_faces:
+    mesh = grid.mesh(offset)
+    mask = 1
+    for i, x in enumerate(mesh):
+      lower = (np.invert(np.isclose(x, grid.domain[i][0]))).astype('int')
+      upper = (np.invert(np.isclose(x, grid.domain[i][1]))).astype('int')
+      mask = mask * upper * lower
+    masks.append(mask)
+  return tuple(masks)

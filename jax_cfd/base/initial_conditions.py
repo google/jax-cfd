@@ -12,17 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 """Prepare initial conditions for simulations."""
-from typing import Callable, Optional, Tuple, Sequence, Union
+import functools
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-
 from jax_cfd.base import filter_utils
 from jax_cfd.base import funcutils
 from jax_cfd.base import grids
 from jax_cfd.base import pressure
 import numpy as np
+
+# Specifying the full signatures of Callable would get somewhat onerous
+# pylint: disable=g-bare-generic
 
 Array = Union[np.ndarray, jnp.DeviceArray]
 GridArray = grids.GridArray
@@ -108,8 +112,10 @@ def filtered_velocity_field(
 def initial_velocity_field(
     velocity_fns: Tuple[Callable[..., Array], ...],
     grid: grids.Grid,
-    boundary_conditions: Optional[Tuple[BoundaryConditions, ...]] = None,
-    iterations: Optional[int] = None) -> GridVariableVector:
+    velocity_bc: Optional[Sequence[BoundaryConditions]] = None,
+    pressure_solve: Callable = pressure.solve_fast_diag,
+    iterations: Optional[int] = None,
+) -> GridVariableVector:
   """Given velocity functions on arrays, returns the velocity field on the grid.
 
   Typical usage example:
@@ -122,20 +128,22 @@ def initial_velocity_field(
     velocity_fns: functions for computing each velocity component. These should
       takes the args (x, y, ...) and return an array of the same shape.
     grid: the grid on which the velocity field is defined.
-    boundary_conditions: the boundary conditions to associate with each velocity
+    velocity_bc: the boundary conditions to associate with each velocity
       component. If unspecified, uses periodic boundary conditions.
+    pressure_solve: method used to solve pressure projection.
     iterations: if specified, the number of iterations of applied projection
       onto an incompressible velocity field.
 
   Returns:
     Velocity components defined with expected offsets on the grid.
   """
-  if boundary_conditions is None:
-    boundary_conditions = (
+  if velocity_bc is None:
+    velocity_bc = (
         grids.BoundaryConditions((grids.PERIODIC,) * grid.ndim),) * grid.ndim
   v = tuple(
       grids.GridVariable(grid.eval_on_mesh(v_fn, offset), bc) for v_fn, offset,
-      bc in zip(velocity_fns, grid.cell_faces, boundary_conditions))
+      bc in zip(velocity_fns, grid.cell_faces, velocity_bc))
   if iterations is not None:
-    v = funcutils.repeated(pressure.projection, iterations)(v)
+    projection = functools.partial(pressure.projection, solve=pressure_solve)
+    v = funcutils.repeated(projection, iterations)(v)
   return v

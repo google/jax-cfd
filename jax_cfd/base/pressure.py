@@ -39,7 +39,7 @@ BoundaryConditions = grids.BoundaryConditions
 
 
 def solve_cg(v: GridVariableVector,
-             q0: Optional[GridVariable] = None,
+             q0: GridVariable,
              rtol: float = 1e-6,
              atol: float = 1e-6,
              maxiter: Optional[int] = None) -> GridArray:
@@ -53,7 +53,8 @@ def solve_cg(v: GridVariableVector,
   Args:
     v: the velocity field.
     q0: an initial value, or "guess" for the pressure correction. A common
-      choice is the correction from the previous time step.
+      choice is the correction from the previous time step. Also specifies the
+      boundary conditions on `q`.
     rtol: relative tolerance for convergence.
     atol: absolute tolerance for convergence.
     maxiter: optional int, the maximum number of iterations to perform.
@@ -62,18 +63,10 @@ def solve_cg(v: GridVariableVector,
     A pressure correction `q` such that `div(v - grad(q))` is zero.
   """
   # TODO(jamieas): add functionality for non-uniform density.
-  if not grids.has_periodic_boundary_conditions(*v):
-    raise ValueError('solve_cg() expects periodic BC')
   rhs = fd.divergence(v)
 
-  if q0 is None:
-    grid = grids.consistent_grid(*v)
-    q0 = grids.GridVariable.create(
-        jnp.zeros_like(rhs.data), grid.cell_center, grid, grids.PERIODIC)
-  q_bc = q0.bc
-
   def laplacian_with_bcs(array: GridArray) -> GridArray:
-    variable = grids.GridVariable(array, q_bc)
+    variable = grids.GridVariable(array, q0.bc)
     return fd.laplacian(variable)
 
   q, _ = jax.scipy.sparse.linalg.cg(
@@ -92,7 +85,7 @@ def solve_fast_diag(v: GridVariableVector,
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
   if not grids.has_periodic_boundary_conditions(*v):
-    raise ValueError('solve_fast_diag() expects periodic BC')
+    raise ValueError('solve_fast_diag() expects periodic velocity BC')
   grid = grids.consistent_grid(*v)
   rhs = fd.divergence(v)
   laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))
@@ -107,9 +100,21 @@ def projection(
     solve: Callable = solve_fast_diag,
 ) -> GridVariableVector:
   """Apply pressure projection to make a velocity field divergence free."""
-  # TODO(pnorgaard) Include arg for different q boundary conditions
-  q = solve(v)
-  q = grids.GridVariable.create(q.data, q.offset, q.grid, grids.PERIODIC)
+  grid = grids.consistent_grid(*v)
+
+  # Expect each component of v to have the same BC, either both PERIODIC or
+  # both DIRICHLET.
+  velocity_boundaries = grids.consistent_boundary_conditions(*v).boundaries
+  pressure_boundaries = tuple(
+      grids.NEUMANN if boundary == grids.DIRICHLET else grids.PERIODIC
+      for boundary in velocity_boundaries)
+  pressure_bc = grids.BoundaryConditions(pressure_boundaries)
+
+  q0 = grids.GridArray(jnp.zeros(grid.shape), grid.cell_center, grid)
+  q0 = grids.GridVariable(q0, pressure_bc)
+
+  q = solve(v, q0)
+  q = grids.GridVariable(q, pressure_bc)
   q_grad = fd.forward_difference(q)
   v_projected = tuple(
       grids.GridVariable(u.array - q_g, u.bc) for u, q_g in zip(v, q_grad))

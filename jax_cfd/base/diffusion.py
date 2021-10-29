@@ -43,7 +43,7 @@ def stable_time_step(viscosity: float, grid: grids.Grid) -> float:
   schemes.
 
   Args:
-    viscosity: visosity
+    viscosity: kinematic visosity
     grid: a `Grid` object.
 
   Returns:

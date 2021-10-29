@@ -28,11 +28,6 @@ import numpy as np
 
 USE_FLOAT64 = True
 
-
-def _offsets(n):
-  return tuple(tuple(o) for o in (np.eye(n) + np.ones([n, n])) / 2.)
-
-
 solve_cg = functools.partial(pressure.solve_cg, atol=1e-6, maxiter=10**5)
 
 
@@ -74,7 +69,7 @@ class PressureTest(test_util.TestCase):
            step=(.1, .1, .1),
            seed=333),
   )
-  def testPressureCorrectionZeroDivergence(
+  def test_pressure_correction_periodic_bc(
       self, shape, solve, step, seed):
     """Returned velocity should be divergence free."""
     grid = grids.Grid(shape, step)
@@ -85,7 +80,7 @@ class PressureTest(test_util.TestCase):
     ks = jax.random.split(jax.random.PRNGKey(seed), 2 * len(shape))
     v = tuple(
         grids.GridArray(1. + .3 * jax.random.normal(k, shape), offset, grid)
-        for k, offset in zip(ks[:len(shape)], _offsets(len(shape))))
+        for k, offset in zip(ks[:grid.ndim], grid.cell_faces))
     v = tuple(grids.GridVariable(u, bc) for u in v)
     v_corrected = pressure.projection(v, solve)
 
@@ -95,6 +90,80 @@ class PressureTest(test_util.TestCase):
       np.testing.assert_allclose(u.offset, u_corrected.offset)
     np.testing.assert_allclose(div.data, 0., atol=1e-4)
 
+  @parameterized.named_parameters(
+      dict(testcase_name='_1D_cg',
+           shape=(10,),
+           solve=solve_cg,
+           step=(.1,),
+           seed=111),
+      dict(testcase_name='_2D_cg',
+           shape=(10, 10),
+           solve=solve_cg,
+           step=(.1, .1),
+           seed=222),
+      dict(testcase_name='_3D_cg',
+           shape=(10, 10, 10),
+           solve=solve_cg,
+           step=(.1, .1, .1),
+           seed=333),
+  )
+  def test_pressure_correction_dirichlet_velocity_bc(
+      self, shape, solve, step, seed):
+    """Returned velocity should be divergence free."""
+    grid = grids.Grid(shape, step)
+    velocity_bc = grid.ndim * (  # tuple of BC for velocity components
+        grids.BoundaryConditions((grids.DIRICHLET,) * grid.ndim),)
+
+    # The uncorrected velocity is zero + a small amount of noise in each
+    # dimension.
+    ks = jax.random.split(jax.random.PRNGKey(seed), 2 * grid.ndim)
+    v = tuple(
+        grids.GridArray(0. + .3 * jax.random.normal(k, shape), offset, grid)
+        for k, offset in zip(ks[:grid.ndim], grid.cell_faces))
+    # Set boundary velocity to zero
+    masks = grids.domain_interior_masks(grid)
+    self.assertLen(masks, grid.ndim)
+    v = (m * u for m, u in zip(masks, v))
+    # Associate boundary conditions
+    v = tuple(grids.GridVariable(u, u_bc) for u, u_bc in zip(v, velocity_bc))
+    self.assertLen(v, grid.ndim)
+    # Apply pressure correction
+    v_corrected = pressure.projection(v, solve)
+
+    # The corrected velocity should be divergence free.
+    div = fd.divergence(v_corrected)
+    for u, u_corrected in zip(v, v_corrected):
+      np.testing.assert_allclose(u.offset, u_corrected.offset)
+    np.testing.assert_allclose(div.data, 0., atol=1e-4)
+
+  def test_pressure_correction_mixed_velocity_bc(self):
+    """Returned velocity should be divergence free."""
+    grid = grids.Grid((20, 20), step=0.1)
+    velocity_bc = (grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET)),
+                   grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET)))
+
+    def rand_array(shape, seed):
+      key = jax.random.split(jax.random.PRNGKey(seed))
+      return jax.random.normal(key[0], shape)
+
+    v = (grids.GridArray(1. + .3 * rand_array(grid.shape, seed=0),
+                         offset=grid.cell_faces[0], grid=grid),
+         grids.GridArray(.3 * rand_array(grid.shape, seed=1),
+                         offset=grid.cell_faces[1], grid=grid))
+
+    # Set y-boundary velocity to zero since it is a Dirichlet BC
+    masks = grids.domain_interior_masks(grid)
+    v = (v[0], v[1] * masks[1])
+    # Associate boundary conditions
+    v = tuple(grids.GridVariable(u, u_bc) for u, u_bc in zip(v, velocity_bc))
+    # Apply pressure correction
+    v_corrected = pressure.projection(v, solve_cg)
+
+    # The corrected velocity should be divergence free.
+    div = fd.divergence(v_corrected)
+    for u, u_corrected in zip(v, v_corrected):
+      np.testing.assert_allclose(u.offset, u_corrected.offset)
+    np.testing.assert_allclose(div.data, 0., atol=1e-4)
 
 if __name__ == '__main__':
   absltest.main()

@@ -243,8 +243,8 @@ class BoundaryConditions:
     Returns:
       Trimmed array, shrunk along the indicated axis.
     """
-    slice_size = u.data.shape[axis] - sum(padding)
-    data = lax.dynamic_slice_in_dim(u.data, padding[0], slice_size, axis)
+    limit_index = u.data.shape[axis] - padding[1]
+    data = lax.slice_in_dim(u.data, padding[0], limit_index, axis=axis)
     offset = list(u.offset)
     offset[axis] += padding[0]
     return GridArray(data, tuple(offset), u.grid)

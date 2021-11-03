@@ -298,22 +298,6 @@ class GridVariable:
           'Incompatible dimension between grid and bc, grid dimension = '
           f'{self.grid.ndim}, bc dimension = {len(self.bc.boundaries)}')
 
-  # TODO(pnorgaard): Remove this initialization.
-  @classmethod
-  def create(
-      cls,
-      data: Array,
-      offset: Tuple[float, ...],
-      grid: Grid,
-      boundaries: Union[str, Tuple[str, ...]],
-  ) -> GridVariable:
-    """Create the enclosed GridArray and BoundaryConditions on the fly."""
-    array = GridArray(data, offset, grid)
-    if isinstance(boundaries, str):
-      boundaries = (boundaries,) * grid.ndim
-    bc = BoundaryConditions(boundaries)
-    return cls(array, bc)
-
   def tree_flatten(self):
     """Returns flattening recipe for GridVariable JAX pytree."""
     children = (self.array,)

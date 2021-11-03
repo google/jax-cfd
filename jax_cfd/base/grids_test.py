@@ -437,24 +437,6 @@ class GridVariableTest(test_util.TestCase):
         bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))  # 2D
         grids.GridVariable(array, bc)
 
-  def test_construction_with_create(self):
-    grid = grids.Grid((10, 10))
-    data = np.zeros((10, 10))
-    offset = (0.5, 0.5)
-    array = grids.GridArray(data, offset, grid)
-    boundaries = (grids.PERIODIC, grids.PERIODIC)
-    bc = grids.BoundaryConditions(boundaries)
-
-    with self.subTest('tuple boundaries arg'):
-      variable_1 = grids.GridVariable(array, bc)
-      variable_2 = grids.GridVariable.create(data, offset, grid, boundaries)
-      self.assertArrayEqual(variable_1, variable_2)
-
-    with self.subTest('str boundaries arg'):
-      variable_1 = grids.GridVariable(array, bc)
-      variable_2 = grids.GridVariable.create(data, offset, grid, 'periodic')
-      self.assertArrayEqual(variable_1, variable_2)
-
 
 class GridArrayTensorTest(test_util.TestCase):
 

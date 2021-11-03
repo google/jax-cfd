@@ -26,6 +26,12 @@ import numpy as np
 import scipy.interpolate as spi
 
 
+def periodic_grid_variable(data, offset, grid):
+  return grids.GridVariable(
+      array=grids.GridArray(data, offset, grid),
+      bc=grids.periodic_boundary_conditions(grid.ndim))
+
+
 class LinearInterpolationTest(test_util.TestCase):
 
   @parameterized.named_parameters(
@@ -41,8 +47,7 @@ class LinearInterpolationTest(test_util.TestCase):
   def testRaisesForInvalidOffset(self, shape, step, offset):
     """Test that incompatible offsets raise an exception."""
     grid = grids.Grid(shape, step)
-    u = grids.GridVariable.create(
-        jnp.ones(shape), jnp.zeros(shape), grid, 'periodic')
+    u = periodic_grid_variable(jnp.ones(shape), jnp.zeros(shape), grid)
     with self.assertRaises(ValueError):
       interpolation.linear(u, offset)
 
@@ -73,8 +78,7 @@ class LinearInterpolationTest(test_util.TestCase):
 
     initial_mesh = grid.mesh(offset=initial_offset)
     initial_axes = grid.axes(offset=initial_offset)
-    initial_u = grids.GridVariable.create(
-        f(initial_mesh), initial_offset, grid, 'periodic')
+    initial_u = periodic_grid_variable(f(initial_mesh), initial_offset, grid)
 
     final_mesh = grid.mesh(offset=final_offset)
     final_u = interpolation.linear(initial_u, final_offset)
@@ -111,8 +115,7 @@ class UpwindInterpolationTest(test_util.TestCase):
       self, grid_shape, grid_step, c_offset, u_offset):
     """Test that incompatible offsets raise an exception."""
     grid = grids.Grid(grid_shape, grid_step)
-    c = grids.GridVariable.create(
-        jnp.ones(grid_shape), c_offset, grid, 'periodic')
+    c = periodic_grid_variable(jnp.ones(grid_shape), c_offset, grid)
     with self.assertRaises(grids.InconsistentOffsetError):
       interpolation.upwind(c, u_offset, None)
 
@@ -160,8 +163,8 @@ class UpwindInterpolationTest(test_util.TestCase):
   def testCorrectness(self, grid_shape, grid_step, c_data, c_offset, u_data,
                       u_offset, u_axis, expected_data):
     grid = grids.Grid(grid_shape, grid_step)
-    initial_c = grids.GridVariable.create(c_data(), c_offset, grid, 'periodic')
-    u = grids.GridVariable.create(u_data(), u_offset, grid, 'periodic')
+    initial_c = periodic_grid_variable(c_data(), c_offset, grid)
+    u = periodic_grid_variable(u_data(), u_offset, grid)
     v = tuple(
         u if axis == u_axis else None for axis, _ in enumerate(u_offset)
     )
@@ -188,8 +191,7 @@ class LaxWendroffInterpolationTest(test_util.TestCase):
       self, grid_shape, grid_step, c_offset, u_offset):
     """Test that incompatible offsets raise an exception."""
     grid = grids.Grid(grid_shape, grid_step)
-    c = grids.GridVariable.create(
-        jnp.ones(grid_shape), c_offset, grid, 'periodic')
+    c = periodic_grid_variable(jnp.ones(grid_shape), c_offset, grid)
     with self.assertRaises(grids.InconsistentOffsetError):
       interpolation.lax_wendroff(c, u_offset, v=None, dt=0.)
 
@@ -249,8 +251,8 @@ class LaxWendroffInterpolationTest(test_util.TestCase):
   def testCorrectness(self, grid_shape, grid_step, c_data, c_offset, u_data,
                       u_offset, u_axis, dt, expected_data):
     grid = grids.Grid(grid_shape, grid_step)
-    initial_c = grids.GridVariable.create(c_data(), c_offset, grid, 'periodic')
-    u = grids.GridVariable.create(u_data(), u_offset, grid, 'periodic')
+    initial_c = periodic_grid_variable(c_data(), c_offset, grid)
+    u = periodic_grid_variable(u_data(), u_offset, grid)
     v = tuple(
         u if axis == u_axis else None for axis, _ in enumerate(u_offset)
     )
@@ -282,8 +284,8 @@ class ApplyTvdLimiterTest(test_util.TestCase):
     c_interpolation_fn = interpolation.apply_tvd_limiter(
         interpolation_fn, limiter)
     grid = grids.Grid(grid_shape, grid_step)
-    initial_c = grids.GridVariable.create(c_data(), c_offset, grid, 'periodic')
-    u = grids.GridVariable.create(u_data(), u_offset, grid, 'periodic')
+    initial_c = periodic_grid_variable(c_data(), c_offset, grid)
+    u = periodic_grid_variable(u_data(), u_offset, grid)
     v = tuple(
         u if axis == u_axis else None for axis, _ in enumerate(u_offset)
     )

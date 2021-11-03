@@ -105,8 +105,8 @@ class FusedLearnedInterpolation:
                tag=None) -> GridVariable:
     del dt  # not used.
     # TODO(dkochkov) Add decorator to expand/squeeze channel dim.
-    c = grids.GridVariable.create(
-        jnp.expand_dims(c.data, -1), c.offset, c.grid, c.bc.boundaries)
+    c = grids.GridVariable(
+        grids.GridArray(jnp.expand_dims(c.data, -1), c.offset, c.grid), c.bc)
     # TODO(jamieas): Try removing the following line.
     if c.offset == offset: return c
     key = (c.offset, offset, tag)
@@ -115,7 +115,8 @@ class FusedLearnedInterpolation:
       raise KeyError(f'No interpolator for key {key}. '
                      f'Available keys: {list(self._interpolators.keys())}')
     result = jnp.squeeze(interpolator(c.data), axis=-1)
-    return grids.GridVariable.create(result, offset, c.grid, c.bc.boundaries)
+    return grids.GridVariable(
+        grids.GridArray(result, offset, c.grid), c.bc)
 
 
 def _nearest_neighhbor_stencil_size_fn(
@@ -189,8 +190,8 @@ class IndividualLearnedInterpolation:
     c_input = jnp.expand_dims(c.data, axis=-1)
     aux_inputs = [jnp.expand_dims(u.data, axis=-1) for u in v]
     res = self._get_interpolation_module(offsets)(c_input, *aux_inputs)
-    return grids.GridVariable.create(
-        jnp.squeeze(res, axis=-1), offset, c.grid, c.bc.boundaries)
+    return grids.GridVariable(
+        grids.GridArray(jnp.squeeze(res, axis=-1), offset, c.grid), c.bc)
 
 
 @gin.configurable

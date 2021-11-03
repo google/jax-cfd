@@ -88,7 +88,9 @@ class NavierStokesModulesTest(test_util.TestCase):
     for seed, offset in enumerate(grid.cell_faces):
       rng_key = jax.random.PRNGKey(seed)
       data = jax.random.uniform(rng_key, grid.shape, jnp.float32)
-      variable = grids.GridVariable.create(data, offset, grid, 'periodic')
+      variable = grids.GridVariable(
+          array=grids.GridArray(data, offset, grid),
+          bc=grids.periodic_boundary_conditions(grid.ndim))
       inputs.append(variable)
     inputs = tuple(inputs)
     rng = jax.random.PRNGKey(42)

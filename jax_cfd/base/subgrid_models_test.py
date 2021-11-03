@@ -28,10 +28,16 @@ from jax_cfd.base import test_util
 import numpy as np
 
 
+def periodic_grid_variable(data, offset, grid):
+  return grids.GridVariable(
+      array=grids.GridArray(data, offset, grid),
+      bc=grids.periodic_boundary_conditions(grid.ndim))
+
+
 def zero_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:
   """Returns an all-zero periodic velocity fields."""
-  return tuple(grids.GridVariable.create(
-      jnp.zeros(grid.shape), o, grid, 'periodic') for o in grid.cell_faces)
+  return tuple(periodic_grid_variable(jnp.zeros(grid.shape), o, grid)
+               for o in grid.cell_faces)
 
 
 def sinusoidal_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:
@@ -39,7 +45,7 @@ def sinusoidal_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:
   mesh_size = jnp.array(grid.shape) * jnp.array(grid.step)
   vs = tuple(jnp.sin(2. * np.pi * g / s)
              for g, s in zip(grid.mesh(), mesh_size))
-  return tuple(grids.GridVariable.create(v, o, grid, 'periodic')
+  return tuple(periodic_grid_variable(v, o, grid)
                for v, o in zip(vs[1:] + vs[:1], grid.cell_faces))
 
 
@@ -78,12 +84,8 @@ class SubgridModelsTest(test_util.TestCase):
 
   def test_smagorinsky_viscosity(self):
     grid = grids.Grid((3, 3))
-    v = (
-        grids.GridVariable.create(
-            jnp.zeros(grid.shape), (1, 0.5), grid, 'periodic'),
-        grids.GridVariable.create(
-            jnp.zeros(grid.shape), (0.5, 1), grid, 'periodic'),
-    )
+    v = (periodic_grid_variable(jnp.zeros(grid.shape), (1, 0.5), grid),
+         periodic_grid_variable(jnp.zeros(grid.shape), (0.5, 1), grid))
     c00 = grids.GridArray(jnp.zeros(grid.shape), offset=(0, 0), grid=grid)
     c01 = grids.GridArray(jnp.zeros(grid.shape), offset=(0, 1), grid=grid)
     c10 = grids.GridArray(jnp.zeros(grid.shape), offset=(1, 0), grid=grid)
@@ -101,11 +103,8 @@ class SubgridModelsTest(test_util.TestCase):
   def test_evm_model(self):
     grid = grids.Grid((3, 3))
     v = (
-        grids.GridVariable.create(
-            jnp.zeros(grid.shape), (1, 0.5), grid, 'periodic'),
-        grids.GridVariable.create(
-            jnp.zeros(grid.shape), (0.5, 1), grid, 'periodic'),
-    )
+        periodic_grid_variable(jnp.zeros(grid.shape), (1, 0.5), grid),
+        periodic_grid_variable(jnp.zeros(grid.shape), (0.5, 1), grid))
     viscosity_fn = functools.partial(
         subgrid_models.smagorinsky_viscosity, dt=1.0, cs=0.2)
     acceleration = subgrid_models.evm_model(v, viscosity_fn)

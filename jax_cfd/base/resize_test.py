@@ -23,6 +23,12 @@ from jax_cfd.base import test_util
 import numpy as np
 
 
+def periodic_grid_variable(data, offset, grid):
+  return grids.GridVariable(
+      array=grids.GridArray(data, offset, grid),
+      bc=grids.periodic_boundary_conditions(grid.ndim))
+
+
 class ResizeTest(test_util.TestCase):
 
   @parameterized.parameters(
@@ -88,15 +94,13 @@ class ResizeTest(test_util.TestCase):
                                              destination_grid, velocity)
 
     with self.subTest('GridVariableVector'):
-      velocity = (grids.GridVariable.create(u, (1, 0), source_grid, 'periodic'),
-                  grids.GridVariable.create(u, (0, 1), source_grid, 'periodic'))
+      velocity = (periodic_grid_variable(u, (1, 0), source_grid),
+                  periodic_grid_variable(u, (0, 1), source_grid))
       actual = resize.downsample_staggered_velocity(source_grid,
                                                     destination_grid, velocity)
       expected_aligned = (
-          grids.GridVariable.create(
-              expected[0], (1, 0), destination_grid, 'periodic'),
-          grids.GridVariable.create(
-              expected[1], (0, 1), destination_grid, 'periodic'),
+          periodic_grid_variable(expected[0], (1, 0), destination_grid),
+          periodic_grid_variable(expected[1], (0, 1), destination_grid),
       )
       self.assertAllClose(expected_aligned[0], actual[0])
       self.assertAllClose(expected_aligned[1], actual[1])
@@ -106,8 +110,8 @@ class ResizeTest(test_util.TestCase):
                                   'source_grid for downsampling'):
         different_grid = grids.Grid((4, 4), domain=[(-2, 2), (0, 1)])
         velocity = (
-            grids.GridVariable.create(u, (1, 0), different_grid, 'periodic'),
-            grids.GridVariable.create(u, (0, 1), different_grid, 'periodic'))
+            periodic_grid_variable(u, (1, 0), different_grid),
+            periodic_grid_variable(u, (0, 1), different_grid))
         resize.downsample_staggered_velocity(source_grid,
                                              destination_grid, velocity)
 

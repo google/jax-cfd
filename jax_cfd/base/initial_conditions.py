@@ -139,7 +139,7 @@ def initial_velocity_field(
   """
   if velocity_bc is None:
     velocity_bc = (
-        grids.BoundaryConditions((grids.PERIODIC,) * grid.ndim),) * grid.ndim
+        grids.periodic_boundary_conditions(grid.ndim),) * grid.ndim
   v = tuple(
       grids.GridVariable(grid.eval_on_mesh(v_fn, offset), bc) for v_fn, offset,
       bc in zip(velocity_fns, grid.cell_faces, velocity_bc))

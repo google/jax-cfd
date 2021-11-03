@@ -70,7 +70,7 @@ class TestCase(parameterized.TestCase):
         raise AssertionError(str(e)) from None
       try:
         grids.consistent_boundary_conditions(*arrays)
-      except grids.InconsistentBoundaryConditionError as e:
+      except grids.InconsistentBoundaryConditionsError as e:
         raise AssertionError(str(e)) from None
       arrays = tuple(array.array.data for array in arrays)
     return arrays

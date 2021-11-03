@@ -47,11 +47,11 @@ def _linear_along_axis(c: GridVariable,
 
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
-    return GridVariable.create(
-        data=c.shift(int(offset_delta), axis).data,
-        offset=new_offset,
-        grid=c.grid,
-        boundaries=c.bc.boundaries)
+    return grids.GridVariable(
+        array=grids.GridArray(data=c.shift(int(offset_delta), axis).data,
+                              offset=new_offset,
+                              grid=c.grid),
+        bc=c.bc)
 
   floor = int(np.floor(offset_delta))
   ceil = int(np.ceil(offset_delta))
@@ -59,11 +59,8 @@ def _linear_along_axis(c: GridVariable,
   ceil_weight = 1. - floor_weight
   data = (floor_weight * c.shift(floor, axis).data +
           ceil_weight * c.shift(ceil, axis).data)
-  return GridVariable.create(
-      data=data,
-      offset=new_offset,
-      grid=c.grid,
-      boundaries=c.bc.boundaries)
+  return grids.GridVariable(
+      array=grids.GridArray(data, new_offset, c.grid), bc=c.bc)
 
 
 def linear(
@@ -140,22 +137,21 @@ def upwind(
 
   # If offsets differ by an integer, we can just shift `c`.
   if int(offset_delta) == offset_delta:
-    return GridVariable.create(
-        data=c.shift(int(offset_delta), axis).data,
-        offset=offset,
-        grid=grids.consistent_grid(c, u),
-        boundaries=c.bc.boundaries)
+    return grids.GridVariable(
+        array=grids.GridArray(data=c.shift(int(offset_delta), axis).data,
+                              offset=offset,
+                              grid=grids.consistent_grid(c, u)),
+        bc=c.bc)
 
   floor = int(np.floor(offset_delta))
   ceil = int(np.ceil(offset_delta))
   array = grids.applied(jnp.where)(
       u.array > 0, c.shift(floor, axis).data, c.shift(ceil, axis).data
   )
-  return grids.GridVariable.create(
-      data=array.data,
-      offset=offset,
-      grid=grids.consistent_grid(c, u),
-      boundaries=c.bc.boundaries)
+  grid = grids.consistent_grid(c, u)
+  return grids.GridVariable(
+      array=grids.GridArray(array.data, offset, grid),
+      bc=grids.periodic_boundary_conditions(grid.ndim))
 
 
 def lax_wendroff(
@@ -218,11 +214,10 @@ def lax_wendroff(
       c.shift(ceil, axis).data - 0.5 * (1 + courant_numbers) *
       (c.shift(ceil, axis).data - c.shift(floor, axis).data))
   array = grids.where(u.array > 0, positive_u_case, negative_u_case)
-  return grids.GridVariable.create(
-      data=array.data,
-      offset=offset,
-      grid=grids.consistent_grid(c, u),
-      boundaries=c.bc.boundaries)
+  grid = grids.consistent_grid(c, u)
+  return grids.GridVariable(
+      array=grids.GridArray(array.data, offset, grid),
+      bc=grids.periodic_boundary_conditions(grid.ndim))
 
 
 def safe_div(x, y, default_numerator=1):
@@ -299,8 +294,9 @@ def apply_tvd_limiter(
         phi = grids.applied(jnp.where)(
             u.array > 0, positive_u_phi, negative_u_phi)
         c_interpolated = c_low.array - (c_low.array - c_high.array) * phi
-        c = grids.GridVariable.create(
-            c_interpolated.data, interpolation_offset, c.grid, c.bc.boundaries)
+        c = grids.GridVariable(
+            grids.GridArray(c_interpolated.data, interpolation_offset, c.grid),
+            c.bc)
     return c
 
   return tvd_interpolation

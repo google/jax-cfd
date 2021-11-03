@@ -138,15 +138,12 @@ jax.tree_util.register_pytree_node(
 )
 
 
-# NOTE: only periodic boundary conditions work correctly in the majority of the
-# JAX-CFD code.
 PERIODIC = 'periodic'
 DIRICHLET = 'dirichlet'
 NEUMANN = 'neumann'
 VALID_BOUNDARIES = (PERIODIC, DIRICHLET, NEUMANN)
 
 
-# TODO(pnorgaard) Generalize BC implementation
 @dataclasses.dataclass(init=False, frozen=True)
 class BoundaryConditions:
   """Boundary conditions for a PDE variable.
@@ -250,9 +247,20 @@ class BoundaryConditions:
     return GridArray(data, tuple(offset), u.grid)
 
 
+# Convenience utilities to ease updating of BoundaryConditions implementation
 def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
   """Returns periodic BCs for a variable with `ndim` spatial dimension."""
   return BoundaryConditions((PERIODIC,) * ndim)
+
+
+def dirichlet_boundary_conditions(ndim: int) -> BoundaryConditions:
+  """Returns Dirichelt BCs for a variable with `ndim` spatial dimension."""
+  return BoundaryConditions((DIRICHLET,) * ndim)
+
+
+def periodic_and_dirichlet_boundary_conditions() -> BoundaryConditions:
+  """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1."""
+  return BoundaryConditions((PERIODIC, DIRICHLET))
 
 
 @register_pytree_node_class
@@ -290,6 +298,7 @@ class GridVariable:
           'Incompatible dimension between grid and bc, grid dimension = '
           f'{self.grid.ndim}, bc dimension = {len(self.bc.boundaries)}')
 
+  # TODO(pnorgaard): Remove this initialization.
   @classmethod
   def create(
       cls,
@@ -473,15 +482,15 @@ def consistent_grid(*arrays: Union[GridArray, GridVariable]) -> Grid:
   return grid
 
 
-class InconsistentBoundaryConditionError(Exception):
+class InconsistentBoundaryConditionsError(Exception):
   """Raised for cases of inconsistent bc between GridVariables."""
 
 
 def consistent_boundary_conditions(*arrays: GridVariable) -> BoundaryConditions:
-  """Returns the unique BCs, or raises InconsistentBoundaryConditionError."""
+  """Returns the unique BCs, or raises InconsistentBoundaryConditionsError."""
   bcs = {array.bc for array in arrays}
   if len(bcs) != 1:
-    raise InconsistentBoundaryConditionError(
+    raise InconsistentBoundaryConditionsError(
         f'arrays do not have a unique bc: {bcs}')
   bc, = bcs
   return bc

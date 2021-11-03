@@ -261,8 +261,8 @@ def advect_van_leer(
     )
     # for negative velocity we simply need to shift the correction along v axis.
     # Cast to GridVariable so that we can apply a shift() operation.
-    forward_correction_array = grids.GridVariable.create(
-        forward_correction, u.offset, u.grid, u.bc.boundaries)
+    forward_correction_array = grids.GridVariable(
+        grids.GridArray(forward_correction, u.offset, u.grid), u.bc)
     backward_correction_array = forward_correction_array.shift(+1, axis)
     backward_correction = backward_correction_array.data
     abs_velocity = abs(u.array)
@@ -310,7 +310,7 @@ def advect_step_semilagrangian(
   coords = [x - dt * interpolation.linear(u, c.offset).data
             for x, u in zip(grid.mesh(c.offset), v)]
   indices = [x / s - o for s, o, x in zip(grid.step, c.offset, coords)]
-  if set(c.bc.boundaries) != {grids.PERIODIC}:
+  if not grids.has_periodic_boundary_conditions(c):
     raise NotImplementedError('non-periodic BCs not yet supported')
   c_advected = grids.applied(jax.scipy.ndimage.map_coordinates)(
       c.array, indices, order=1, mode='wrap')

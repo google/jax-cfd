@@ -32,7 +32,9 @@ class DiffusionTest(test_util.TestCase):
     step = (1., 1., 1.)
     grid = grids.Grid(shape, step)
 
-    c = grids.GridVariable.create(jnp.ones(shape), offset, grid, 'periodic')
+    c = grids.GridVariable(
+        array=grids.GridArray(jnp.ones(shape), offset, grid),
+        bc=grids.periodic_boundary_conditions(grid.ndim))
     diffused = diffusion.diffuse(c, nu)
     expected = grids.GridArray(jnp.zeros_like(diffused.data), offset, grid)
     self.assertAllClose(expected, diffused)
@@ -46,8 +48,13 @@ class DiffusionTest(test_util.TestCase):
     dt = 0.1
     shape = (100, 100)
     grid = grids.Grid(shape, step=1)
-    v = (grids.GridVariable.create(jnp.ones(shape), (1, 0.5), grid, 'periodic'),
-         grids.GridVariable.create(jnp.ones(shape), (0.5, 1), grid, 'periodic'))
+    periodic_bc = grids.periodic_boundary_conditions(grid.ndim)
+    v = (
+        grids.GridVariable(
+            grids.GridArray(jnp.ones(shape), (1, 0.5), grid), periodic_bc),
+        grids.GridVariable(
+            grids.GridArray(jnp.ones(shape), (0.5, 1), grid), periodic_bc),
+    )
     actual = solve(v, nu, dt)
     expected = v
     self.assertAllClose(expected[0], actual[0], atol=atol)

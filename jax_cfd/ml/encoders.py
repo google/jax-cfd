@@ -35,8 +35,9 @@ def aligned_array_encoder(
 
   # TODO(pnorgaard) Make the encoder/decoder/network configurable for BC
   def encode_fn(inputs):
+    bc = grids.periodic_boundary_conditions(grid.ndim)
     return tuple(
-        grids.GridVariable.create(slice_last_fn(x), offset, grid, 'periodic')
+        grids.GridVariable(grids.GridArray(slice_last_fn(x), offset, grid), bc)
         for x, offset in zip(inputs, data_offsets))
 
   return encode_fn

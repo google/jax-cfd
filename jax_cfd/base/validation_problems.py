@@ -87,18 +87,20 @@ class TaylorGreen(Problem):
     scale = jnp.exp(-2 * self.viscosity * t)
 
     ux, uy = self.grid.mesh(offsets[0])
-    u = grids.GridVariable.create(
-        data=scale * jnp.cos(self._kx * ux) * jnp.sin(self._ky * uy),
-        offset=offsets[0],
-        grid=self.grid,
-        boundaries='periodic')
+    u = grids.GridVariable(
+        array=grids.GridArray(
+            data=scale * jnp.cos(self._kx * ux) * jnp.sin(self._ky * uy),
+            offset=offsets[0],
+            grid=self.grid),
+        bc=grids.periodic_boundary_conditions(self.grid.ndim))
 
     vx, vy = self.grid.mesh(offsets[1])
-    v = grids.GridVariable.create(
-        data=-scale * jnp.sin(self._kx * vx) * jnp.cos(self._ky * vy),
-        offset=offsets[1],
-        grid=self.grid,
-        boundaries='periodic')
+    v = grids.GridVariable(
+        array=grids.GridArray(
+            data=-scale * jnp.sin(self._kx * vx) * jnp.cos(self._ky * vy),
+            offset=offsets[1],
+            grid=self.grid),
+        bc=grids.periodic_boundary_conditions(self.grid.ndim))
 
     return (u, v)
 

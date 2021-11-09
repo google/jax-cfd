@@ -55,6 +55,11 @@ def aligned_field_from_split_divergence(
       for o in grid.cell_faces
   )
 
+  def _to_grid_variables(grid_arrays):
+    # TODO(dkochkov) make boundary conditions configurable.
+    bc = grids.periodic_boundary_conditions(grid.ndim)
+    return tuple(grids.GridVariable(array, bc) for array in grid_arrays)
+
   def process(inputs):
     split_inputs = array_utils.split_axis(inputs, -1)
     split_inputs = tuple(grids.GridArray(x, o, grid)
@@ -66,8 +71,12 @@ def aligned_field_from_split_divergence(
     # tuple(zip(*([iter(a)] * 2))) >>> ((1, 2), (3, 4))
     split_inputs = tuple(zip(*[iter(split_inputs)] * grid.ndim))
     tensor_inputs = grids.GridArrayTensor(split_inputs)
-    return tuple(-finite_differences.divergence(tensor_inputs[i, :])
-                 for i in range(grid.ndim))
+    # to compute divergence we need to convert fluxes to GridVariable class.
+    grid_array_field = tuple(
+        -finite_differences.divergence(_to_grid_variables(tensor_inputs[i, :]))
+        for i in range(grid.ndim))
+    # since divergence removes the boundary conditions, we add them back.
+    return _to_grid_variables(grid_array_field)
 
   return hk.to_module(process)()
 

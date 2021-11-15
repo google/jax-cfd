@@ -258,6 +258,11 @@ def dirichlet_boundary_conditions(ndim: int) -> BoundaryConditions:
   return BoundaryConditions((DIRICHLET,) * ndim)
 
 
+def neumann_boundary_conditions(ndim: int) -> BoundaryConditions:
+  """Returns Neumann BCs for a variable with `ndim` spatial dimension."""
+  return BoundaryConditions((NEUMANN,) * ndim)
+
+
 def periodic_and_dirichlet_boundary_conditions() -> BoundaryConditions:
   """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1."""
   return BoundaryConditions((PERIODIC, DIRICHLET))

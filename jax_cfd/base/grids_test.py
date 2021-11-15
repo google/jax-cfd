@@ -177,6 +177,10 @@ class BoundaryConditionsTest(test_util.TestCase):
       bc = grids.dirichlet_boundary_conditions(ndim=3)
       self.assertEqual(bc.boundaries, ('dirichlet', 'dirichlet', 'dirichlet'))
 
+    with self.subTest('neumann bc utility'):
+      bc = grids.neumann_boundary_conditions(ndim=3)
+      self.assertEqual(bc.boundaries, ('neumann', 'neumann', 'neumann'))
+
     with self.subTest('periodic and dirichlet bc utility'):
       bc = grids.periodic_and_dirichlet_boundary_conditions()
       self.assertEqual(bc.boundaries, ('periodic', 'dirichlet'))

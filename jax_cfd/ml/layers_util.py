@@ -304,12 +304,15 @@ _DIMENSION_NUMBERS = {
     3: ('NHWDC', 'HWDIO', 'NHWDC'),
 }
 
+PrecisionLike = Optional[Union[lax.Precision, Tuple[lax.Precision,
+                                                    lax.Precision]]]
+
 
 def periodic_convolution(
     x: Array,
     kernel: Array,
     tile_layout: Optional[Tuple[int, ...]] = None,
-    precision: lax.Precision = lax.Precision.HIGHEST,
+    precision: PrecisionLike = lax.Precision.HIGHEST,
 ) -> Array:
   """Applies a periodic convolution."""
   num_spatial_dims = kernel.ndim - 2

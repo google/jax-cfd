@@ -20,6 +20,7 @@ from typing import Optional
 import jax.scipy.sparse.linalg
 
 from jax_cfd.base import array_utils
+from jax_cfd.base import boundaries
 from jax_cfd.base import fast_diagonalization
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
@@ -63,7 +64,7 @@ def solve_cg(v: GridVariableVector,
              atol: float = 1e-6,
              maxiter: Optional[int] = None) -> GridVariableVector:
   """Conjugate gradient solve for diffusion."""
-  if not grids.has_periodic_boundary_conditions(*v):
+  if not boundaries.has_all_periodic_boundary_conditions(*v):
     raise ValueError('solve_cg() expects periodic BC')
 
   def solve_component(u: GridVariable) -> GridArray:
@@ -93,7 +94,7 @@ def solve_fast_diag(v: GridVariableVector,
   # We reuse eigenvectors from the Laplacian and transform the eigenvalues
   # because this is better conditioned than directly diagonalizing 1 - ν Δt ∇²
   # when ν Δt is small.
-  if not grids.has_periodic_boundary_conditions(*v):
+  if not boundaries.has_all_periodic_boundary_conditions(*v):
     raise ValueError('solve_fast_diag() expects periodic BC')
   grid = grids.consistent_grid(*v)
   laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))

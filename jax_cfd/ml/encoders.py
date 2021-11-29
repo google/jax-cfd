@@ -11,6 +11,7 @@ import gin
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import array_utils
+from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 from jax_cfd.ml import physics_specifications
 from jax_cfd.ml import towers
@@ -35,7 +36,7 @@ def aligned_array_encoder(
 
   # TODO(pnorgaard) Make the encoder/decoder/network configurable for BC
   def encode_fn(inputs):
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     return tuple(
         grids.GridVariable(grids.GridArray(slice_last_fn(x), offset, grid), bc)
         for x, offset in zip(inputs, data_offsets))

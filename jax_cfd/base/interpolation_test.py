@@ -19,6 +19,7 @@ from absl.testing import parameterized
 
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 from jax_cfd.base import interpolation
 from jax_cfd.base import test_util
@@ -29,7 +30,7 @@ import scipy.interpolate as spi
 def periodic_grid_variable(data, offset, grid):
   return grids.GridVariable(
       array=grids.GridArray(data, offset, grid),
-      bc=grids.periodic_boundary_conditions(grid.ndim))
+      bc=boundaries.periodic_boundary_conditions(grid.ndim))
 
 
 class LinearInterpolationTest(test_util.TestCase):

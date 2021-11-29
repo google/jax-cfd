@@ -20,7 +20,6 @@ import operator
 from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import jax
-from jax import lax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 import numpy as np
@@ -138,37 +137,15 @@ jax.tree_util.register_pytree_node(
 )
 
 
-PERIODIC = 'periodic'
-DIRICHLET = 'dirichlet'
-NEUMANN = 'neumann'
-VALID_BOUNDARIES = (PERIODIC, DIRICHLET, NEUMANN)
-
-
 @dataclasses.dataclass(init=False, frozen=True)
 class BoundaryConditions:
-  """Boundary conditions for a PDE variable.
-
-  Example usage:
-    grid = Grid((10, 10))
-    array = GridArray(np.zeros((10, 10)), offset=(0.5, 0.5), grid)
-    bc = BoundaryConditions((PERIODIC, PERIODIC))
-    u = GridVariable(array, bc)
-
+  """Base class for boundary conditions on a PDE variable.
 
   Attributes:
-    boundaries: `boundaries[i]` gives the boundary conditions in each direction.
+    types: `types[i]` is a tuple specifying the lower and upper BC types for
+      dimension `i`.
   """
-  boundaries: Tuple[str, ...]
-
-  def __init__(self, boundaries: Union[str, Sequence[str]] = 'periodic'):
-    if isinstance(boundaries, str):
-      boundaries = (boundaries,)
-    else:
-      boundaries = tuple(boundaries)
-    invalid_boundaries = [b for b in boundaries if b not in VALID_BOUNDARIES]
-    if invalid_boundaries:
-      raise ValueError(f'Invalid boundary condition: {invalid_boundaries}')
-    object.__setattr__(self, 'boundaries', boundaries)
+  types: Tuple[Tuple[str, str], ...]
 
   def shift(
       self,
@@ -187,85 +164,8 @@ class BoundaryConditions:
       A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
       `u.offset + offset`.
     """
-    padding = (-offset, 0) if offset < 0 else (0, offset)
-    padded = self.pad(u, padding, axis)
-    trimmed = self.trim(padded, padding[::-1], axis)
-    return trimmed
-
-  def pad(
-      self,
-      u: GridArray,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Pad an GridArray by `padding`.
-
-    Args:
-      u: an `GridArray` object.
-      padding: left and right padding along this axis.
-      axis: axis to pad along.
-
-    Returns:
-      Padded array, elongated along the indicated axis.
-    """
-    if self.boundaries[axis] == PERIODIC:
-      pad_kwargs = dict(mode='wrap')
-    elif self.boundaries[axis] == DIRICHLET:
-      pad_kwargs = dict(mode='constant')
-    elif self.boundaries[axis] == NEUMANN:
-      pad_kwargs = dict(mode='edge')
-    else:
-      raise ValueError('invalid boundary type')
-
-    offset = list(u.offset)
-    offset[axis] -= padding[0]
-    full_padding = [(0, 0)] * u.data.ndim
-    full_padding[axis] = padding
-    data = jnp.pad(u.data, full_padding, **pad_kwargs)
-    return GridArray(data, tuple(offset), u.grid)
-
-  def trim(
-      self,
-      u: GridArray,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Trim padding from an GridArray.
-
-    Args:
-      u: an `GridArray` object.
-      padding: left and right padding along this axis.
-      axis: axis to trim along.
-
-    Returns:
-      Trimmed array, shrunk along the indicated axis.
-    """
-    limit_index = u.data.shape[axis] - padding[1]
-    data = lax.slice_in_dim(u.data, padding[0], limit_index, axis=axis)
-    offset = list(u.offset)
-    offset[axis] += padding[0]
-    return GridArray(data, tuple(offset), u.grid)
-
-
-# Convenience utilities to ease updating of BoundaryConditions implementation
-def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
-  """Returns periodic BCs for a variable with `ndim` spatial dimension."""
-  return BoundaryConditions((PERIODIC,) * ndim)
-
-
-def dirichlet_boundary_conditions(ndim: int) -> BoundaryConditions:
-  """Returns Dirichelt BCs for a variable with `ndim` spatial dimension."""
-  return BoundaryConditions((DIRICHLET,) * ndim)
-
-
-def neumann_boundary_conditions(ndim: int) -> BoundaryConditions:
-  """Returns Neumann BCs for a variable with `ndim` spatial dimension."""
-  return BoundaryConditions((NEUMANN,) * ndim)
-
-
-def periodic_and_dirichlet_boundary_conditions() -> BoundaryConditions:
-  """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1."""
-  return BoundaryConditions((PERIODIC, DIRICHLET))
+    raise NotImplementedError(
+        'shift() not implemented in BoundaryConditions base class.')
 
 
 @register_pytree_node_class
@@ -298,10 +198,10 @@ class GridVariable:
     if not isinstance(self.array, GridArray):  # frequently missed by pytype
       raise ValueError(
           f'Expected array type to be GridArray, got {type(self.array)}')
-    if len(self.bc.boundaries) != self.grid.ndim:
+    if len(self.bc.types) != self.grid.ndim:
       raise ValueError(
           'Incompatible dimension between grid and bc, grid dimension = '
-          f'{self.grid.ndim}, bc dimension = {len(self.bc.boundaries)}')
+          f'{self.grid.ndim}, bc dimension = {len(self.bc.types)}')
 
   def tree_flatten(self):
     """Returns flattening recipe for GridVariable JAX pytree."""
@@ -350,38 +250,6 @@ class GridVariable:
       GridArray has offset `u.offset + offset`.
     """
     return self.bc.shift(self.array, offset, axis)
-
-  def pad(
-      self,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Pad this GridVariable by `padding`.
-
-    Args:
-      padding: left and right padding along this axis.
-      axis: axis to pad along.
-
-    Returns:
-      A copy of the encapsulated GridArray, padded along the indicated axis.
-    """
-    return self.bc.pad(self.array, padding, axis)
-
-  def trim(
-      self,
-      padding: Tuple[int, int],
-      axis: int,
-  ) -> GridArray:
-    """Trim padding from this GridVariable.
-
-    Args:
-      padding: left and right padding along this axis.
-      axis: axis to trim along.
-
-    Returns:
-      A copy of the encapsulated GridArray, trimmed along the indicated axis.
-    """
-    return self.bc.trim(self.array, padding, axis)
 
 
 GridVariableVector = Tuple[GridVariable, ...]
@@ -483,14 +351,6 @@ def consistent_boundary_conditions(*arrays: GridVariable) -> BoundaryConditions:
         f'arrays do not have a unique bc: {bcs}')
   bc, = bcs
   return bc
-
-
-def has_periodic_boundary_conditions(*arrays: GridVariable) -> bool:
-  """Returns True if arrays have periodic BC in every dimension, else False."""
-  for array in arrays:
-    if any(b != PERIODIC for b in array.bc.boundaries):
-      return False
-  return True
 
 
 @dataclasses.dataclass(init=False, frozen=True)

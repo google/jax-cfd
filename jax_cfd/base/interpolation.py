@@ -18,6 +18,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 import numpy as np
 
@@ -151,7 +152,7 @@ def upwind(
   grid = grids.consistent_grid(c, u)
   return grids.GridVariable(
       array=grids.GridArray(array.data, offset, grid),
-      bc=grids.periodic_boundary_conditions(grid.ndim))
+      bc=boundaries.periodic_boundary_conditions(grid.ndim))
 
 
 def lax_wendroff(
@@ -217,7 +218,7 @@ def lax_wendroff(
   grid = grids.consistent_grid(c, u)
   return grids.GridVariable(
       array=grids.GridArray(array.data, offset, grid),
-      bc=grids.periodic_boundary_conditions(grid.ndim))
+      bc=boundaries.periodic_boundary_conditions(grid.ndim))
 
 
 def safe_div(x, y, default_numerator=1):

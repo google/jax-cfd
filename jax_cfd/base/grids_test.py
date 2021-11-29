@@ -19,6 +19,7 @@ from absl.testing import parameterized
 
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
 import numpy as np
@@ -158,187 +159,6 @@ class GridArrayTest(test_util.TestCase):
     self.assertAllClose(expected, actual)
 
 
-class BoundaryConditionsTest(test_util.TestCase):
-
-  def test_typical_usage(self):
-    with self.subTest('string'):
-      bc = grids.BoundaryConditions('periodic')
-      self.assertEqual(bc.boundaries, ('periodic',))
-
-    with self.subTest('sequence'):
-      bc = grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET))
-      self.assertEqual(bc.boundaries, ('periodic', 'dirichlet'))
-
-    with self.subTest('periodic bc utility'):
-      bc = grids.periodic_boundary_conditions(ndim=3)
-      self.assertEqual(bc.boundaries, ('periodic', 'periodic', 'periodic'))
-
-    with self.subTest('dirichlet bc utility'):
-      bc = grids.dirichlet_boundary_conditions(ndim=3)
-      self.assertEqual(bc.boundaries, ('dirichlet', 'dirichlet', 'dirichlet'))
-
-    with self.subTest('neumann bc utility'):
-      bc = grids.neumann_boundary_conditions(ndim=3)
-      self.assertEqual(bc.boundaries, ('neumann', 'neumann', 'neumann'))
-
-    with self.subTest('periodic and dirichlet bc utility'):
-      bc = grids.periodic_and_dirichlet_boundary_conditions()
-      self.assertEqual(bc.boundaries, ('periodic', 'dirichlet'))
-
-  def test_raises(self):
-    with self.assertRaisesRegex(ValueError, 'Invalid boundary condition'):
-      grids.BoundaryConditions(('not_a_valid_bc',))
-
-  @parameterized.parameters(
-      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(0,)),
-      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(1,)),
-      dict(
-          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(-1,)),
-      dict(backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(5,)),
-      dict(
-          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(13,)),
-      dict(
-          backend=np, shape=(11,), initial_offset=(0.0,), step=1, offset=(31,)),
-      dict(
-          backend=np,
-          shape=(11, 12, 17),
-          initial_offset=(-0.5, -1.0, 1.0),
-          step=0.1,
-          offset=(-236, 10001, 3)),
-      dict(
-          backend=np,
-          shape=(121,),
-          initial_offset=(-0.5,),
-          step=1,
-          offset=(31,)),
-      dict(
-          backend=np,
-          shape=(11, 12, 17),
-          initial_offset=(0.5, 0.0, 1.0),
-          step=0.1,
-          offset=(-236, 10001, 3)),
-  )
-  def test_shift(self, backend, shape, initial_offset, step, offset):
-    """Test that `shift` returns the expected values."""
-    grid = grids.Grid(shape, step)
-    data = backend.arange(np.prod(shape)).reshape(shape)
-    array = grids.GridArray(data, initial_offset, grid)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
-
-    shifted_array = array
-    for axis, o in enumerate(offset):
-      shifted_array = bc.shift(shifted_array, o, axis)
-
-    shifted_indices = [(jnp.arange(s) + o) % s for s, o in zip(shape, offset)]
-    shifted_mesh = jnp.meshgrid(*shifted_indices, indexing='ij')
-    expected_offset = tuple(i + o for i, o in zip(initial_offset, offset))
-    expected = grids.GridArray(data[tuple(shifted_mesh)], expected_offset, grid)
-
-    self.assertArrayEqual(shifted_array, expected)
-
-  @parameterized.parameters(
-      dict(
-          grid=grids.Grid((3,)),
-          bc=grids.periodic_boundary_conditions(1),
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 0),
-          expected_array=np.array([1, 2, 3]),
-          expected_offset=(0,),
-      ),
-      dict(
-          grid=grids.Grid((3,)),
-          bc=grids.periodic_boundary_conditions(1),
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 1),
-          expected_array=np.array([1, 2, 3, 1]),
-          expected_offset=(0,),
-      ),
-      dict(
-          grid=grids.Grid((3,)),
-          bc=grids.periodic_boundary_conditions(1),
-          inputs=np.array([1, 2, 3]),
-          padding=(1, 1),
-          expected_array=np.array([3, 1, 2, 3, 1]),
-          expected_offset=(-1,),
-      ),
-      dict(
-          grid=grids.Grid((3,)),
-          bc=grids.dirichlet_boundary_conditions(1),
-          inputs=np.array([1, 2, 3]),
-          padding=(1, 1),
-          expected_array=np.array([0, 1, 2, 3, 0]),
-          expected_offset=(-1,),
-      ),
-  )
-  def test_pad(self, grid, bc, inputs, padding, expected_array,
-               expected_offset):
-    array = grids.GridArray(inputs, (0,), grid)
-    actual = bc.pad(array, padding, axis=0)
-    expected = grids.GridArray(expected_array, expected_offset, grid)
-    self.assertArrayEqual(actual, expected)
-
-  @parameterized.parameters(
-      dict(
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 0),
-          expected_array=np.array([1, 2, 3]),
-          expected_offset=(0,),
-      ),
-      dict(
-          inputs=np.array([1, 2, 3, 4]),
-          padding=(1, 1),
-          expected_array=np.array([2, 3]),
-          expected_offset=(1,),
-      ),
-      dict(
-          inputs=np.arange(10),
-          padding=(2, 3),
-          expected_array=np.arange(2, 7),
-          expected_offset=(2,),
-      ),
-  )
-  def test_trim(self, inputs, padding, expected_array, expected_offset):
-    grid = grids.Grid(inputs.data.shape)
-    array = grids.GridArray(inputs, (0,), grid)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
-    actual = bc.trim(array, padding, axis=0)
-    expected = grids.GridArray(expected_array, expected_offset, grid)
-    self.assertArrayEqual(actual, expected)
-
-  def test_has_periodic_boundary_conditions(self):
-    grid = grids.Grid((10, 10))
-    array = grids.GridArray(np.zeros((10, 10)), (0.5, 0.5), grid)
-    periodic_bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))
-    nonperiodic_bc = grids.BoundaryConditions((grids.PERIODIC, grids.DIRICHLET))
-
-    with self.subTest('returns True'):
-      c = grids.GridVariable(array, periodic_bc)
-      v = (grids.GridVariable(array, periodic_bc),
-           grids.GridVariable(array, periodic_bc))
-      self.assertTrue(grids.has_periodic_boundary_conditions(c, *v))
-
-    with self.subTest('returns False'):
-      c = grids.GridVariable(array, periodic_bc)
-      v = (grids.GridVariable(array, periodic_bc),
-           grids.GridVariable(array, nonperiodic_bc))
-      self.assertFalse(grids.has_periodic_boundary_conditions(c, *v))
-
-  def test_consistent_boundary_conditions(self):
-    grid = grids.Grid((5,))
-    array = grids.GridArray(np.arange(5), offset=(0.5,), grid=grid)
-    bc1 = grids.periodic_boundary_conditions(grid.ndim)
-    bc2 = grids.dirichlet_boundary_conditions(grid.ndim)
-    x_bc1 = grids.GridVariable(array, bc1)
-    y_bc1 = grids.GridVariable(array, bc1)
-    z_bc2 = grids.GridVariable(array, bc2)
-
-    bc = grids.consistent_boundary_conditions(x_bc1, y_bc1)
-    self.assertEqual(bc, bc1)
-
-    with self.assertRaises(grids.InconsistentBoundaryConditionsError):
-      grids.consistent_boundary_conditions(x_bc1, y_bc1, z_bc2)
-
-
 class GridVariableTest(test_util.TestCase):
 
   def test_constructor_and_attributes(self):
@@ -346,7 +166,7 @@ class GridVariableTest(test_util.TestCase):
       grid = grids.Grid((10,))
       data = np.zeros((10,), dtype=np.float32)
       array = grids.GridArray(data, offset=(0.5,), grid=grid)
-      bc = grids.BoundaryConditions((grids.PERIODIC,))
+      bc = boundaries.periodic_boundary_conditions(grid.ndim)
       variable = grids.GridVariable(array, bc)
       self.assertEqual(variable.array, array)
       self.assertEqual(variable.bc, bc)
@@ -360,7 +180,7 @@ class GridVariableTest(test_util.TestCase):
       grid = grids.Grid((10, 10))
       data = np.zeros((10, 10), dtype=np.float32)
       array = grids.GridArray(data, offset=(0.5, 0.5), grid=grid)
-      bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))
+      bc = boundaries.periodic_boundary_conditions(grid.ndim)
       variable = grids.GridVariable(array, bc)
       self.assertEqual(variable.array, array)
       self.assertEqual(variable.bc, bc)
@@ -374,7 +194,7 @@ class GridVariableTest(test_util.TestCase):
       grid = grids.Grid((10, 10))
       data = np.zeros((5, 10, 10), dtype=np.float32)
       array = grids.GridArray(data, offset=(0.5, 0.5), grid=grid)
-      bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))
+      bc = boundaries.periodic_boundary_conditions(grid.ndim)
       variable = grids.GridVariable(array, bc)
       self.assertEqual(variable.array, array)
       self.assertEqual(variable.bc, bc)
@@ -390,47 +210,38 @@ class GridVariableTest(test_util.TestCase):
         grid = grids.Grid((10,))
         data = np.zeros((10,))
         array = grids.GridArray(data, offset=(0.5,), grid=grid)  # 1D
-        bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))  # 2D
+        bc = boundaries.periodic_boundary_conditions(ndim=2)  # 2D
         grids.GridVariable(array, bc)
 
   @parameterized.parameters(
       dict(
           shape=(10,),
-          boundaries=(grids.PERIODIC,),
+          bc=boundaries.periodic_boundary_conditions(ndim=1),
           padding=(1, 1),
           axis=0,
       ),
       dict(
           shape=(10, 10),
-          boundaries=(grids.PERIODIC, grids.PERIODIC),
+          bc=boundaries.dirichlet_boundary_conditions(ndim=2),
           padding=(2, 1),
           axis=1,
       ),
       dict(
           shape=(10, 10, 10),
-          boundaries=(grids.DIRICHLET, grids.DIRICHLET, grids.DIRICHLET),
+          bc=boundaries.neumann_boundary_conditions(ndim=3),
           padding=(0, 2),
           axis=2,
       ),
   )
-  def test_shift_pad_trim(self, shape, boundaries, padding, axis):
+  def test_shift_pad_trim(self, shape, bc, padding, axis):
     grid = grids.Grid(shape)
     data = np.random.randint(0, 10, shape)
     array = grids.GridArray(data, offset=(0.5,) * len(shape), grid=grid)
-    bc = grids.BoundaryConditions(boundaries)
     u = grids.GridVariable(array, bc)
 
     with self.subTest('shift'):
       self.assertArrayEqual(
           u.shift(offset=1, axis=axis), bc.shift(array, 1, axis))
-
-    with self.subTest('pad'):
-      self.assertArrayEqual(
-          u.pad(padding, axis), bc.pad(array, padding, axis))
-
-    with self.subTest('trim'):
-      self.assertArrayEqual(
-          u.trim(padding, axis), bc.trim(array, padding, axis))
 
     with self.subTest('raises exception'):
       with self.assertRaisesRegex(
@@ -438,8 +249,23 @@ class GridVariableTest(test_util.TestCase):
         grid = grids.Grid((10,))
         data = np.zeros((10,))
         array = grids.GridArray(data, offset=(0.5,), grid=grid)  # 1D
-        bc = grids.BoundaryConditions((grids.PERIODIC, grids.PERIODIC))  # 2D
+        bc = boundaries.periodic_boundary_conditions(ndim=2)  # 2D
         grids.GridVariable(array, bc)
+
+  def test_consistent_boundary_conditions(self):
+    grid = grids.Grid((5,))
+    array = grids.GridArray(np.arange(5), offset=(0.5,), grid=grid)
+    bc1 = boundaries.periodic_boundary_conditions(grid.ndim)
+    bc2 = boundaries.dirichlet_boundary_conditions(grid.ndim)
+    x_bc1 = grids.GridVariable(array, bc1)
+    y_bc1 = grids.GridVariable(array, bc1)
+    z_bc2 = grids.GridVariable(array, bc2)
+
+    bc = grids.consistent_boundary_conditions(x_bc1, y_bc1)
+    self.assertEqual(bc, bc1)
+
+    with self.assertRaises(grids.InconsistentBoundaryConditionsError):
+      grids.consistent_boundary_conditions(x_bc1, y_bc1, z_bc2)
 
 
 class GridArrayTensorTest(test_util.TestCase):

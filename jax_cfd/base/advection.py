@@ -17,6 +17,7 @@
 from typing import Optional, Tuple
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 from jax_cfd.base import interpolation
@@ -310,7 +311,7 @@ def advect_step_semilagrangian(
   coords = [x - dt * interpolation.linear(u, c.offset).data
             for x, u in zip(grid.mesh(c.offset), v)]
   indices = [x / s - o for s, o, x in zip(grid.step, c.offset, coords)]
-  if not grids.has_periodic_boundary_conditions(c):
+  if not boundaries.has_all_periodic_boundary_conditions(c):
     raise NotImplementedError('non-periodic BCs not yet supported')
   c_advected = grids.applied(jax.scipy.ndimage.map_coordinates)(
       c.array, indices, order=1, mode='wrap')

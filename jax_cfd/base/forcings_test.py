@@ -19,6 +19,7 @@ import functools
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import forcings
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
@@ -28,7 +29,7 @@ import numpy as np
 def _make_zero_velocity_field(grid):
   ndim = grid.ndim
   offsets = (np.eye(ndim) + np.ones([ndim, ndim])) / 2.
-  bc = grids.periodic_boundary_conditions(grid.ndim)
+  bc = boundaries.periodic_boundary_conditions(grid.ndim)
   return tuple(
       grids.GridVariable(
           grids.GridArray(jnp.zeros(grid.shape), tuple(offset), grid), bc)
@@ -127,7 +128,7 @@ class ForcingsTest(test_util.TestCase):
                                    expected_force_function):
     grid = grids.Grid((grid_size,) * ndim,
                       domain=((0, 1),) * ndim)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     velocity = tuple(
         grids.GridVariable(grids.GridArray(u, offset, grid), bc)
         for u, offset in zip(velocity_function(*grid.mesh()), grid.cell_faces))

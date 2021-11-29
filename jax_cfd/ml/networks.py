@@ -6,6 +6,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import array_utils
+from jax_cfd.base import boundaries
 from jax_cfd.base import finite_differences
 from jax_cfd.base import grids
 from jax_cfd.ml import physics_specifications
@@ -31,7 +32,7 @@ def split_to_aligned_field(
   def process(inputs):
     split_inputs = array_utils.split_axis(inputs, -1)
     # TODO(pnorgaard) Make the encoder/decoder/network configurable for BC
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     return tuple(grids.GridVariable(grids.GridArray(x, offset, grid), bc)
                  for x, offset in zip(split_inputs, data_offsets))
 
@@ -57,7 +58,7 @@ def aligned_field_from_split_divergence(
 
   def _to_grid_variables(grid_arrays):
     # TODO(dkochkov) make boundary conditions configurable.
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     return tuple(grids.GridVariable(array, bc) for array in grid_arrays)
 
   def process(inputs):

@@ -19,6 +19,7 @@ from absl.testing import parameterized
 
 import jax.numpy as jnp
 from jax_cfd.base import advection
+from jax_cfd.base import boundaries
 from jax_cfd.base import diffusion
 from jax_cfd.base import equations
 from jax_cfd.base import finite_differences as fd
@@ -31,19 +32,21 @@ import numpy as np
 
 def zero_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:
   """Returns an all-zero periodic velocity fields."""
-  return tuple(grids.GridVariable(
-      grids.GridArray(jnp.zeros(grid.shape), o, grid),
-      grids.periodic_boundary_conditions(grid.ndim)) for o in grid.cell_faces)
+  return tuple(
+      grids.GridVariable(grids.GridArray(jnp.zeros(grid.shape), o, grid),
+                         boundaries.periodic_boundary_conditions(grid.ndim))
+      for o in grid.cell_faces)
 
 
 def sinusoidal_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:
   """Returns a divergence-free velocity flow on `grid`."""
   mesh_size = jnp.array(grid.shape) * jnp.array(grid.step)
-  vs = tuple(jnp.sin(2. * np.pi * g / s)
-             for g, s in zip(grid.mesh(), mesh_size))
-  return tuple(grids.GridVariable(grids.GridArray(v, o, grid),
-                                  grids.periodic_boundary_conditions(grid.ndim))
-               for v, o in zip(vs[1:] + vs[:1], grid.cell_faces))
+  vs = tuple(
+      jnp.sin(2. * np.pi * g / s) for g, s in zip(grid.mesh(), mesh_size))
+  return tuple(
+      grids.GridVariable(grids.GridArray(v, o, grid),
+                         boundaries.periodic_boundary_conditions(grid.ndim))
+      for v, o in zip(vs[1:] + vs[:1], grid.cell_faces))
 
 
 def gaussian_force_field(grid):

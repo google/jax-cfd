@@ -7,6 +7,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import array_utils
+from jax_cfd.base import boundaries
 from jax_cfd.base import equations
 from jax_cfd.base import grids
 
@@ -150,7 +151,7 @@ def time_derivative_network_model(
       v = array_utils.split_axis(x, axis=-1)  # Tuple[DeviceArray, ...]
       v = tuple(grids.GridArray(u, o, grid) for u, o in zip(v, grid.cell_faces))
       # TODO(pnorgaard) Explicitly specify boundary conditions for ML model
-      bc = grids.periodic_boundary_conditions(grid.ndim)
+      bc = boundaries.periodic_boundary_conditions(grid.ndim)
       v = tuple(grids.GridVariable(u, bc) for u in v)
       forcing_scalars = jnp.stack(
           [a.data for a in active_forcing_fn(v)], axis=-1)

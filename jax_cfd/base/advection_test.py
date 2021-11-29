@@ -21,6 +21,7 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import advection as adv
+from jax_cfd.base import boundaries
 from jax_cfd.base import funcutils
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
@@ -148,7 +149,7 @@ class AdvectionTest(test_util.TestCase):
     """Tests advection of a Gaussian concentration on a periodic grid."""
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid, v_sign))
     c = grids.GridVariable(_gaussian_concentration(grid), bc)
     dt = cfl_number * min(step)
@@ -223,7 +224,7 @@ class AdvectionTest(test_util.TestCase):
   ):
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid, v_sign))
     c = grids.GridVariable(_gaussian_concentration(grid), bc)
     dt = cfl_number * min(step)
@@ -252,7 +253,7 @@ class AdvectionTest(test_util.TestCase):
     """Exercises self-advection, check equality with advection on components."""
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     v = tuple(grids.GridVariable(u, bc) for u in _cos_velocity(grid))
     self_advected = convection_method(v)
     for u, du in zip(v, self_advected):
@@ -275,7 +276,7 @@ class AdvectionTest(test_util.TestCase):
     atol = 1e-6
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid))
     c = grids.GridVariable(_square_concentration(grid), bc)
     dt = min(step) / 100.
@@ -303,7 +304,7 @@ class AdvectionTest(test_util.TestCase):
   def test_van_leer_same_as_van_leer_using_limiters(self, shape, v_sign):
     step = tuple(1. / s for s in shape)
     grid = grids.Grid(shape, step)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid, v_sign))
     c = grids.GridVariable(_gaussian_concentration(grid), bc)
     dt = min(step) / 100.

@@ -7,6 +7,7 @@ import gin
 import haiku as hk
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 from jax_cfd.base import subgrid_models
 from jax_cfd.ml import interpolations
@@ -58,7 +59,7 @@ def learned_scalar_viscosity(
       dt: Optional[float] = None,
       ) -> grids.GridArray:
     """Interpolation method wrapped for GridArray using periodic BC."""
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
     c_bc = grids.GridVariable(c, bc)
     v_bc = tuple(grids.GridVariable(u, bc) for u in v)
     interp_var = interpolate_module(grid, dt, physics_specs)(

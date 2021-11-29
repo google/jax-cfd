@@ -19,6 +19,7 @@ from absl.testing import parameterized
 
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 from jax_cfd.base import initial_conditions as ic
@@ -67,10 +68,10 @@ class InitialConditionsTest(test_util.TestCase):
     expected_v0 = (
         grids.GridVariable(
             grids.GridArray(jnp.ones((10, 10)), (1, 0.5), grid),
-            grids.periodic_boundary_conditions(grid.ndim)),
+            boundaries.periodic_boundary_conditions(grid.ndim)),
         grids.GridVariable(
             grids.GridArray(jnp.zeros((10, 10)), (0.5, 1), grid),
-            grids.periodic_boundary_conditions(grid.ndim)),
+            boundaries.periodic_boundary_conditions(grid.ndim)),
         )
     for d in range(len(v0)):
       self.assertArrayEqual(expected_v0[d], v0[d])
@@ -84,13 +85,13 @@ class InitialConditionsTest(test_util.TestCase):
 
   @parameterized.parameters(
       dict(
-          velocity_bc=(grids.dirichlet_boundary_conditions(2),
-                       grids.dirichlet_boundary_conditions(2)),
+          velocity_bc=(boundaries.dirichlet_boundary_conditions(2),
+                       boundaries.dirichlet_boundary_conditions(2)),
           pressure_solve=pressure.solve_cg,
           ),
       dict(
-          velocity_bc=(grids.periodic_and_dirichlet_boundary_conditions(),
-                       grids.periodic_and_dirichlet_boundary_conditions()),
+          velocity_bc=(boundaries.periodic_and_dirichlet_boundary_conditions(),
+                       boundaries.periodic_and_dirichlet_boundary_conditions()),
           pressure_solve=pressure.solve_cg,
           ),
       dict(velocity_bc=None,  # default is all periodic BC.

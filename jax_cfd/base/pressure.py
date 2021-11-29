@@ -20,6 +20,7 @@ import jax.numpy as jnp
 import jax.scipy.sparse.linalg
 
 from jax_cfd.base import array_utils
+from jax_cfd.base import boundaries
 from jax_cfd.base import fast_diagonalization
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
@@ -84,7 +85,7 @@ def solve_fast_diag(v: GridVariableVector,
                     implementation: Optional[str] = None) -> GridArray:
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
-  if not grids.has_periodic_boundary_conditions(*v):
+  if not boundaries.has_all_periodic_boundary_conditions(*v):
     raise ValueError('solve_fast_diag() expects periodic velocity BC')
   grid = grids.consistent_grid(*v)
   rhs = fd.divergence(v)
@@ -101,14 +102,7 @@ def projection(
 ) -> GridVariableVector:
   """Apply pressure projection to make a velocity field divergence free."""
   grid = grids.consistent_grid(*v)
-
-  # Expect each component of v to have the same BC, either both PERIODIC or
-  # both DIRICHLET.
-  velocity_boundaries = grids.consistent_boundary_conditions(*v).boundaries
-  pressure_boundaries = tuple(
-      grids.NEUMANN if boundary == grids.DIRICHLET else grids.PERIODIC
-      for boundary in velocity_boundaries)
-  pressure_bc = grids.BoundaryConditions(pressure_boundaries)
+  pressure_bc = boundaries.get_pressure_bc_from_velocity(v)
 
   q0 = grids.GridArray(jnp.zeros(grid.shape), grid.cell_center, grid)
   q0 = grids.GridVariable(q0, pressure_bc)

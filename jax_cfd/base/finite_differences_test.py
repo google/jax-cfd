@@ -18,6 +18,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
@@ -35,7 +36,7 @@ def _trim_boundary(array):
 def periodic_grid_variable(data, offset, grid):
   return grids.GridVariable(
       array=grids.GridArray(data, offset, grid),
-      bc=grids.periodic_boundary_conditions(grid.ndim))
+      bc=boundaries.periodic_boundary_conditions(grid.ndim))
 
 
 class FiniteDifferenceTest(test_util.TestCase):

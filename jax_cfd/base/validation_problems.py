@@ -18,6 +18,7 @@ import abc
 from typing import Optional, Sequence, Tuple
 
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 import numpy as np
 
@@ -92,7 +93,7 @@ class TaylorGreen(Problem):
             data=scale * jnp.cos(self._kx * ux) * jnp.sin(self._ky * uy),
             offset=offsets[0],
             grid=self.grid),
-        bc=grids.periodic_boundary_conditions(self.grid.ndim))
+        bc=boundaries.periodic_boundary_conditions(self.grid.ndim))
 
     vx, vy = self.grid.mesh(offsets[1])
     v = grids.GridVariable(
@@ -100,7 +101,7 @@ class TaylorGreen(Problem):
             data=-scale * jnp.sin(self._kx * vx) * jnp.cos(self._ky * vy),
             offset=offsets[1],
             grid=self.grid),
-        bc=grids.periodic_boundary_conditions(self.grid.ndim))
+        bc=boundaries.periodic_boundary_conditions(self.grid.ndim))
 
     return (u, v)
 

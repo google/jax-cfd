@@ -17,6 +17,7 @@ import functools
 from typing import Any, Callable, Mapping, Optional
 
 import jax
+from jax_cfd.base import boundaries
 from jax_cfd.base import equations
 from jax_cfd.base import finite_differences
 from jax_cfd.base import forcings
@@ -72,7 +73,7 @@ def smagorinsky_viscosity(
   # velocity and then computing s_ij via finite differences, producing
   # a `GridVariableTensor`. Then no wrapper or GridArray/GridVariable
   # conversion hacks are needed.
-  if not grids.has_periodic_boundary_conditions(*v):
+  if not boundaries.has_all_periodic_boundary_conditions(*v):
     raise ValueError('smagorinsky_viscosity only valid for periodic BC.')
   bc = grids.consistent_boundary_conditions(*v)
 
@@ -80,7 +81,7 @@ def smagorinsky_viscosity(
     return interpolate_fn(grids.GridVariable(c, bc), offset, v, dt).array
 
   grid = grids.consistent_grid(*s_ij.ravel(), *v)
-  bc = grids.periodic_boundary_conditions(grid.ndim)
+  bc = boundaries.periodic_boundary_conditions(grid.ndim)
   s_ij_offsets = [array.offset for array in s_ij.ravel()]
   unique_offsets = list(set(s_ij_offsets))
   cell_center = grid.cell_center
@@ -116,10 +117,10 @@ def evm_model(
   Returns:
     acceleration of the velocity field `v`.
   """
-  if not grids.has_periodic_boundary_conditions(*v):
+  if not boundaries.has_all_periodic_boundary_conditions(*v):
     raise ValueError('evm_model only valid for periodic BC.')
   grid = grids.consistent_grid(*v)
-  bc = grids.periodic_boundary_conditions(grid.ndim)
+  bc = boundaries.periodic_boundary_conditions(grid.ndim)
   s_ij = grids.GridArrayTensor([
       [0.5 * (finite_differences.forward_difference(v[i], j) +  # pylint: disable=g-complex-comprehension
               finite_differences.forward_difference(v[j], i))
@@ -162,7 +163,7 @@ def implicit_evm_solve_with_diffusion(
   cg_kwargs.setdefault('tol', 1e-6)
   cg_kwargs.setdefault('atol', 1e-6)
 
-  if not grids.has_periodic_boundary_conditions(*v):
+  if not boundaries.has_all_periodic_boundary_conditions(*v):
     raise ValueError(
         'implicit_evm_solve_with_diffusion only valid for periodic BC.')
   bc = grids.consistent_boundary_conditions(*v)

@@ -20,6 +20,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 import jax
+from jax_cfd.base import boundaries
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 from jax_cfd.base import pressure
@@ -73,7 +74,7 @@ class PressureTest(test_util.TestCase):
       self, shape, solve, step, seed):
     """Returned velocity should be divergence free."""
     grid = grids.Grid(shape, step)
-    bc = grids.periodic_boundary_conditions(grid.ndim)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
 
     # The uncorrected velocity is a 1 + a small amount of noise in each
     # dimension.
@@ -111,7 +112,8 @@ class PressureTest(test_util.TestCase):
       self, shape, solve, step, seed):
     """Returned velocity should be divergence free."""
     grid = grids.Grid(shape, step)
-    velocity_bc = (grids.dirichlet_boundary_conditions(grid.ndim),) * grid.ndim
+    velocity_bc = (boundaries.dirichlet_boundary_conditions(
+        grid.ndim),) * grid.ndim
 
     # The uncorrected velocity is zero + a small amount of noise in each
     # dimension.
@@ -138,8 +140,8 @@ class PressureTest(test_util.TestCase):
   def test_pressure_correction_mixed_velocity_bc(self):
     """Returned velocity should be divergence free."""
     grid = grids.Grid((20, 20), step=0.1)
-    velocity_bc = (grids.periodic_and_dirichlet_boundary_conditions(),
-                   grids.periodic_and_dirichlet_boundary_conditions())
+    velocity_bc = (boundaries.periodic_and_dirichlet_boundary_conditions(),
+                   boundaries.periodic_and_dirichlet_boundary_conditions())
 
     def rand_array(shape, seed):
       key = jax.random.split(jax.random.PRNGKey(seed))

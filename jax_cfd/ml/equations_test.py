@@ -8,6 +8,7 @@ import gin
 import haiku as hk
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import funcutils
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
@@ -90,7 +91,7 @@ class NavierStokesModulesTest(test_util.TestCase):
       data = jax.random.uniform(rng_key, grid.shape, jnp.float32)
       variable = grids.GridVariable(
           array=grids.GridArray(data, offset, grid),
-          bc=grids.periodic_boundary_conditions(grid.ndim))
+          bc=boundaries.periodic_boundary_conditions(grid.ndim))
       inputs.append(variable)
     inputs = tuple(inputs)
     rng = jax.random.PRNGKey(42)

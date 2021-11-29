@@ -19,6 +19,7 @@ from typing import Callable, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
 from jax_cfd.base import filter_utils
 from jax_cfd.base import funcutils
 from jax_cfd.base import grids
@@ -94,7 +95,8 @@ def filtered_velocity_field(
     noise = jax.random.normal(k, grid.shape)
     velocity_components.append(
         filter_utils.filter(spectral_density, noise, grid))
-    boundary_conditions.append(grids.periodic_boundary_conditions(grid.ndim))
+    boundary_conditions.append(
+        boundaries.periodic_boundary_conditions(grid.ndim))
   velocity = wrap_velocities(velocity_components, grid, boundary_conditions)
 
   def project_and_normalize(v: GridVariableVector):
@@ -139,7 +141,7 @@ def initial_velocity_field(
   """
   if velocity_bc is None:
     velocity_bc = (
-        grids.periodic_boundary_conditions(grid.ndim),) * grid.ndim
+        boundaries.periodic_boundary_conditions(grid.ndim),) * grid.ndim
   v = tuple(
       grids.GridVariable(grid.eval_on_mesh(v_fn, offset), bc) for v_fn, offset,
       bc in zip(velocity_fns, grid.cell_faces, velocity_bc))

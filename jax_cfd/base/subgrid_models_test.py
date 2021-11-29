@@ -19,6 +19,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import jax.numpy as jnp
 from jax_cfd.base import advection
+from jax_cfd.base import boundaries
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import funcutils
 from jax_cfd.base import grids
@@ -31,7 +32,7 @@ import numpy as np
 def periodic_grid_variable(data, offset, grid):
   return grids.GridVariable(
       array=grids.GridArray(data, offset, grid),
-      bc=grids.periodic_boundary_conditions(grid.ndim))
+      bc=boundaries.periodic_boundary_conditions(grid.ndim))
 
 
 def zero_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:

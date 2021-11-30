@@ -69,64 +69,74 @@ class HomogeneousBoundaryConditions(BoundaryConditions):
       A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
       `u.offset + offset`.
     """
-    padding = (-offset, 0) if offset < 0 else (0, offset)
-    padded = self._pad(u, padding, axis)
-    trimmed = self._trim(padded, padding[::-1], axis)
+    padded = self._pad(u, offset, axis)
+    trimmed = self._trim(padded, -offset, axis)
     return trimmed
 
   def _pad(
       self,
       u: GridArray,
-      padding: Tuple[int, int],
+      width: int,
       axis: int,
   ) -> GridArray:
-    """Pad an GridArray by `padding`.
+    """Pad a GridArray by `padding`.
 
     Args:
-      u: an `GridArray` object.
-      padding: left and right padding along this axis.
+      u: a `GridArray` object.
+      width: number of elements to pad along axis. Use negative value for lower
+        boundary or positive value for upper boundary.
       axis: axis to pad along.
 
     Returns:
       Padded array, elongated along the indicated axis.
     """
-    type_lower, type_upper = self.types[axis]
-    # TODO(pnorgaard) Make this work for mixed lower/upper BC types
-    if type_lower != type_upper:
-      raise NotImplementedError('padding is not implemented for mixed BC types')
+    if width < 0:  # pad lower boundary
+      bc_type = self.types[axis][0]
+      padding = (-width, 0)
+    else:  # pad upper boundary
+      bc_type = self.types[axis][1]
+      padding = (0, width)
 
-    if type_lower == BCType.PERIODIC:
+    full_padding = [(0, 0)] * u.data.ndim
+    full_padding[axis] = padding
+
+    offset = list(u.offset)
+    offset[axis] -= padding[0]
+
+    if bc_type == BCType.PERIODIC:
       pad_kwargs = dict(mode='wrap')
-    elif type_lower == BCType.DIRICHLET:
+    elif bc_type == BCType.DIRICHLET:
       pad_kwargs = dict(mode='constant')
-    elif type_lower == BCType.NEUMANN:
+    elif bc_type == BCType.NEUMANN:
       pad_kwargs = dict(mode='edge')
     else:
       raise ValueError('invalid boundary type')
 
-    offset = list(u.offset)
-    offset[axis] -= padding[0]
-    full_padding = [(0, 0)] * u.data.ndim
-    full_padding[axis] = padding
     data = jnp.pad(u.data, full_padding, **pad_kwargs)
     return GridArray(data, tuple(offset), u.grid)
 
   def _trim(
       self,
       u: GridArray,
-      padding: Tuple[int, int],
+      width: int,
       axis: int,
   ) -> GridArray:
-    """Trim padding from an GridArray.
+    """Trim padding from a GridArray.
 
     Args:
-      u: an `GridArray` object.
-      padding: left and right padding along this axis.
+      u: a `GridArray` object.
+      width: number of elements to trim along axis. Use negative value for lower
+        boundary or positive value for upper boundary.
       axis: axis to trim along.
 
     Returns:
       Trimmed array, shrunk along the indicated axis.
     """
+    if width < 0:  # trim lower boundary
+      padding = (-width, 0)
+    else:  # trim upper boundary
+      padding = (0, width)
+
     limit_index = u.data.shape[axis] - padding[1]
     data = lax.slice_in_dim(u.data, padding[0], limit_index, axis=axis)
     offset = list(u.offset)

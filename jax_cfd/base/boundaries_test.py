@@ -27,7 +27,7 @@ BCType = boundaries.BCType
 
 class HomogeneousBoundaryConditionsTest(test_util.TestCase):
 
-  def test_typical_usage(self):
+  def test_init_usage(self):
 
     with self.subTest('init 1d'):
       bc = boundaries.HomogeneousBoundaryConditions(
@@ -157,72 +157,345 @@ class HomogeneousBoundaryConditionsTest(test_util.TestCase):
     self.assertArrayEqual(shifted_array, expected)
 
   @parameterized.parameters(
+      # Periodic BC
       dict(
-          grid=grids.Grid((3,)),
-          bc=boundaries.periodic_boundary_conditions(1),
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 0),
-          expected_array=np.array([1, 2, 3]),
-          expected_offset=(0,),
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=-2,
+          expected_data=np.array([13, 14, 11, 12]),
+          expected_offset=(-2,),
       ),
       dict(
-          grid=grids.Grid((3,)),
-          bc=boundaries.periodic_boundary_conditions(1),
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 1),
-          expected_array=np.array([1, 2, 3, 1]),
-          expected_offset=(0,),
-      ),
-      dict(
-          grid=grids.Grid((3,)),
-          bc=boundaries.periodic_boundary_conditions(1),
-          inputs=np.array([1, 2, 3]),
-          padding=(1, 1),
-          expected_array=np.array([3, 1, 2, 3, 1]),
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=-1,
+          expected_data=np.array([14, 11, 12, 13]),
           expected_offset=(-1,),
       ),
       dict(
-          grid=grids.Grid((3,)),
-          bc=boundaries.dirichlet_boundary_conditions(1),
-          inputs=np.array([1, 2, 3]),
-          padding=(1, 1),
-          expected_array=np.array([0, 1, 2, 3, 0]),
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=1,
+          expected_data=np.array([12, 13, 14, 11]),
+          expected_offset=(1,),
+      ),
+      dict(
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=2,
+          expected_data=np.array([13, 14, 11, 12]),
+          expected_offset=(2,),
+      ),
+      # Dirichlet BC
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=-2,
+          expected_data=np.array([0, 0, 11, 12]),
+          expected_offset=(-2,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=-1,
+          expected_data=np.array([0, 11, 12, 13]),
           expected_offset=(-1,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=1,
+          expected_data=np.array([12, 13, 14, 0]),
+          expected_offset=(1,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=2,
+          expected_data=np.array([13, 14, 0, 0]),
+          expected_offset=(2,),
+      ),
+      # Neumann BC
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=-2,
+          expected_data=np.array([11, 11, 11, 12]),
+          expected_offset=(-2,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=-1,
+          expected_data=np.array([11, 11, 12, 13]),
+          expected_offset=(-1,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=1,
+          expected_data=np.array([12, 13, 14, 14]),
+          expected_offset=(1,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=2,
+          expected_data=np.array([13, 14, 14, 14]),
+          expected_offset=(2,),
+      ),
+      # Dirichlet / Neumann BC
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=-1,
+          expected_data=np.array([0, 11, 12, 13]),
+          expected_offset=(-1,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          shift_offset=1,
+          expected_data=np.array([12, 13, 14, 14]),
+          expected_offset=(1,),
       ),
   )
-  def test_pad(self, grid, bc, inputs, padding, expected_array,
-               expected_offset):
-    array = grids.GridArray(inputs, (0,), grid)
-    actual = bc._pad(array, padding, axis=0)
-    expected = grids.GridArray(expected_array, expected_offset, grid)
+  def test_shift_1d(self, bc_types, input_data, input_offset, shift_offset,
+                    expected_data, expected_offset):
+    grid = grids.Grid(input_data.shape)
+    array = grids.GridArray(input_data, input_offset, grid)
+    bc = boundaries.HomogeneousBoundaryConditions(bc_types)
+    actual = bc.shift(array, shift_offset, axis=0)
+    expected = grids.GridArray(expected_data, expected_offset, grid)
+    self.assertArrayEqual(actual, expected)
+
+  @parameterized.parameters(
+      # Periodic BC
+      dict(
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=-2,
+          expected_data=np.array([13, 14, 11, 12, 13, 14]),
+          expected_offset=(-2,),
+      ),
+      dict(
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=-1,
+          expected_data=np.array([14, 11, 12, 13, 14]),
+          expected_offset=(-1,),
+      ),
+      dict(
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=1,
+          expected_data=np.array([11, 12, 13, 14, 11]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=2,
+          expected_data=np.array([11, 12, 13, 14, 11, 12]),
+          expected_offset=(0,),
+      ),
+      # Dirichlet BC
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=-2,
+          expected_data=np.array([0, 0, 11, 12, 13, 14]),
+          expected_offset=(-2,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=-1,
+          expected_data=np.array([0, 11, 12, 13, 14]),
+          expected_offset=(-1,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=1,
+          expected_data=np.array([11, 12, 13, 14, 0]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=2,
+          expected_data=np.array([11, 12, 13, 14, 0, 0]),
+          expected_offset=(0,),
+      ),
+      # Neumann BC
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=-2,
+          expected_data=np.array([11, 11, 11, 12, 13, 14]),
+          expected_offset=(-2,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=-1,
+          expected_data=np.array([11, 11, 12, 13, 14]),
+          expected_offset=(-1,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=1,
+          expected_data=np.array([11, 12, 13, 14, 14]),
+          expected_offset=(0,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=2,
+          expected_data=np.array([11, 12, 13, 14, 14, 14]),
+          expected_offset=(0,),
+      ),
+      # Dirichlet / Neumann BC
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=-1,
+          expected_data=np.array([0, 11, 12, 13, 14]),
+          expected_offset=(-1,),
+      ),
+      dict(
+          bc_types=((BCType.DIRICHLET, BCType.NEUMANN),),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=1,
+          expected_data=np.array([11, 12, 13, 14, 14]),
+          expected_offset=(0,),
+      ),
+  )
+  def test_pad_1d(self, bc_types, input_data, input_offset, width,
+                  expected_data, expected_offset):
+    grid = grids.Grid(input_data.shape)
+    array = grids.GridArray(input_data, input_offset, grid)
+    bc = boundaries.HomogeneousBoundaryConditions(bc_types)
+    actual = bc._pad(array, width, axis=0)
+    expected = grids.GridArray(expected_data, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 
   @parameterized.parameters(
       dict(
-          inputs=np.array([1, 2, 3]),
-          padding=(0, 0),
-          expected_array=np.array([1, 2, 3]),
-          expected_offset=(0,),
-      ),
-      dict(
-          inputs=np.array([1, 2, 3, 4]),
-          padding=(1, 1),
-          expected_array=np.array([2, 3]),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=-1,
+          expected_data=np.array([12, 13, 14]),
           expected_offset=(1,),
       ),
       dict(
-          inputs=np.arange(10),
-          padding=(2, 3),
-          expected_array=np.arange(2, 7),
-          expected_offset=(2,),
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(0,),
+      ),
+      dict(
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=1,
+          expected_data=np.array([11, 12, 13]),
+          expected_offset=(0,),
+      ),
+      dict(
+          input_data=np.array([11, 12, 13, 14]),
+          input_offset=(0,),
+          width=2,
+          expected_data=np.array([11, 12]),
+          expected_offset=(0,),
       ),
   )
-  def test_trim(self, inputs, padding, expected_array, expected_offset):
-    grid = grids.Grid(inputs.data.shape)
-    array = grids.GridArray(inputs, (0,), grid)
+  def test_trim_1d(self, input_data, input_offset, width, expected_data,
+                   expected_offset):
+    grid = grids.Grid(input_data.shape)
+    array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.periodic_boundary_conditions(grid.ndim)
-    actual = bc._trim(array, padding, axis=0)
-    expected = grids.GridArray(expected_array, expected_offset, grid)
+    # Note: trim behavior does not depend on bc type
+    actual = bc._trim(array, width, axis=0)
+    expected = grids.GridArray(expected_data, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 
   def test_has_all_periodic_boundary_conditions(self):

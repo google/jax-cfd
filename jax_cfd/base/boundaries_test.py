@@ -460,6 +460,66 @@ class HomogeneousBoundaryConditionsTest(test_util.TestCase):
 
   @parameterized.parameters(
       dict(
+          input_data=np.array([[11, 12, 13, 14],
+                               [21, 22, 23, 24],
+                               [31, 32, 33, 34]]),
+          input_offset=(0.5, 0.5),
+          width=-1,
+          axis=0,
+          expected_data=np.array([[-11, -12, -13, -14],
+                                  [11, 12, 13, 14],
+                                  [21, 22, 23, 24],
+                                  [31, 32, 33, 34]]),
+          expected_offset=(-0.5, 0.5),
+      ),
+      dict(
+          input_data=np.array([[11, 12, 13, 14],
+                               [21, 22, 23, 24],
+                               [31, 32, 33, 34]]),
+          input_offset=(0.5, 0.5),
+          width=1,
+          axis=1,
+          expected_data=np.array([[11, 12, 13, 14, -14],
+                                  [21, 22, 23, 24, -24],
+                                  [31, 32, 33, 34, -34]]),
+          expected_offset=(0.5, 0.5),
+      ),
+      dict(
+          input_data=np.array([[11, 12, 13, 14],
+                               [21, 22, 23, 24],
+                               [31, 32, 33, 34]]),
+          input_offset=(0.5, 0.5),
+          width=-2,
+          axis=1,
+          expected_data=np.array([[-12, -11, 11, 12, 13, 14],
+                                  [-22, -21, 21, 22, 23, 24],
+                                  [-32, -31, 31, 32, 33, 34]]),
+          expected_offset=(0.5, -1.5),
+      ),
+      dict(
+          input_data=np.array([[11, 12, 13, 14],
+                               [21, 22, 23, 24],
+                               [31, 32, 33, 34]]),
+          input_offset=(0.5, 1),  # edge aligned offset
+          width=-1,
+          axis=1,
+          expected_data=np.array([[0, 11, 12, 13, 14],
+                                  [0, 21, 22, 23, 24],
+                                  [0, 31, 32, 33, 34]]),
+          expected_offset=(0.5, 0),
+      ),
+  )
+  def test_pad_dirichlet_cell_center(self, input_data, input_offset, width,
+                                     axis, expected_data, expected_offset):
+    grid = grids.Grid(input_data.shape)
+    array = grids.GridArray(input_data, input_offset, grid)
+    bc = boundaries.dirichlet_boundary_conditions(grid.ndim)
+    actual = bc._pad(array, width, axis)
+    expected = grids.GridArray(expected_data, expected_offset, grid)
+    self.assertArrayEqual(actual, expected)
+
+  @parameterized.parameters(
+      dict(
           input_data=np.array([11, 12, 13, 14]),
           input_offset=(0,),
           width=-1,

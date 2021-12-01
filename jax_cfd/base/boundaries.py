@@ -18,6 +18,7 @@ from typing import Sequence, Tuple
 from jax import lax
 import jax.numpy as jnp
 from jax_cfd.base import grids
+import numpy as np
 
 BoundaryConditions = grids.BoundaryConditions
 GridArray = grids.GridArray
@@ -106,7 +107,17 @@ class HomogeneousBoundaryConditions(BoundaryConditions):
     if bc_type == BCType.PERIODIC:
       pad_kwargs = dict(mode='wrap')
     elif bc_type == BCType.DIRICHLET:
-      pad_kwargs = dict(mode='constant')
+      if np.isclose(u.offset[axis] % 1, 0.5):  # cell center
+        # make the linearly interpolated value 0 by setting the padded values
+        # to the negative symmetric values
+        data = (2 * jnp.pad(u.data, full_padding, mode='constant')
+                - jnp.pad(u.data, full_padding, mode='symmetric'))
+        return GridArray(data, tuple(offset), u.grid)
+      elif np.isclose(u.offset[axis] % 1, 0):  # cell edge
+        pad_kwargs = dict(mode='constant')
+      else:
+        raise ValueError('expected offset to be an edge or cell center, got '
+                         f'offset[axis]={u.offset[axis]}')
     elif bc_type == BCType.NEUMANN:
       pad_kwargs = dict(mode='edge')
     else:

@@ -143,6 +143,16 @@ def divergence(v: Sequence[GridVariable]) -> GridArray:
   return sum(differences)
 
 
+def centered_divergence(v: Sequence[GridVariable]) -> GridArray:
+  """Approximates the divergence of `v` using centered differences."""
+  grid = grids.consistent_grid(*v)
+  if len(v) != grid.ndim:
+    raise ValueError('The length of `v` must be equal to `grid.ndim`.'
+                     f'Expected length {grid.ndim}; got {len(v)}.')
+  differences = [central_difference(u, axis) for axis, u in enumerate(v)]
+  return sum(differences)
+
+
 @typing.overload
 def gradient_tensor(v: GridVariable) -> GridArrayTensor:
   ...

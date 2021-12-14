@@ -16,6 +16,7 @@
 
 import jax_cfd.base.advection
 import jax_cfd.base.array_utils
+import jax_cfd.base.boundaries
 import jax_cfd.base.diffusion
 import jax_cfd.base.equations
 import jax_cfd.base.fast_diagonalization

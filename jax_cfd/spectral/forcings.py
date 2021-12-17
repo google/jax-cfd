@@ -14,15 +14,23 @@
 
 """Functions that implement different forcing terms."""
 
+import gin
 import jax.numpy as jnp
+from jax_cfd.base import forcings
 from jax_cfd.base import grids
-from jax_cfd.spectral import types as spectral_types
 
 
 # pylint: disable=unused-argument
-def kolmogorov_forcing_fn(grid: grids.Grid,
-                          state: spectral_types.Array) -> spectral_types.Array:
+@gin.register
+def kolmogorov_forcing_fn(grid: grids.Grid) -> forcings.ForcingFn:
   """Constant Kolmogorov forcing function."""
-  _, ys = grid.mesh(offset=(0, 0))
-  constant_forcing = -4 * jnp.cos(4 * ys)
-  return constant_forcing
+  offset = (0, 0)
+  _, ys = grid.mesh(offset=offset)
+  f = -4 * jnp.cos(4 * ys)
+  f = (grids.GridArray(f, offset, grid),)
+
+  def forcing(v):
+    del v
+    return f
+
+  return forcing

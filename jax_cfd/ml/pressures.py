@@ -20,13 +20,13 @@ PressureSolveFn = Callable[
 PressureModule = Callable[..., PressureSolveFn]
 
 
-@gin.configurable
+@gin.register
 def fast_diagonalization(grid, dt, physics_specs):
   del grid, dt, physics_specs  # unused.
   return pressure.solve_fast_diag
 
 
-@gin.configurable
+@gin.register
 def conjugate_gradient(grid, dt, physics_specs, atol=1e-5, maxiter=32):
   del grid, dt, physics_specs  # unused.
   return functools.partial(pressure.solve_cg, atol=atol, maxiter=maxiter)

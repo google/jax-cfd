@@ -22,7 +22,7 @@ EncoderModule = Callable[..., EncodeFn]  # generate EncodeFn closed over args.
 TowerFactory = towers.TowerFactory
 
 
-@gin.configurable
+@gin.register
 def aligned_array_encoder(
     grid: grids.Grid,
     dt: float,
@@ -34,7 +34,7 @@ def aligned_array_encoder(
   data_offsets = data_offsets or grid.cell_faces
   slice_last_fn = lambda x: array_utils.slice_along_axis(x, 0, -1)
 
-  # TODO(pnorgaard) Make the encoder/decoder/network configurable for BC
+  # TODO(pnorgaard) Make the encoder/decoder/network register for BC
   def encode_fn(inputs):
     bc = boundaries.periodic_boundary_conditions(grid.ndim)
     return tuple(
@@ -44,7 +44,7 @@ def aligned_array_encoder(
   return encode_fn
 
 
-@gin.configurable
+@gin.register
 def slice_last_state_encoder(
     grid: grids.Grid,
     dt: float,
@@ -58,7 +58,7 @@ def slice_last_state_encoder(
   return encode_fn
 
 
-@gin.configurable
+@gin.register
 def slice_last_n_state_encoder(
     grid: grids.Grid,
     dt: float,
@@ -74,7 +74,7 @@ def slice_last_n_state_encoder(
   return encode_fn
 
 
-@gin.configurable
+@gin.register
 def stack_last_n_state_encoder(
     grid: grids.Grid,
     dt: float,
@@ -92,7 +92,7 @@ def stack_last_n_state_encoder(
   return encode_fn
 
 
-@gin.configurable
+@gin.register
 def latent_encoder(
     grid: grids.Grid,
     dt: float,

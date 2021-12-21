@@ -66,7 +66,7 @@ class DynamicalSystem(hk.Module):
     )(x)
 
 
-@gin.configurable
+@gin.register
 class ModularStepModel(DynamicalSystem):
   """Dynamical model based on independent encoder/decoder/step components."""
 

@@ -20,7 +20,7 @@ ConvectFn = Callable[[GridVariableVector], GridArrayVector]
 ConvectionModule = Callable[..., ConvectFn]
 
 
-@gin.configurable
+@gin.register
 def modular_advection(
     grid: grids.Grid,
     dt: float,
@@ -44,7 +44,7 @@ def modular_advection(
   return advect
 
 
-@gin.configurable
+@gin.register
 def modular_self_advection(
     grid: grids.Grid,
     dt: float,
@@ -70,7 +70,7 @@ def modular_self_advection(
   return advect
 
 
-@gin.configurable
+@gin.register
 def self_advection(
     grid: grids.Grid,
     dt: float,

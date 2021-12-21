@@ -47,7 +47,7 @@ def aligned_array_decoder(
   return decode_fn
 
 
-@gin.configurable
+@gin.register
 def channels_split_decoder(
     grid: grids.Grid,
     dt: float,
@@ -61,7 +61,7 @@ def channels_split_decoder(
   return decode_fn
 
 
-@gin.configurable
+@gin.register
 def latent_decoder(
     grid: grids.Grid,
     dt: float,

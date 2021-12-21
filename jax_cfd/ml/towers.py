@@ -51,7 +51,7 @@ def periodic_transpose_convolution(
       output_channels, kernel_shape, **kwargs)
 
 
-@gin.configurable
+@gin.register
 def fixed_scale(
     inputs: Array,
     axes: Tuple[int, ...],
@@ -62,7 +62,7 @@ def fixed_scale(
   return inputs * rescaled_one
 
 
-@gin.configurable
+@gin.register
 def scale_to_range(
     inputs: Array,
     axes: Tuple[int, ...],
@@ -87,7 +87,7 @@ def scale_to_range(
   return layers.rescale_to_range(inputs, min_value, max_value, axes)
 
 
-@gin.configurable
+@gin.register
 def forward_tower_factory(
     num_output_channels: int,
     ndim: int,
@@ -145,7 +145,7 @@ def forward_tower_factory(
       output_scale_fn=output_scale_fn, name=name)
 
 
-@gin.configurable
+@gin.register
 def forward_flex_tower_factory(
     num_output_channels: int,
     ndim: int,
@@ -214,7 +214,7 @@ def forward_flex_tower_factory(
   return hk.experimental.named_call(module, name=name)
 
 
-@gin.configurable
+@gin.register
 def residual_block_tower_factory(
     num_output_channels: int,
     ndim: int,

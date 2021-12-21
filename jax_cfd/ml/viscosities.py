@@ -24,7 +24,7 @@ ViscosityFn = Callable[[grids.GridArrayTensor, GridArrayVector, grids.Grid],
 ViscosityModule = Callable[..., ViscosityFn]
 
 
-@gin.configurable
+@gin.register
 def smagorinsky_viscosity(
     grid: grids.Grid,
     dt: float,
@@ -42,7 +42,7 @@ def smagorinsky_viscosity(
   return hk.to_module(viscosity_fn)(name='smagorinsky_viscosity')
 
 
-@gin.configurable
+@gin.register
 def learned_scalar_viscosity(
     grid: grids.Grid,
     dt: float,
@@ -104,7 +104,7 @@ def learned_scalar_viscosity(
   return hk.to_module(viscosity_fn)()
 
 
-@gin.configurable
+@gin.register
 def learned_tensor_viscosity(
     grid: grids.Grid,
     dt: float,
@@ -152,7 +152,7 @@ def learned_tensor_viscosity(
   return hk.to_module(viscosity_fn)()
 
 
-@gin.configurable
+@gin.register
 def eddy_viscosity_model(
     grid: grids.Grid,
     dt: float,

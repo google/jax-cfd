@@ -42,13 +42,13 @@ ViscosityModule = viscosities.ViscosityModule
 # TODO(shoyer): stop deleting unrecognized **kwargs. This is really error-prone!
 
 
-@gin.configurable(denylist=("grid", "dt", "physics_specs"))
+@gin.register(denylist=("grid", "dt", "physics_specs"))
 def diffuse(grid, dt, physics_specs) -> DiffuseFn:
   del grid, dt, physics_specs  # unused.
   return diffusion.diffuse
 
 
-@gin.configurable(denylist=("grid", "dt", "physics_specs"))
+@gin.register(denylist=("grid", "dt", "physics_specs"))
 def solve_fast_diag(
     grid,
     dt,
@@ -60,7 +60,7 @@ def solve_fast_diag(
       diffusion.solve_fast_diag, implementation=implementation)
 
 
-@gin.configurable(denylist=("grid", "dt", "physics_specs"))
+@gin.register(denylist=("grid", "dt", "physics_specs"))
 def solve_cg(
     grid,
     dt,
@@ -75,7 +75,7 @@ def solve_cg(
       diffusion.solve_cg, atol=atol, rtol=rtol, maxiter=maxiter)
 
 
-@gin.configurable(denylist=("grid", "dt", "physics_specs"))
+@gin.register(denylist=("grid", "dt", "physics_specs"))
 def implicit_evm_solve_with_diffusion(
     grid,
     dt,

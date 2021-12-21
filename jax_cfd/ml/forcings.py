@@ -18,7 +18,7 @@ def sum_forcings(*forces: ForcingFn) -> ForcingFn:
   return forcing
 
 
-@gin.configurable
+@gin.register
 def filtered_linear_forcing(grid: grids.Grid,
                             scale: float,
                             lower_wavenumber: float = 0,
@@ -29,13 +29,13 @@ def filtered_linear_forcing(grid: grids.Grid,
                                           grid=grid)
 
 
-@gin.configurable
+@gin.register
 def linear_forcing(grid: grids.Grid,
                    scale: float) -> ForcingFn:
   return forcings.linear_forcing(grid, scale)
 
 
-@gin.configurable
+@gin.register
 def kolmogorov_forcing(grid: grids.Grid,  # pylint: disable=missing-function-docstring
                        scale: float = 0,
                        wavenumber: int = 2,
@@ -48,7 +48,7 @@ def kolmogorov_forcing(grid: grids.Grid,  # pylint: disable=missing-function-doc
   return force_fn
 
 
-@gin.configurable
+@gin.register
 def taylor_green_forcing(grid: grids.Grid,
                          scale: float = 0,
                          wavenumber: int = 2,
@@ -60,6 +60,6 @@ def taylor_green_forcing(grid: grids.Grid,
   return force_fn
 
 
-@gin.configurable
+@gin.register
 def no_forcing(grid: grids.Grid) -> ForcingFn:
   return forcings.no_forcing(grid)

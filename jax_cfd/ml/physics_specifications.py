@@ -6,8 +6,8 @@ PhysicsSpecs objects using `get_physics_specs`, which should be
 configured appropriately.
 """
 
-from typing import Optional
 import dataclasses
+from typing import Optional
 import gin
 
 from jax_cfd.ml import forcings
@@ -22,19 +22,20 @@ def get_physics_specs(physics_specs_cls=gin.REQUIRED):
   return physics_specs_cls()
 
 
+@gin.register
 @dataclasses.dataclass
 class BasePhysicsSpecs:
   """Base class for keeping physical parameters and forcing module."""
   forcing_module: Optional[ForcingModule]
 
 
-@gin.configurable
+@gin.register
 @dataclasses.dataclass
 class KsPhysicsSpecs(BasePhysicsSpecs):
   """Configurable physical parameters for Kuramoto-Sivashinsky models."""
 
 
-@gin.configurable
+@gin.register
 @dataclasses.dataclass
 class NavierStokesPhysicsSpecs(BasePhysicsSpecs):
   """Configurable physical parameters and modules for Navier-Stokes models."""

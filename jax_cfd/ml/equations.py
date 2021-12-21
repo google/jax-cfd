@@ -29,7 +29,7 @@ PressureModule = pressures.PressureModule
 
 
 # TODO(dkochkov) move diffusion to modular_navier_stokes after b/160947162.
-@gin.configurable(denylist=("grid", "dt", "physics_specs"))
+@gin.register(denylist=("grid", "dt", "physics_specs"))
 def semi_implicit_navier_stokes(
     grid: grids.Grid,
     dt: float,
@@ -44,7 +44,7 @@ def semi_implicit_navier_stokes(
   return hk.to_module(step_fn)()
 
 
-@gin.configurable(denylist=("grid", "dt", "physics_specs"))
+@gin.register(denylist=("grid", "dt", "physics_specs"))
 def implicit_diffusion_navier_stokes(
     grid: grids.Grid,
     dt: float,
@@ -59,7 +59,7 @@ def implicit_diffusion_navier_stokes(
   return hk.to_module(step_fn)()
 
 
-@gin.configurable(denylist=("grid", "dt", "physics_specs"))
+@gin.register(denylist=("grid", "dt", "physics_specs"))
 def modular_navier_stokes_model(
     grid: grids.Grid,
     dt: float,
@@ -117,7 +117,7 @@ def modular_navier_stokes_model(
   return hk.to_module(navier_stokes_step_fn)()
 
 
-@gin.configurable
+@gin.register
 def time_derivative_network_model(
     grid: grids.Grid,
     dt: float,
@@ -167,7 +167,7 @@ def time_derivative_network_model(
   return hk.to_module(step_fn)()
 
 
-@gin.configurable
+@gin.register
 def learned_corrector(
     grid: grids.Grid,
     dt: float,
@@ -189,7 +189,7 @@ def learned_corrector(
   return hk.to_module(step_fn)()
 
 
-@gin.configurable
+@gin.register
 def learned_corrector_v2(
     grid: grids.Grid,
     dt: float,

@@ -28,7 +28,7 @@ StencilSizeFn = Callable[
     [Tuple[int, ...], Tuple[int, ...], Any], Tuple[int, ...]]
 
 
-@gin.configurable
+@gin.register
 class FusedLearnedInterpolation:
   """Learned interpolator that computes interpolation coefficients in 1 pass.
 
@@ -129,7 +129,7 @@ def _nearest_neighhbor_stencil_size_fn(
   )
 
 
-@gin.configurable
+@gin.register
 def anisotropic_learned_interpolation(*args, stencil_size=2, **kwargs):
   """Like FusedLearnedInterpolation, but with anisotropic stencil."""
   stencil_size_fn = functools.partial(
@@ -140,7 +140,7 @@ def anisotropic_learned_interpolation(*args, stencil_size=2, **kwargs):
   )
 
 
-@gin.configurable
+@gin.register
 class IndividualLearnedInterpolation:
   """Trainable interpolation module.
 
@@ -194,26 +194,26 @@ class IndividualLearnedInterpolation:
         grids.GridArray(jnp.squeeze(res, axis=-1), offset, c.grid), c.bc)
 
 
-@gin.configurable
+@gin.register
 def linear(*args, **kwargs):
   del args, kwargs
   return interpolation.linear
 
 
-@gin.configurable
+@gin.register
 def upwind(*args, **kwargs):
   del args, kwargs
   return interpolation.upwind
 
 
-@gin.configurable
+@gin.register
 def lax_wendroff(*args, **kwargs):
   del args, kwargs
   return interpolation.lax_wendroff
 
 
 # TODO(dkochkov) make flux limiters configurable.
-@gin.configurable
+@gin.register
 def tvd_limiter_transformation(
     interpolation_fn: InterpolationFn,
     limiter_fn: FluxLimiter = interpolation.van_leer_limiter,
@@ -222,7 +222,7 @@ def tvd_limiter_transformation(
   return interpolation.apply_tvd_limiter(interpolation_fn, limiter_fn)
 
 
-@gin.configurable
+@gin.register
 def transformed(
     grid: grids.Grid,
     dt: float,

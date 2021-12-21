@@ -18,7 +18,7 @@ def _identity(grid, dt, physics_specs):
   return lambda x: x
 
 
-@gin.configurable
+@gin.register
 def split_to_aligned_field(
     grid: grids.Grid,
     dt: float,
@@ -39,7 +39,7 @@ def split_to_aligned_field(
   return hk.to_module(process)()
 
 
-@gin.configurable
+@gin.register
 def aligned_field_from_split_divergence(
     grid: grids.Grid,
     dt: float,
@@ -82,7 +82,7 @@ def aligned_field_from_split_divergence(
   return hk.to_module(process)()
 
 
-@gin.configurable
+@gin.register
 def stack_aligned_field(
     grid: grids.Grid,
     dt: float,
@@ -98,7 +98,7 @@ def stack_aligned_field(
   return hk.to_module(process)()
 
 
-@gin.configurable
+@gin.register
 def tower_module(
     grid: grids.Grid,
     dt: float,
@@ -124,7 +124,7 @@ def tower_module(
   return hk.to_module(forward_pass)(name=name)
 
 
-@gin.configurable
+@gin.register
 def velocity_corrector_network(
     grid: grids.Grid,
     dt: float,
@@ -142,7 +142,7 @@ def velocity_corrector_network(
       name=name)
 
 
-@gin.configurable
+@gin.register
 def flux_corrector_network(
     grid: grids.Grid,
     dt: float,

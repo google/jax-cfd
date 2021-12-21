@@ -1,5 +1,6 @@
 """Tests for models_v2.equations."""
 
+import copy
 import itertools
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -212,8 +213,11 @@ class MLModulesTest(test_util.TestCase):
     dt = 0.1
     physics_specs = physics_specifications.get_physics_specs()
     def step_fwd(x):
+      # deepcopy triggers evaluation of references
+      derivative_modules = copy.deepcopy(gin.query_parameter(
+          'time_derivative_network_model.derivative_modules'))
       model = equations.time_derivative_network_model(
-          grid, dt, physics_specs)
+          grid, dt, physics_specs, derivative_modules)
       return model(x)
 
     step_model = hk.without_apply_rng(hk.transform(step_fwd))
@@ -240,7 +244,7 @@ class MLModulesTest(test_util.TestCase):
     """Intgeration tests checking that `step_fn` produces expected shape."""
     ndim = grid.ndim
     latent_dims = 20
-    ml_module_name = 'equations.time_derivative_network_model'
+    ml_module_name = 'time_derivative_network_model'
     epd_towers = '(@enc/tower_module, @proc/tower_module, @dec/tower_module,)'
     config = [
         f'enc/tower_module.num_output_channels = {latent_dims}',

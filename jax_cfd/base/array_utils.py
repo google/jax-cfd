@@ -18,7 +18,6 @@ from typing import Any, Callable, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from jax_cfd.base import grids
 import numpy as np
 import scipy.linalg
 
@@ -28,7 +27,8 @@ import scipy.linalg
 # information about PyTrees and https://github.com/google/jax/issues/3340 for
 # discussion of this issue.
 PyTree = Any
-Array = grids.Array
+# the same as grids.Array but without the dependency on grids.py
+Array = Union[np.ndarray, jnp.DeviceArray]
 
 
 def _normalize_axis(axis: int, ndim: int) -> int:

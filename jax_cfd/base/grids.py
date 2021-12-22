@@ -22,6 +22,7 @@ from typing import Any, Callable, Optional, Sequence, Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
+from jax_cfd.base import array_utils
 import numpy as np
 
 # TODO(jamieas): consider moving common types to a separate module.
@@ -144,8 +145,12 @@ class BoundaryConditions:
   Attributes:
     types: `types[i]` is a tuple specifying the lower and upper BC types for
       dimension `i`.
+    values: 'values[i]' is a tuple specifying the lower and upper BC values for
+      dimension `i`. Currently it can have Any type because it can be a fixed
+      function, a float or something else.
   """
   types: Tuple[Tuple[str, str], ...]
+  values: Tuple[Tuple[Any, Any], ...]
 
   def shift(
       self,
@@ -202,6 +207,42 @@ class GridVariable:
       raise ValueError(
           'Incompatible dimension between grid and bc, grid dimension = '
           f'{self.grid.ndim}, bc dimension = {len(self.bc.types)}')
+    # To keep consistent sizes, in case of the dirichlet boundary with edge
+    # offset, self.array stores a row of dependent boundary values. To avoid
+    # errors, __post_init__ automatically processes array to make sure that
+    # 1) if only interior data was supplied, the array is augmented with the
+    #  "boundary row".
+    # 2) the "boundary row" values are set to match the prescribed bc.
+    # This allows to treat array just as a collection of interior data and
+    # bc as just the boundary data, independent of each other.
+    # This only has effect on dirichlet bc with edge offset.
+    def _set_value_on_boundary(arr_1d, value, side):
+      loc = side
+      if side == 1:
+        loc = -1
+      arr_1d = arr_1d.at[loc].set(value)
+      return arr_1d
+
+    for axis in range(self.grid.ndim):
+      for boundary_side in range(2):
+        if self.bc.types[axis][boundary_side] == 'dirichlet':
+          if self.array.offset[axis] == float(boundary_side):
+            # if only interior data was supplied:
+            if self.array.grid.shape[axis] == self.array.data.shape[axis] + 1:
+              npad = [(0, 0)] * self.array.grid.ndim
+              pad_arr = [0, 0]
+              pad_arr[boundary_side] = 1
+              npad[axis] = tuple(pad_arr)
+              self.array = GridArray(
+                  jnp.pad(self.array.data, pad_width=npad), self.array.offset,
+                  self.array.grid)
+            # boundary data is set to match self.bc:
+            self.array = GridArray(
+                jnp.apply_along_axis(_set_value_on_boundary, axis,
+                                     self.array.data,
+                                     self.bc.values[axis][boundary_side],
+                                     boundary_side), self.array.offset,
+                self.array.grid)
 
   def tree_flatten(self):
     """Returns flattening recipe for GridVariable JAX pytree."""
@@ -250,6 +291,49 @@ class GridVariable:
       GridArray has offset `u.offset + offset`.
     """
     return self.bc.shift(self.array, offset, axis)
+
+  def interior_grid(self) -> Grid:
+    """Returns only the interior grid points.
+
+    In case of dirichlet with edge offset, the grid size is reduced, since one
+    scalar lies eactly on the boundary. In all other cases, self.grid is
+    returned.
+    """
+    grid = self.array.grid
+    for axis in range(self.grid.ndim):
+      if self.bc.types[axis][1] == 'dirichlet' and np.isclose(
+          self.array.offset[axis], 1.0):
+        domain = np.array(grid.domain)
+        shape = np.array(grid.shape)
+        shape[axis] -= 1
+        domain[axis] = (domain[axis][0], domain[axis][1] - grid.step[axis])
+        grid = Grid(shape, domain=tuple(domain))
+      elif self.bc.types[axis][0] == 'dirichlet' and np.isclose(
+          self.array.offset[axis], 0.0):
+        domain = np.array(grid.domain)
+        shape = np.array(grid.shape)
+        shape[axis] -= 1
+        domain[axis] = (domain[axis][0] + grid.step[axis], domain[axis][1])
+        grid = Grid(shape, domain=tuple(domain))
+    return grid
+
+  def interior(self) -> Array:
+    """Returns only the interior points of self.array.
+
+    In case of dirichlet with edge offset, one boundary is cut off from the
+    array, since one scalar lies eactly on the boundary.
+    In all other cases, self.array is returned.
+    """
+    array = self.array.data
+    for axis in range(self.grid.ndim):
+      if self.bc.types[axis][1] == 'dirichlet' and np.isclose(
+          self.offset[axis], 1.0):
+        array, _ = array_utils.split_along_axis(array, -1, axis)
+      elif self.bc.types[axis][1] == 'dirichlet' and np.isclose(
+          self.offset[axis], 0.0):
+        _, array = array_utils.split_along_axis(array, 1, axis)
+
+    return array
 
 
 GridVariableVector = Tuple[GridVariable, ...]

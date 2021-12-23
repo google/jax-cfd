@@ -132,3 +132,25 @@ def latent_encoder(
     return encoder_tower(inputs)
 
   return encode_fn
+
+
+@gin.register
+def spectral_vorticity_encoder(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
+) -> EncodeFn:
+  """Generates encoder that wraps last data slice as GridVariables."""
+  del dt, physics_specs, data_offsets  # unused.
+  slice_last_fn = lambda x: array_utils.slice_along_axis(x, 0, -1)
+
+  def encode_fn(inputs):
+    u, v = inputs
+    u, v = slice_last_fn(u), slice_last_fn(v)
+    uhat, vhat = jnp.fft.rfft2(u.data), jnp.fft.rfft2(v.data)
+    kx, ky = grid.rfft_mesh()
+    vorticity = 2j * jnp.pi * (vhat * kx - uhat * ky)
+    return vorticity
+
+  return encode_fn

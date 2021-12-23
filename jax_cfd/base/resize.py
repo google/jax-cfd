@@ -15,6 +15,8 @@
 """Resize velocity fields to a different resolution grid."""
 from typing import Tuple, Union
 
+import gin
+
 import jax.numpy as jnp
 from jax_cfd.base import array_utils as arr_utils
 from jax_cfd.base import grids
@@ -69,6 +71,7 @@ def downsample_staggered_velocity_component(u: Array, direction: int,
   return arr_utils.block_reduce(w, block_size, jnp.mean)
 
 
+@gin.register
 def downsample_staggered_velocity(
     source_grid: grids.Grid,
     destination_grid: grids.Grid,
@@ -104,3 +107,21 @@ def downsample_staggered_velocity(
       downsample = downsample_staggered_velocity_component
     result.append(downsample(u, j, round(factor)))
   return tuple(result)
+
+
+# TODO(dresdner) gin usage should be restricted to jax_cfd.ml
+@gin.register
+def downsample_spectral(_: grids.Grid, destination_grid: grids.Grid,
+                        signal_hat):
+  """Downsamples a 2D signal in the Fourier basis to the `destination_grid`."""
+  kx, ky = destination_grid.rfft_axes()
+  (num_x,), (num_y,) = kx.shape, ky.shape
+
+  input_num_x, _ = signal_hat.shape
+
+  downed = jnp.concatenate(
+      [signal_hat[:num_x // 2, :num_y], signal_hat[-num_x // 2:, :num_y]])
+
+  scale = (num_x / input_num_x)
+  downed *= scale**2
+  return downed

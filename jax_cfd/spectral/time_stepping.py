@@ -14,50 +14,12 @@
 
 """Implicit-explicit time stepping routines for ODEs."""
 
-import operator
 from typing import Callable, Sequence, TypeVar
-from jax import tree_util
+from jax_cfd.base import tree_math
 
 
 PyTreeState = TypeVar("PyTreeState")
 TimeStepFn = Callable[[PyTreeState], PyTreeState]
-
-
-class _InfixArithmeticWrapper:
-  """A pytree wrapper to support basic infix arithmetic."""
-
-  def __init__(self, pytree):
-    self.pytree = pytree
-
-  def __add__(self, other):
-    if isinstance(other, _InfixArithmeticWrapper):
-      result = tree_util.tree_map(operator.add, self.pytree, other.pytree)
-    else:
-      result = tree_util.tree_map(lambda x: x + other, self.pytree)
-    return _InfixArithmeticWrapper(result)
-
-  __radd__ = __add__
-
-  def __mul__(self, other):
-    if isinstance(other, _InfixArithmeticWrapper):
-      result = tree_util.tree_map(operator.mul, self.pytree, other.pytree)
-    else:
-      result = tree_util.tree_map(lambda x: x * other, self.pytree)
-    return _InfixArithmeticWrapper(result)
-
-  __rmul__ = __mul__
-
-
-def _pytree_to_infix(func):
-  def wrapper(state):
-    return func(_InfixArithmeticWrapper(state)).pytree
-  return wrapper
-
-
-def _infix_to_pytree(func):
-  def wrapper(state, *aux_args):
-    return _InfixArithmeticWrapper(func(state.pytree, *aux_args))
-  return wrapper
 
 
 class ImplicitExplicitODE:
@@ -105,10 +67,10 @@ def backward_forward_euler(
   """
   # pylint: disable=invalid-name
   dt = time_step
-  F = _infix_to_pytree(equation.explicit_terms)
-  G_inv = _infix_to_pytree(equation.implicit_solve)
+  F = tree_math.pytree_to_vector_fun(equation.explicit_terms)
+  G_inv = tree_math.pytree_to_vector_fun(equation.implicit_solve)
 
-  @_pytree_to_infix
+  @tree_math.vector_to_pytree_fun
   def step_fn(u0):
     g = u0 + dt * F(u0)
     u1 = G_inv(g, dt)
@@ -137,11 +99,11 @@ def crank_nicolson_rk2(
   """
   # pylint: disable=invalid-name
   dt = time_step
-  F = _infix_to_pytree(equation.explicit_terms)
-  G = _infix_to_pytree(equation.implicit_terms)
-  G_inv = _infix_to_pytree(equation.implicit_solve)
+  F = tree_math.pytree_to_vector_fun(equation.explicit_terms)
+  G = tree_math.pytree_to_vector_fun(equation.implicit_terms)
+  G_inv = tree_math.pytree_to_vector_fun(equation.implicit_solve)
 
-  @_pytree_to_infix
+  @tree_math.vector_to_pytree_fun
   def step_fn(u0):
     g = u0 + 0.5 * dt * G(u0)
     h1 = F(u0)
@@ -190,14 +152,14 @@ def low_storage_runge_kutta_crank_nicolson(
   β = betas
   γ = gammas
   dt = time_step
-  F = _infix_to_pytree(equation.explicit_terms)
-  G = _infix_to_pytree(equation.implicit_terms)
-  G_inv = _infix_to_pytree(equation.implicit_solve)
+  F = tree_math.pytree_to_vector_fun(equation.explicit_terms)
+  G = tree_math.pytree_to_vector_fun(equation.implicit_terms)
+  G_inv = tree_math.pytree_to_vector_fun(equation.implicit_solve)
 
   if len(alphas) - 1 != len(betas) != len(gammas):
     raise ValueError("number of RK coefficients does not match")
 
-  @_pytree_to_infix
+  @tree_math.vector_to_pytree_fun
   def step_fn(u):
     h = 0
     for k in range(len(β)):

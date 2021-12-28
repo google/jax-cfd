@@ -27,6 +27,7 @@ from jax_cfd.base import funcutils
 from jax_cfd.base import grids
 from jax_cfd.base import pressure
 from jax_cfd.base import test_util
+from jax_cfd.base import time_stepping
 import numpy as np
 
 
@@ -92,6 +93,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            viscosity=1e-4,
            convect=None,
            pressure_solve=pressure.solve_cg,
+           time_stepper=time_stepping.forward_euler,
            dt=1e-3,
            time_steps=1000,
            divergence_atol=1e-3,
@@ -105,6 +107,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            viscosity=None,
            convect=_convect_upwind,
            pressure_solve=pressure.solve_cg,
+           time_stepper=time_stepping.midpoint_rk2,
            dt=1e-3,
            time_steps=100,
            divergence_atol=1e-4,
@@ -118,6 +121,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            viscosity=1e-4,
            convect=advection.convect_linear,
            pressure_solve=pressure.solve_fast_diag,
+           time_stepper=time_stepping.classic_rk4,
            dt=1e-3,
            time_steps=1000,
            divergence_atol=1e-3,
@@ -125,7 +129,8 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
   )
   def test_divergence_and_momentum(
       self, velocity, forcing, shape, step, density, viscosity, convect,
-      pressure_solve, dt, time_steps, divergence_atol, momentum_atol,
+      pressure_solve, time_stepper, dt, time_steps, divergence_atol,
+      momentum_atol,
   ):
     grid = grids.Grid(shape, step)
 
@@ -136,7 +141,9 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
         grid,
         convect=convect,
         pressure_solve=pressure_solve,
-        forcing=forcing)
+        forcing=forcing,
+        time_stepper=time_stepper,
+    )
 
     v_initial = velocity(grid)
     v_final = funcutils.repeated(navier_stokes, time_steps)(v_initial)

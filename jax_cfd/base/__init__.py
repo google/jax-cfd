@@ -29,4 +29,6 @@ import jax_cfd.base.interpolation
 import jax_cfd.base.pressure
 import jax_cfd.base.resize
 import jax_cfd.base.subgrid_models
+import jax_cfd.base.time_stepping
+import jax_cfd.base.tree_math
 import jax_cfd.base.validation_problems

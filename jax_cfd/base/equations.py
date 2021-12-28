@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Examples of defining equations."""
+import functools
 from typing import Callable, Optional
 
 import jax
@@ -22,6 +23,8 @@ from jax_cfd.base import advection
 from jax_cfd.base import diffusion
 from jax_cfd.base import grids
 from jax_cfd.base import pressure
+from jax_cfd.base import time_stepping
+from jax_cfd.base import tree_math
 
 # Specifying the full signatures of Callable would get somewhat onerous
 # pylint: disable=g-bare-generic
@@ -67,6 +70,11 @@ def dynamic_time_step(v: GridVariableVector,
       v_max, max_courant_number, viscosity, grid, implicit_diffusion)
 
 
+def _wrap_term_as_vector(fun, *, name):
+  return tree_math.pytree_to_vector_fun(jax.named_call(fun, name=name))
+
+
+# TODO(shoyer): rename this to explicit_diffusion_navier_stokes
 def semi_implicit_navier_stokes(
     density: float,
     viscosity: float,
@@ -76,6 +84,7 @@ def semi_implicit_navier_stokes(
     diffuse: DiffuseFn = diffusion.diffuse,
     pressure_solve: Callable = pressure.solve_fast_diag,
     forcing: Optional[ForcingFn] = None,
+    time_stepper: Callable = time_stepping.forward_euler,
 ) -> Callable[[GridVariableVector], GridVariableVector]:
   """Returns a function that performs a time step of Navier Stokes."""
   del grid  # unused
@@ -85,34 +94,38 @@ def semi_implicit_navier_stokes(
       return tuple(
           advection.advect_van_leer_using_limiters(u, v, dt) for u in v)
 
-  convect = jax.named_call(convect, name='convection')
-  diffuse = jax.named_call(diffuse, name='diffusion')
+  def diffuse_velocity(v, *args):
+    return tuple(diffuse(u, *args) for u in v)
+
+  convection = _wrap_term_as_vector(convect, name='convection')
+  diffusion_ = _wrap_term_as_vector(diffuse_velocity, name='diffusion')
+  if forcing is not None:
+    forcing = _wrap_term_as_vector(forcing, name='forcing')
   pressure_projection = jax.named_call(pressure.projection, name='pressure')
 
   # TODO(jamieas): Consider a scheme where pressure calculations and
   # advection/diffusion are staggered in time.
-  @jax.named_call
-  def navier_stokes_step(v: GridVariableVector) -> GridVariableVector:
-    """Computes state at time `t + dt` using first order time integration."""
-    # Collect the acceleration terms
-    convection = convect(v)
-    accelerations = [convection]
+
+  @tree_math.vector_to_pytree_fun
+  @functools.partial(jax.named_call, name='navier_stokes_momentum')
+  def _explicit_terms(v):
+    dv_dt = convection(v)
     if viscosity is not None:
-      diffusion_ = tuple(diffuse(u, viscosity / density) for u in v)
-      accelerations.append(diffusion_)
+      dv_dt += diffusion_(v, viscosity / density)
     if forcing is not None:
-      # TODO(shoyer): include time in state?
-      force = forcing(v)
-      accelerations.append(tuple(f / density for f in force))
-    dvdt = sum_fields(*accelerations)
-    # Update v by taking a time step
-    v = tuple(
-        grids.GridVariable(u.array + dudt * dt, u.bc)
-        for u, dudt in zip(v, dvdt))
-    # Pressure projection to incompressible velocity field
-    v = pressure_projection(v, pressure_solve)
-    return v
-  return navier_stokes_step
+      dv_dt += forcing(v) / density
+    return dv_dt
+
+  def explicit_terms_with_same_bcs(v):
+    dv_dt = _explicit_terms(v)
+    return tuple(grids.GridVariable(a, u.bc) for a, u in zip(dv_dt, v))
+
+  ode = time_stepping.ExplicitNavierStokesODE(
+      explicit_terms_with_same_bcs,
+      lambda v: pressure_projection(v, pressure_solve)
+  )
+  step_fn = time_stepper(ode, dt)
+  return step_fn
 
 
 def implicit_diffusion_navier_stokes(
@@ -136,6 +149,7 @@ def implicit_diffusion_navier_stokes(
   pressure_projection = jax.named_call(pressure.projection, name='pressure')
   diffusion_solve = jax.named_call(diffusion_solve, name='diffusion')
 
+  # TODO(shoyer): refactor to support optional higher-order time integators
   @jax.named_call
   def navier_stokes_step(v: GridVariableVector) -> GridVariableVector:
     """Computes state at time `t + dt` using first order time integration."""

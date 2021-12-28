@@ -25,6 +25,7 @@ from jax_cfd.base import diffusion
 from jax_cfd.base import equations
 from jax_cfd.base import funcutils
 from jax_cfd.base import test_util
+from jax_cfd.base import time_stepping
 from jax_cfd.base import validation_problems
 
 
@@ -42,6 +43,32 @@ class ValidationTests(test_util.TestCase):
           max_courant_number=.1,
           time=10.,
           atol=1e-5),
+      dict(
+          testcase_name='_TaylorGreen_SemiImplicitNavierStokes_rk1',
+          problem=validation_problems.TaylorGreen(
+              shape=(512, 512), density=1., viscosity=1e-2),
+          solver=functools.partial(
+              equations.semi_implicit_navier_stokes,
+              convect=advection.convect_linear,
+              time_stepper=time_stepping.forward_euler,
+          ),
+          implicit_diffusion=False,
+          max_courant_number=.1,
+          time=40.,
+          atol=6e-6),
+      dict(
+          testcase_name='_TaylorGreen_SemiImplicitNavierStokes_rk4',
+          problem=validation_problems.TaylorGreen(
+              shape=(512, 512), density=1., viscosity=1e-2),
+          solver=functools.partial(
+              equations.semi_implicit_navier_stokes,
+              convect=advection.convect_linear,
+              time_stepper=time_stepping.classic_rk4,
+          ),
+          implicit_diffusion=False,
+          max_courant_number=.1,
+          time=40.,
+          atol=8e-7),
       dict(
           testcase_name='_TaylorGreen_ImplicitDiffusionNavierStokes_matmul',
           problem=validation_problems.TaylorGreen(
@@ -103,12 +130,12 @@ class ValidationTests(test_util.TestCase):
               shape=(1024, 1024), density=1., viscosity=0.5),
           solver=functools.partial(
               equations.implicit_diffusion_navier_stokes,
-              convect=advection.convect_linear,
-          ),
+              convect=advection.convect_linear),
           implicit_diffusion=True,
           max_courant_number=.5,
           time=1.0,
-          atol=6e-4),
+          atol=6e-4,
+      ),
   )
   def test_accuracy(self, problem, solver, implicit_diffusion,
                     max_courant_number, time, atol):

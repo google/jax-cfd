@@ -205,13 +205,192 @@ class GridVariableTest(test_util.TestCase):
       self.assertEqual(variable.grid, grid)
 
     with self.subTest('raises exception'):
-      with self.assertRaisesRegex(
-          ValueError, 'Incompatible dimension between grid and bc'):
+      with self.assertRaisesRegex(ValueError,
+                                  'Incompatible dimension between grid and bc'):
         grid = grids.Grid((10,))
         data = np.zeros((10,))
         array = grids.GridArray(data, offset=(0.5,), grid=grid)  # 1D
         bc = boundaries.periodic_boundary_conditions(ndim=2)  # 2D
         grids.GridVariable(array, bc)
+
+  @parameterized.parameters(
+      dict(
+          shape=(10,),
+          offset=(0.0,),
+      ),
+      dict(
+          shape=(10,),
+          offset=(0.5,),
+      ),
+      dict(
+          shape=(10,),
+          offset=(1.0,),
+      ),
+      dict(
+          shape=(10, 10),
+          offset=(1.0, 0.0),
+      ),
+      dict(
+          shape=(10, 10, 10),
+          offset=(1.0, 0.0, 0.5),
+      ),
+  )
+  def test_interior_consistency_periodic(self, shape, offset):
+    grid = grids.Grid(shape)
+    data = np.random.randint(0, 10, shape)
+    array = grids.GridArray(data, offset=offset, grid=grid)
+    bc = boundaries.periodic_boundary_conditions(ndim=len(shape))
+    u = grids.GridVariable(array, bc)
+    u_interior = u.interior()
+    self.assertEqual(u_interior, u.array)
+
+  @parameterized.parameters(
+      dict(
+          shape=(10,),
+          bc=boundaries.dirichlet_boundary_conditions(ndim=1),
+      ),
+      dict(
+          shape=(10,),
+          bc=boundaries.neumann_boundary_conditions(ndim=1),
+      ),
+      dict(
+          shape=(10, 10),
+          bc=boundaries.dirichlet_boundary_conditions(ndim=2),
+      ),
+      dict(
+          shape=(10, 10),
+          bc=boundaries.neumann_boundary_conditions(ndim=2),
+      ),
+      dict(
+          shape=(10, 10, 10),
+          bc=boundaries.dirichlet_boundary_conditions(ndim=3),
+      ),
+      dict(
+          shape=(10, 10, 10),
+          bc=boundaries.neumann_boundary_conditions(ndim=3),
+      ),
+  )
+  def test_interior_consistency_no_edge_offsets(self, bc, shape):
+    grid = grids.Grid(shape)
+    data = np.random.randint(0, 10, shape)
+    array = grids.GridArray(data, offset=(0.5,) * len(shape), grid=grid)
+    u = grids.GridVariable(array, bc)
+    u_interior = u.interior()
+    self.assertEqual(u_interior, u.array)
+
+  @parameterized.parameters(
+      dict(
+          shape=(10,),
+          bc=boundaries.dirichlet_boundary_conditions(ndim=1),
+          offset=(0.0,)),
+      dict(
+          shape=(10,),
+          bc=boundaries.neumann_boundary_conditions(ndim=1),
+          offset=(0.0,)),
+      dict(
+          shape=(10, 10),
+          bc=boundaries.dirichlet_boundary_conditions(ndim=2),
+          offset=(0.0, 0.0)),
+      dict(
+          shape=(10, 10),
+          bc=boundaries.neumann_boundary_conditions(ndim=2),
+          offset=(0.0, 0.0)),
+      dict(
+          shape=(10, 10, 10),
+          bc=boundaries.dirichlet_boundary_conditions(ndim=3),
+          offset=(0.0, 0.0, 0.0)),
+      dict(
+          shape=(10, 10, 10),
+          bc=boundaries.neumann_boundary_conditions(ndim=3),
+          offset=(0.0, 0.0, 0.0)),
+  )
+  def test_interior_consistency_edge_offsets(self, shape, bc, offset):
+    grid = grids.Grid(shape)
+    data = np.random.randint(0, 10, shape)
+    array = grids.GridArray(data, offset=offset, grid=grid)
+    u = grids.GridVariable(array, bc)
+    u_interior = u.interior()
+
+    self.assertEqual(u_interior.offset, u.array.offset)
+    self.assertEqual(u_interior.grid.ndim, u.array.grid.ndim)
+    self.assertEqual(u_interior.grid.step, u.array.grid.step)
+    self.assertEqual(
+        u_interior.grid.mesh(offset)[0].shape, u_interior.data.shape)
+
+  def test_interior_dirichlet(self):
+    data = np.array([
+        [11, 12, 13, 14, 15],
+        [21, 22, 23, 24, 25],
+        [31, 32, 33, 34, 35],
+        [41, 42, 43, 44, 45],
+    ])
+
+    grid = grids.Grid(shape=(4, 5), domain=((0, 1), (0, 1)))
+    bc = boundaries.dirichlet_boundary_conditions(ndim=2)
+
+    with self.subTest('offset=(1, 0.5)'):
+      offset = (1., 0.5)
+      array = grids.GridArray(data, offset, grid)
+      u = grids.GridVariable(array, bc)
+      u_interior = u.interior()
+      answer = np.array([[11, 12, 13, 14, 15], [21, 22, 23, 24, 25],
+                         [31, 32, 33, 34, 35]])
+      self.assertArrayEqual(u_interior.data, answer)
+      self.assertEqual(u_interior.offset, offset)
+      self.assertEqual(u_interior.grid,
+                       grids.Grid(shape=(3, 5), domain=((0, 0.75), (0, 1))))
+
+    with self.subTest('offset=(1, 1)'):
+      offset = (1., 1.)
+      array = grids.GridArray(data, offset, grid)
+      u = grids.GridVariable(array, bc)
+      u_interior = u.interior()
+      answer = np.array([[11, 12, 13, 14], [21, 22, 23, 24], [31, 32, 33, 34]])
+      self.assertArrayEqual(u_interior.data, answer)
+      self.assertEqual(u_interior.grid,
+                       grids.Grid(shape=(3, 4), domain=((0, 0.75), (0, 0.8))))
+
+    with self.subTest('offset=(0.0, 0.5)'):
+      offset = (0., 0.5)
+      array = grids.GridArray(data, offset, grid)
+      u = grids.GridVariable(array, bc)
+      u_interior = u.interior()
+      answer = np.array([[21, 22, 23, 24, 25], [31, 32, 33, 34, 35],
+                         [41, 42, 43, 44, 45]])
+      self.assertArrayEqual(u_interior.data, answer)
+      self.assertEqual(u_interior.grid,
+                       grids.Grid(shape=(3, 5), domain=((0.25, 1.), (0., 1.))))
+
+    with self.subTest('offset=(0.0, 0.0)'):
+      offset = (0.0, 0.0)
+      array = grids.GridArray(data, offset, grid)
+      u = grids.GridVariable(array, bc)
+      u_interior = u.interior()
+      answer = np.array([[22, 23, 24, 25], [32, 33, 34, 35], [42, 43, 44, 45]])
+      self.assertArrayEqual(u_interior.data, answer)
+      self.assertEqual(
+          u_interior.grid,
+          grids.Grid(shape=(3, 4), domain=((0.25, 1.), (0.2, 1.0))))
+
+    with self.subTest('offset=(0.5, 0.0)'):
+      offset = (0.5, 0.0)
+      array = grids.GridArray(data, offset, grid)
+      u = grids.GridVariable(array, bc)
+      u_interior = u.interior()
+      answer = np.array([[12, 13, 14, 15], [22, 23, 24, 25], [32, 33, 34, 35],
+                         [42, 43, 44, 45]])
+      self.assertArrayEqual(u_interior.data, answer)
+      self.assertEqual(u_interior.grid,
+                       grids.Grid(shape=(4, 4), domain=((0.0, 1.), (0.2, 1.0))))
+
+    # this is consistent for all offsets, not just edge and center.
+    with self.subTest('offset=(0.25, 0.75)'):
+      offset = (0.25, 0.75)
+      array = grids.GridArray(data, offset, grid)
+      u = grids.GridVariable(array, bc)
+      u_interior = u.interior()
+      self.assertArrayEqual(u_interior.data, data)
+      self.assertEqual(u_interior.grid, grid)
 
   @parameterized.parameters(
       dict(
@@ -244,8 +423,8 @@ class GridVariableTest(test_util.TestCase):
           u.shift(offset=1, axis=axis), bc.shift(array, 1, axis))
 
     with self.subTest('raises exception'):
-      with self.assertRaisesRegex(
-          ValueError, 'Incompatible dimension between grid and bc'):
+      with self.assertRaisesRegex(ValueError,
+                                  'Incompatible dimension between grid and bc'):
         grid = grids.Grid((10,))
         data = np.zeros((10,))
         array = grids.GridArray(data, offset=(0.5,), grid=grid)  # 1D
@@ -336,9 +515,9 @@ class GridTest(test_util.TestCase):
       self.assertEqual(grid.cell_faces, ((1.0, 0.5), (0.5, 1.0)))
 
     with self.subTest('2d periodic'):
-      grid = grids.Grid((10, 20), domain=2*np.pi)
-      self.assertEqual(grid.step, (2*np.pi / 10, 2*np.pi / 20))
-      self.assertEqual(grid.domain, ((0., 2*np.pi), (0., 2*np.pi)))
+      grid = grids.Grid((10, 20), domain=2 * np.pi)
+      self.assertEqual(grid.step, (2 * np.pi / 10, 2 * np.pi / 20))
+      self.assertEqual(grid.domain, ((0., 2 * np.pi), (0., 2 * np.pi)))
       self.assertEqual(grid.ndim, 2)
 
     with self.assertRaisesRegex(TypeError, 'cannot provide both'):
@@ -516,12 +695,8 @@ class GridTest(test_util.TestCase):
 
     with self.subTest('2d'):
       grid = grids.Grid((3, 3))
-      expected = ([[1, 1, 1],
-                   [1, 1, 1],
-                   [0, 0, 0]],
-                  [[1, 1, 0],
-                   [1, 1, 0],
-                   [1, 1, 0]])
+      expected = ([[1, 1, 1], [1, 1, 1], [0, 0, 0]], [[1, 1, 0], [1, 1, 0],
+                                                      [1, 1, 0]])
       self.assertAllClose(grids.domain_interior_masks(grid), expected)
 
     with self.subTest('3d'):
@@ -535,6 +710,7 @@ class GridTest(test_util.TestCase):
       self.assertAllClose(actual[1][:, -1, :], 0)
       self.assertAllClose(actual[2][:, :, :-1], 1)
       self.assertAllClose(actual[2][:, :, -1], 0)
+
 
 if __name__ == '__main__':
   absltest.main()

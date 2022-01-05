@@ -22,6 +22,7 @@ from typing import Any, Callable, Optional, Sequence, Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
+from jax_cfd.base import array_utils
 import numpy as np
 
 # TODO(jamieas): consider moving common types to a separate module.
@@ -250,6 +251,60 @@ class GridVariable:
       GridArray has offset `u.offset + offset`.
     """
     return self.bc.shift(self.array, offset, axis)
+
+  def _interior_grid(self) -> Grid:
+    """Returns only the interior grid points."""
+    grid = self.array.grid
+    domain = list(grid.domain)
+    shape = list(grid.shape)
+    for axis in range(self.grid.ndim):
+      # nothing happens in periodic case
+      if self.bc.types[axis][1] == 'periodic':
+        continue
+      # nothing happens if the offset is not 0.0 or 1.0
+      # this will automatically set the grid to interior.
+      if np.isclose(self.array.offset[axis], 1.0):
+        shape[axis] -= 1
+        domain[axis] = (domain[axis][0], domain[axis][1] - grid.step[axis])
+      elif np.isclose(self.array.offset[axis], 0.0):
+        shape[axis] -= 1
+        domain[axis] = (domain[axis][0] + grid.step[axis], domain[axis][1])
+    return Grid(shape, domain=tuple(domain))
+
+  def _interior_array(self) -> Array:
+    """Returns only the interior points of self.array."""
+    data = self.array.data
+    for axis in range(self.grid.ndim):
+      # nothing happens in periodic case
+      if self.bc.types[axis][1] == 'periodic':
+        continue
+      # nothing happens if the offset is not 0.0 or 1.0
+      if np.isclose(self.offset[axis], 1.0):
+        data, _ = array_utils.split_along_axis(data, -1, axis)
+      elif np.isclose(self.offset[axis], 0.0):
+        _, data = array_utils.split_along_axis(data, 1, axis)
+
+    return data
+
+  def interior(self) -> GridArray:
+    """Returns a GridArray associated only with interior points.
+
+     Interior is defined as the following:
+       for d in range(u.grid.ndim):
+        points = u.grid.axes(offset=u.offset[d])
+        interior_points =
+          all points where grid.domain[d][0] < points < grid.domain[d][1]
+
+    The exception is when the boundary conditions are periodic,
+    in which case all points are included in the interior.
+
+    In case of dirichlet with edge offset, the grid and array size is reduced,
+    since one scalar lies exactly on the boundary. In all other cases,
+    self.grid and self.array are returned.
+    """
+    interior_array = self._interior_array()
+    interior_grid = self._interior_grid()
+    return GridArray(interior_array, self.array.offset, interior_grid)
 
 
 GridVariableVector = Tuple[GridVariable, ...]

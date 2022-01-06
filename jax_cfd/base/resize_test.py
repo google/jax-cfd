@@ -16,9 +16,12 @@
 
 from absl.testing import absltest
 from absl.testing import parameterized
-
+import jax
+import jax.numpy as jnp
 from jax_cfd.base import boundaries
+from jax_cfd.base import finite_differences
 from jax_cfd.base import grids
+from jax_cfd.base import initial_conditions
 from jax_cfd.base import resize
 from jax_cfd.base import test_util
 import numpy as np
@@ -115,6 +118,52 @@ class ResizeTest(test_util.TestCase):
             periodic_grid_variable(u, (0, 1), different_grid))
         resize.downsample_staggered_velocity(source_grid,
                                              destination_grid, velocity)
+
+  def testDownsampleFourierVorticity(self):
+
+    with self.subTest('Space2D'):
+      domain = ((0, 2 * jnp.pi), (0, 2 * jnp.pi))
+      fine = grids.Grid(((256, 256)), domain=domain)
+      medium = grids.Grid(((128, 128)), domain=domain)
+      coarse = grids.Grid(((64, 64)), domain=domain)
+
+      v0 = initial_conditions.filtered_velocity_field(
+          jax.random.PRNGKey(42), fine, maximum_velocity=7, peak_wavenumber=1)
+      fine_signal = finite_differences.curl_2d(v0).data
+
+      # test that fine -> medium -> coarse == fine -> coarse
+      fine_signal_hat = jnp.fft.rfftn(fine_signal)
+      fine_to_medium = resize.downsample_spectral(
+          None, medium, fine_signal_hat)
+      medium_to_coarse = resize.downsample_spectral(
+          None, coarse, fine_to_medium)
+      fine_to_coarse = resize.downsample_spectral(
+          None, coarse, fine_signal_hat)
+      self.assertAllClose(fine_to_coarse, medium_to_coarse)
+
+      # test that grid -> grid does nothing
+      self.assertAllClose(
+          fine_signal_hat,
+          resize.downsample_spectral(None, fine, fine_signal_hat))
+
+      self.assertAllClose(
+          fine_to_medium,
+          resize.downsample_spectral(None, medium, fine_to_medium))
+
+    with self.subTest('DownsampleWavenumbers'):
+      fine = grids.Grid((256, 256), domain=((0, 2 * jnp.pi),) * 2)
+      coarse = grids.Grid((64, 64), domain=((0, 2 * jnp.pi),) * 2)
+
+      kx_fine, ky_fine = fine.rfft_mesh()
+      kx_coarse, ky_coarse = coarse.rfft_mesh()
+
+      # (256/64)^2 = 16
+      kx_down = 16 * resize.downsample_spectral(None, coarse, kx_fine)
+      ky_down = 16 * resize.downsample_spectral(None, coarse, ky_fine)
+
+      self.assertArrayEqual(kx_down, kx_coarse)
+      self.assertArrayEqual(ky_down, ky_coarse)
+
 
 if __name__ == '__main__':
   absltest.main()

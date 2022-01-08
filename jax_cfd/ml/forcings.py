@@ -6,9 +6,14 @@ import gin
 from jax_cfd.base import equations
 from jax_cfd.base import forcings
 from jax_cfd.base import grids
+from jax_cfd.spectral import forcings as spectral_forcings
 
 ForcingFn = forcings.ForcingFn
 ForcingModule = Callable[..., ForcingFn]
+
+
+gin.external_configurable(spectral_forcings.kolmogorov_forcing_fn)
+gin.external_configurable(spectral_forcings.spectral_no_forcing)
 
 
 def sum_forcings(*forces: ForcingFn) -> ForcingFn:

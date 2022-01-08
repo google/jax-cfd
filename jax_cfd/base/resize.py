@@ -25,6 +25,7 @@ GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
 GridVariable = grids.GridVariable
 GridVariableVector = grids.GridVariableVector
+RawArray = jnp.ndarray
 
 
 def downsample_staggered_velocity_component(u: Array, direction: int,
@@ -104,3 +105,20 @@ def downsample_staggered_velocity(
       downsample = downsample_staggered_velocity_component
     result.append(downsample(u, j, round(factor)))
   return tuple(result)
+
+
+# TODO(dresdner) gin usage should be restricted to jax_cfd.ml
+def downsample_spectral(_: grids.Grid, destination_grid: grids.Grid,
+                        signal_hat: RawArray):
+  """Downsamples a 2D signal in the Fourier basis to the `destination_grid`."""
+  kx, ky = destination_grid.rfft_axes()
+  (num_x,), (num_y,) = kx.shape, ky.shape
+
+  input_num_x, _ = signal_hat.shape
+
+  downed = jnp.concatenate(
+      [signal_hat[:num_x // 2, :num_y], signal_hat[-num_x // 2:, :num_y]])
+
+  scale = (num_x / input_num_x)
+  downed *= scale**2
+  return downed

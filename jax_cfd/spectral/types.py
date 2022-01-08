@@ -17,9 +17,7 @@
 from typing import Callable, Union
 
 import jax.numpy as jnp
-from jax_cfd.base import grids
 import numpy as np
 
 Array = Union[np.ndarray, jnp.DeviceArray]
 StepFn = Callable[[Array], Array]
-ForcingFn = Callable[[grids.Grid, Array], Array]

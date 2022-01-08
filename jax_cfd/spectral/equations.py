@@ -15,13 +15,15 @@
 """Pseudospectral equations."""
 
 import dataclasses
+from typing import Callable
 from typing import Optional
 
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
+from jax_cfd.base import forcings
 from jax_cfd.base import grids
 from jax_cfd.spectral import forcings as spectral_forcings
 from jax_cfd.spectral import time_stepping
-from jax_cfd.spectral import types as spectral_types
 from jax_cfd.spectral import utils as spectral_utils
 
 
@@ -82,13 +84,18 @@ class NavierStokes2D(time_stepping.ImplicitExplicitODE):
   grid: grids.Grid
   drag: float = 0.
   smooth: bool = True
-  forcing_fn: Optional[spectral_types.ForcingFn] = None
+  forcing_fn: Optional[Callable[[grids.Grid], forcings.ForcingFn]] = None
+  _forcing_fn_with_grid = None
 
   def __post_init__(self):
     self.kx, self.ky = self.grid.rfft_mesh()
     self.laplace = (jnp.pi * 2j)**2 * (self.kx**2 + self.ky**2)
     self.filter_ = spectral_utils.circular_filter_2d(self.grid)
     self.linear_term = self.viscosity * self.laplace - self.drag
+
+    # setup the forcing function with the caller-specified grid.
+    if self.forcing_fn is not None:
+      self._forcing_fn_with_grid = self.forcing_fn(self.grid)
 
   def explicit_terms(self, vorticity_hat):
     velocity_solve = spectral_utils.vorticity_to_velocity(self.grid)
@@ -108,7 +115,12 @@ class NavierStokes2D(time_stepping.ImplicitExplicitODE):
     terms = advection_hat
 
     if self.forcing_fn is not None:
-      terms += jnp.fft.rfftn(self.forcing_fn(self.grid, vorticity_hat))
+      # TODO(dresdner) gymnastics to get typing to work
+      bc = boundaries.periodic_boundary_conditions(2)
+      omega = grids.GridVariable(
+          grids.GridArray(vorticity_hat, (0, 0), self.grid), bc)
+      f, = self._forcing_fn_with_grid((omega,))
+      terms += jnp.fft.rfftn(f.data)
 
     return terms
 

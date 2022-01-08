@@ -6,11 +6,11 @@ import gin
 import haiku as hk
 import jax
 import jax.numpy as jnp
+from jax_cfd import spectral
 from jax_cfd.base import array_utils
 from jax_cfd.base import boundaries
 from jax_cfd.base import equations
 from jax_cfd.base import grids
-
 from jax_cfd.ml import advections
 from jax_cfd.ml import diffusions
 from jax_cfd.ml import forcings
@@ -60,6 +60,24 @@ def implicit_diffusion_navier_stokes(
 
 
 @gin.register(denylist=("grid", "dt", "physics_specs"))
+def modular_spectral_step_fn(
+    grid,
+    dt,
+    physics_specs,
+    time_stepper=spectral.time_stepping.crank_nicolson_rk4):
+  """Returns a spectral solver for Forced Navier-Stokes flows."""
+  eq = spectral.equations.NavierStokes2D(
+      physics_specs.viscosity,
+      grid,
+      drag=physics_specs.drag,
+      forcing_fn=physics_specs.forcing_module,
+      smooth=physics_specs.smooth)
+  step_fn = time_stepper(eq, dt)
+  # TODO(dresdner) do haiku
+  return hk.to_module(step_fn)()
+
+
+@gin.configurable(denylist=("grid", "dt", "physics_specs"))
 def modular_navier_stokes_model(
     grid: grids.Grid,
     dt: float,

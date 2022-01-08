@@ -15,14 +15,36 @@
 """Functions that implement different forcing terms."""
 
 import jax.numpy as jnp
+from jax_cfd.base import forcings
 from jax_cfd.base import grids
-from jax_cfd.spectral import types as spectral_types
 
 
-# pylint: disable=unused-argument
-def kolmogorov_forcing_fn(grid: grids.Grid,
-                          state: spectral_types.Array) -> spectral_types.Array:
+def kolmogorov_forcing_fn(grid: grids.Grid) -> forcings.ForcingFn:
   """Constant Kolmogorov forcing function."""
-  _, ys = grid.mesh(offset=(0, 0))
-  constant_forcing = -4 * jnp.cos(4 * ys)
-  return constant_forcing
+  offset = (0, 0)
+  _, ys = grid.mesh(offset=offset)
+  f = -4 * jnp.cos(4 * ys)
+  f = (grids.GridArray(f, offset, grid),)
+
+  def forcing(v):
+    del v  # unused
+    return f
+
+  return forcing
+
+
+def spectral_no_forcing(grid):
+  """Zero-valued forcing field for unforced simulations."""
+  dim = 1  # TODO(dresdner) hard coded for vorticity field
+
+  # TODO(dresdner) double check that types are consistent
+  # this seems like a bit of a hack.
+  f = tuple(
+      grids.GridArray(jnp.array(0), offset=(0, 0), grid=grid)
+      for _ in range(dim))
+
+  def forcing(v):
+    del v  # unused
+    return f
+
+  return forcing

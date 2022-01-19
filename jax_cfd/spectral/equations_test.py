@@ -21,10 +21,10 @@ import jax
 from jax import numpy as jnp
 import jax_cfd.base as cfd
 from jax_cfd.base import finite_differences
+from jax_cfd.base import forcings
 from jax_cfd.base import grids
 from jax_cfd.base import test_util
 from jax_cfd.spectral import equations as spectral_equations
-from jax_cfd.spectral import forcings as spectral_forcings
 from jax_cfd.spectral import time_stepping
 
 ALL_TIME_STEPPERS = [
@@ -99,7 +99,7 @@ class EquationsTest2D(test_util.TestCase):
         spectral_equations.NavierStokes2D(
             viscosity,
             grid,
-            forcing_fn=spectral_forcings.kolmogorov_forcing_fn,
+            forcing_fn=forcings.kolmogorov_forcing,
             drag=0.1), dt)
 
     trajectory_fn = cfd.funcutils.trajectory(step_fn, 100)
@@ -122,7 +122,7 @@ class EquationsTest2D(test_util.TestCase):
           spectral_equations.NavierStokes2D(
               viscosity,
               grid,
-              forcing_fn=spectral_forcings.kolmogorov_forcing_fn,
+              forcing_fn=forcings.kolmogorov_forcing,
               drag=0.1), dt)
 
       trajectory_fn = cfd.funcutils.trajectory(step_fn, 100)
@@ -224,7 +224,7 @@ class EquationsTest2D(test_util.TestCase):
                                         viscosity, grid)
 
     if is_forced:
-      fvm_forcing = cfd.forcings.simple_turbulence_forcing(
+      fvm_forcing = forcings.simple_turbulence_forcing(
           grid,
           constant_magnitude=1,
           constant_wavenumber=4,
@@ -235,7 +235,8 @@ class EquationsTest2D(test_util.TestCase):
           viscosity, grid, smooth=True)
     else:
       fvm_forcing = None
-      eq = spectral_equations.NavierStokes2D(viscosity, grid, smooth=True)
+      eq = spectral_equations.NavierStokes2D(
+          viscosity, grid, smooth=True, drag=0, forcing_fn=None)
 
     # use `repeated` since we only compare the final state
     fvm_rollout_fn = jax.jit(

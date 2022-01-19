@@ -18,7 +18,7 @@
 # close over `grid`.
 
 import functools
-from typing import Callable
+from typing import Callable, Optional, Tuple
 
 import jax.numpy as jnp
 from jax_cfd.base import equations
@@ -65,9 +65,11 @@ def kolmogorov_forcing(
     scale: float = 1,
     k: int = 2,
     swap_xy: bool = False,
+    offsets: Optional[Tuple[Tuple[float]]] = None,
 ) -> ForcingFn:
   """Returns the Kolmogorov forcing function for turbulence in 2D."""
-  offsets = grid.cell_faces
+  if offsets is None:
+    offsets = grid.cell_faces
 
   if swap_xy:
     x = grid.mesh(offsets[1])[0]

@@ -22,7 +22,7 @@ import jax.numpy as jnp
 from jax_cfd.base import boundaries
 from jax_cfd.base import forcings
 from jax_cfd.base import grids
-from jax_cfd.spectral import forcings as spectral_forcings
+from jax_cfd.base import interpolation
 from jax_cfd.spectral import time_stepping
 from jax_cfd.spectral import utils as spectral_utils
 
@@ -64,6 +64,13 @@ class KuramotoSivashinsky(time_stepping.ImplicitExplicitODE):
     """Solves for `implicit_terms`, implicitly."""
     # TODO(dresdner) the same for all linear terms. generalize/refactor?
     return 1 / (1 - time_step * self.linear_term) * uhat
+
+
+def _get_grid_variable(arr,
+                       grid,
+                       bc=boundaries.periodic_boundary_conditions(2),
+                       offset=(0.5, 0.5)):
+  return grids.GridVariable(grids.GridArray(arr, offset, grid), bc)
 
 
 @dataclasses.dataclass
@@ -115,12 +122,11 @@ class NavierStokes2D(time_stepping.ImplicitExplicitODE):
     terms = advection_hat
 
     if self.forcing_fn is not None:
-      # TODO(dresdner) gymnastics to get typing to work
-      bc = boundaries.periodic_boundary_conditions(2)
-      omega = grids.GridVariable(
-          grids.GridArray(vorticity_hat, (0, 0), self.grid), bc)
-      f, = self._forcing_fn_with_grid((omega,))
-      terms += jnp.fft.rfftn(f.data)
+      fx, fy = self._forcing_fn_with_grid((_get_grid_variable(vx, self.grid),
+                                           _get_grid_variable(vy, self.grid)))
+      fx_hat, fy_hat = jnp.fft.rfft2(fx.data), jnp.fft.rfft2(fy.data)
+      terms += spectral_utils.spectral_curl_2d((self.kx, self.ky),
+                                               (fx_hat, fy_hat))
 
     return terms
 
@@ -131,7 +137,7 @@ class NavierStokes2D(time_stepping.ImplicitExplicitODE):
     return 1 / (1 - time_step * self.linear_term) * vorticity_hat
 
 
-# pylint: disable=g-doc-args,g-doc-return-or-yield
+# pylint: disable=g-doc-args,g-doc-return-or-yield,invalid-name
 def ForcedNavierStokes2D(viscosity, grid, smooth):
   """Sets up the flow that is used in Kochkov et al. [1].
 
@@ -148,9 +154,14 @@ def ForcedNavierStokes2D(viscosity, grid, smooth):
     Annual review of fluid mechanics 44 (2012): 427-451.
     https://doi.org/10.1146/annurev-fluid-120710-101240
   """
+  wave_number = 4
+  offsets = ((0, 0), (0, 0))
+  # pylint: disable=g-long-lambda
+  forcing_fn = lambda grid: forcings.kolmogorov_forcing(
+      grid, k=wave_number, offsets=offsets)
   return NavierStokes2D(
       viscosity,
       grid,
       drag=0.1,
       smooth=smooth,
-      forcing_fn=spectral_forcings.kolmogorov_forcing_fn)
+      forcing_fn=forcing_fn)

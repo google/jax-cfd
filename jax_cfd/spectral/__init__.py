@@ -15,7 +15,6 @@
 """Pseudospectral codes (no ML)."""
 
 import jax_cfd.spectral.equations
-import jax_cfd.spectral.forcings
 import jax_cfd.spectral.time_stepping
 import jax_cfd.spectral.types
 import jax_cfd.spectral.utils

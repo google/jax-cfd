@@ -132,3 +132,10 @@ def filter_step(step_fn: spectral_types.StepFn, filter_: spectral_types.Array):
   def new_step_fn(state):
     return filter_ * step_fn(state)
   return new_step_fn
+
+
+def spectral_curl_2d(mesh, velocity_hat):
+  """Computes the 2D curl in the Fourier basis."""
+  kx, ky = mesh
+  uhat, vhat = velocity_hat
+  return 2j * jnp.pi * (vhat * kx - uhat * ky)

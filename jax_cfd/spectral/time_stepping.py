@@ -147,7 +147,7 @@ def low_storage_runge_kutta_crank_nicolson(
     Fluid Dynamics. (Springer Berlin Heidelberg, 2007).
     https://doi.org/10.1007/978-3-540-30728-0 (Appendix D.3)
   """
-  # pylint: disable=invalid-name
+  # pylint: disable=invalid-name,non-ascii-name
   α = alphas
   β = betas
   γ = gammas

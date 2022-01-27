@@ -14,7 +14,7 @@
 """Classes that specify how boundary conditions are applied to arrays."""
 
 import dataclasses
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Optional
 from jax import lax
 import jax.numpy as jnp
 from jax_cfd.base import grids
@@ -33,14 +33,15 @@ class BCType:
 
 
 @dataclasses.dataclass(init=False, frozen=True)
-class HomogeneousBoundaryConditions(BoundaryConditions):
-  """Boundary conditions for a PDE variable.
+class ConstantBoundaryConditions(BoundaryConditions):
+  """Boundary conditions for a PDE variable that are constant in space and time.
 
   Example usage:
     grid = Grid((10, 10))
     array = GridArray(np.zeros((10, 10)), offset=(0.5, 0.5), grid)
-    bc = HomogeneousBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
-                                        (BCType.DIRICHLET, BCType.DIRICHLET)))
+    bc = ConstantBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
+                                        (BCType.DIRICHLET, BCType.DIRICHLET)),
+                                        ((0.0, 10.0),(1.0, 0.0)))
     u = GridVariable(array, bc)
 
   Attributes:
@@ -48,10 +49,14 @@ class HomogeneousBoundaryConditions(BoundaryConditions):
       dimension `i`.
   """
   types: Tuple[Tuple[str, str], ...]
+  _values: Tuple[Tuple[Optional[float], Optional[float]], ...]
 
-  def __init__(self, types: Sequence[Tuple[str, str]]):
+  def __init__(self, types: Sequence[Tuple[str, str]],
+               values: Sequence[Tuple[Optional[float], Optional[float]]]):
     types = tuple(types)
+    values = tuple(values)
     object.__setattr__(self, 'types', types)
+    object.__setattr__(self, '_values', values)
 
   def shift(
       self,
@@ -82,6 +87,9 @@ class HomogeneousBoundaryConditions(BoundaryConditions):
   ) -> GridArray:
     """Pad a GridArray by `padding`.
 
+    Important: _pad makes no sense past 1 ghost cell for nonperiodic
+    boundaries. This is sufficient for jax_cfd finite difference code.
+
     Args:
       u: a `GridArray` object.
       width: number of elements to pad along axis. Use negative value for lower
@@ -98,28 +106,50 @@ class HomogeneousBoundaryConditions(BoundaryConditions):
       bc_type = self.types[axis][1]
       padding = (0, width)
 
-    full_padding = [(0, 0)] * u.data.ndim
+    full_padding = [(0, 0)] * u.grid.ndim
     full_padding[axis] = padding
 
     offset = list(u.offset)
     offset[axis] -= padding[0]
 
+    if bc_type != BCType.PERIODIC and abs(width) > 1:
+      raise ValueError(
+          'Padding past 1 ghost cell is not defined in nonperiodic case.')
+
     if bc_type == BCType.PERIODIC:
+      # self.values are ignored here
       pad_kwargs = dict(mode='wrap')
     elif bc_type == BCType.DIRICHLET:
       if np.isclose(u.offset[axis] % 1, 0.5):  # cell center
-        # make the linearly interpolated value 0 by setting the padded values
-        # to the negative symmetric values
-        data = (2 * jnp.pad(u.data, full_padding, mode='constant')
+        # make the linearly interpolated value equal to the boundary by setting
+        # the padded values to the negative symmetric values
+        data = (2 * jnp.pad(
+            u.data, full_padding, mode='constant', constant_values=self._values)
                 - jnp.pad(u.data, full_padding, mode='symmetric'))
         return GridArray(data, tuple(offset), u.grid)
       elif np.isclose(u.offset[axis] % 1, 0):  # cell edge
-        pad_kwargs = dict(mode='constant')
+        pad_kwargs = dict(mode='constant', constant_values=self._values)
       else:
         raise ValueError('expected offset to be an edge or cell center, got '
                          f'offset[axis]={u.offset[axis]}')
     elif bc_type == BCType.NEUMANN:
-      pad_kwargs = dict(mode='edge')
+      if not (np.isclose(u.offset[axis] % 1, 0) or
+              np.isclose(u.offset[axis] % 1, 0.5)):
+        raise ValueError('expected offset to be an edge or cell center, got '
+                         f'offset[axis]={u.offset[axis]}')
+      else:
+        # When the data is cell-centered, computes the backward difference.
+        # When the data is on cell edges, boundary is set such that
+        # (u_last_interior - u_boundary)/grid_step = neumann_bc_value.
+        data = (
+            jnp.pad(u.data, full_padding, mode='edge') + u.grid.step[axis] *
+            (jnp.pad(u.data, full_padding, mode='constant') - jnp.pad(
+                u.data,
+                full_padding,
+                mode='constant',
+                constant_values=self._values)))
+        return GridArray(data, tuple(offset), u.grid)
+
     else:
       raise ValueError('invalid boundary type')
 
@@ -154,6 +184,31 @@ class HomogeneousBoundaryConditions(BoundaryConditions):
     offset[axis] += padding[0]
     return GridArray(data, tuple(offset), u.grid)
 
+  trim = _trim
+  pad = _pad
+
+
+class HomogeneousBoundaryConditions(ConstantBoundaryConditions):
+  """Boundary conditions for a PDE variable.
+
+  Example usage:
+    grid = Grid((10, 10))
+    array = GridArray(np.zeros((10, 10)), offset=(0.5, 0.5), grid)
+    bc = ConstantBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
+                                        (BCType.DIRICHLET, BCType.DIRICHLET)))
+    u = GridVariable(array, bc)
+
+  Attributes:
+    types: `types[i]` is a tuple specifying the lower and upper BC types for
+      dimension `i`.
+  """
+
+  def __init__(self, types: Sequence[Tuple[str, str]]):
+
+    ndim = len(types)
+    values = ((0.0, 0.0),) * ndim
+    super(HomogeneousBoundaryConditions, self).__init__(types, values)
+
 
 # Convenience utilities to ease updating of BoundaryConditions implementation
 def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
@@ -162,30 +217,90 @@ def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
       ((BCType.PERIODIC, BCType.PERIODIC),) * ndim)
 
 
-def dirichlet_boundary_conditions(ndim: int) -> BoundaryConditions:
-  """Returns Dirichelt BCs for a variable with `ndim` spatial dimension."""
-  return HomogeneousBoundaryConditions(
-      ((BCType.DIRICHLET, BCType.DIRICHLET),) * ndim)
+def dirichlet_boundary_conditions(
+    ndim: int,
+    bc_vals: Optional[Sequence[Tuple[float,
+                                     float]]] = None,) -> BoundaryConditions:
+  """Returns Dirichelt BCs for a variable with `ndim` spatial dimension.
+
+  Args:
+    ndim: spacial dimension.
+    bc_vals: if None, assumes Homogeneous BC. Else needs to be a tuple of lower
+      and upper boundary values for each dimension.
+      If None, returns Homogeneous BC.
+
+  Returns:
+    BoundaryCondition subclass.
+  """
+  if not bc_vals:
+    return HomogeneousBoundaryConditions(
+        ((BCType.DIRICHLET, BCType.DIRICHLET),) * ndim)
+  else:
+    return ConstantBoundaryConditions(
+        ((BCType.DIRICHLET, BCType.DIRICHLET),) * ndim, bc_vals)
 
 
-def neumann_boundary_conditions(ndim: int) -> BoundaryConditions:
-  """Returns Neumann BCs for a variable with `ndim` spatial dimension."""
-  return HomogeneousBoundaryConditions(
-      ((BCType.NEUMANN, BCType.NEUMANN),) * ndim)
+def neumann_boundary_conditions(
+    ndim: int,
+    bc_vals: Optional[Sequence[Tuple[float,
+                                     float]]] = None,) -> BoundaryConditions:
+  """Returns Neumann BCs for a variable with `ndim` spatial dimension.
+
+  Args:
+    ndim: spacial dimension.
+    bc_vals: the lower and upper boundary condition value for each dimension.
+      If None, returns Homogeneous BC.
+
+  Returns:
+    BoundaryCondition subclass.
+  """
+  if not bc_vals:
+    return HomogeneousBoundaryConditions(
+        ((BCType.NEUMANN, BCType.NEUMANN),) * ndim)
+  else:
+    return ConstantBoundaryConditions(
+        ((BCType.NEUMANN, BCType.NEUMANN),) * ndim, bc_vals)
 
 
-def periodic_and_dirichlet_boundary_conditions() -> BoundaryConditions:
-  """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1."""
-  return HomogeneousBoundaryConditions(
-      ((BCType.PERIODIC, BCType.PERIODIC),
-       (BCType.DIRICHLET, BCType.DIRICHLET)))
+def periodic_and_dirichlet_boundary_conditions(
+    bc_vals: Optional[Tuple[float, float]] = None) -> BoundaryConditions:
+  """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1.
+
+  Args:
+    bc_vals: the lower and upper boundary condition value for each dimension.
+      If None, returns Homogeneous BC.
+
+  Returns:
+    BoundaryCondition subclass.
+  """
+  if not bc_vals:
+    return HomogeneousBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
+                                          (BCType.DIRICHLET, BCType.DIRICHLET)))
+  else:
+    return ConstantBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
+                                       (BCType.DIRICHLET, BCType.DIRICHLET)),
+                                      ((None, None), bc_vals))
 
 
-def periodic_and_neumann_boundary_conditions() -> BoundaryConditions:
-  """Returns BCs periodic for dimension 0 and Neumann for dimension 1."""
-  return HomogeneousBoundaryConditions(
-      ((BCType.PERIODIC, BCType.PERIODIC),
-       (BCType.NEUMANN, BCType.NEUMANN)))
+def periodic_and_neumann_boundary_conditions(
+    bc_vals: Optional[Tuple[float, float]] = None) -> BoundaryConditions:
+  """Returns BCs periodic for dimension 0 and Neumann for dimension 1.
+
+  Args:
+    bc_vals: the lower and upper boundary condition value for each dimension.
+      If None, returns Homogeneous BC.
+
+
+  Returns:
+    BoundaryCondition subclass.
+  """
+  if not bc_vals:
+    return HomogeneousBoundaryConditions(
+        ((BCType.PERIODIC, BCType.PERIODIC), (BCType.NEUMANN, BCType.NEUMANN)))
+  else:
+    return ConstantBoundaryConditions(
+        ((BCType.PERIODIC, BCType.PERIODIC), (BCType.NEUMANN, BCType.NEUMANN)),
+        ((None, None), bc_vals))
 
 
 def has_all_periodic_boundary_conditions(*arrays: GridVariable) -> bool:
@@ -220,4 +335,3 @@ def get_pressure_bc_from_velocity(v: GridVariableVector) -> BoundaryConditions:
                        f'got {velocity_bc_upper}')
     pressure_bc_types.append((pressure_bc_lower, pressure_bc_upper))
   return HomogeneousBoundaryConditions(pressure_bc_types)
-

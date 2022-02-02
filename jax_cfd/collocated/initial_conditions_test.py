@@ -47,10 +47,10 @@ class InitialConditionsTest(test_util.TestCase):
     max_divergence = fd.centered_divergence(v).data.max()
 
     # Assert that initial velocity is divergence free
-    self.assertAllClose(0., max_divergence, atol=5e-4)
+    self.assertAllClose(0., max_divergence, atol=1e-4)
 
     # Assert that the specified maximum velocity is obtained.
-    self.assertAllClose(maximum_velocity, actual_maximum_velocity, atol=1e-5)
+    self.assertAllClose(maximum_velocity, actual_maximum_velocity, atol=1e-4)
 
 
 if __name__ == '__main__':

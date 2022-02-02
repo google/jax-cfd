@@ -25,7 +25,7 @@ import numpy as np
 BCType = boundaries.BCType
 
 
-class HomogeneousBoundaryConditionsTest(test_util.TestCase):
+class ConstantBoundaryConditionsTest(test_util.TestCase):
 
   def test_init_usage(self):
 
@@ -636,6 +636,102 @@ class HomogeneousBoundaryConditionsTest(test_util.TestCase):
     actual = bc._trim(array, width, axis=0)
     expected = grids.GridArray(expected_data, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
+
+  @parameterized.parameters(
+      dict(
+          values=((1.0, 2.0),), axis=0, shape=(3,), expected_values=(1.0, 2.0)),
+      dict(
+          values=((1.0, 2.0), (3.0, 4.0)),
+          axis=0,
+          shape=(3, 4),
+          expected_values=((1.0, 1.0, 1.0, 1.0), (2.0, 2.0, 2.0, 2.0))),
+      dict(
+          values=((1.0, 2.0), (3.0, 4.0)),
+          axis=1,
+          shape=(3, 4),
+          expected_values=((3.0, 3.0, 3.0), (4.0, 4.0, 4.0))),
+  )
+  def test_values_constant_boundary(self, values, axis, shape, expected_values):
+    grid = grids.Grid(shape)
+    bc = boundaries.dirichlet_boundary_conditions(grid.ndim, values)
+    actual = bc.values(axis, grid)
+    self.assertArrayEqual(actual, expected_values)
+    self.assertIsInstance(actual, tuple)
+    for x in actual:
+      self.assertIsInstance(x, jnp.ndarray)
+
+  @parameterized.parameters(
+      dict(axis=0, shape=(3,), expected_values=(0.0, 0.0)),
+      dict(
+          axis=0,
+          shape=(3, 4),
+          expected_values=((0.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))),
+      dict(
+          axis=1,
+          shape=(3, 4),
+          expected_values=((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))),
+  )
+  def test_values_homogeneous_boundary(self, axis, shape, expected_values):
+    grid = grids.Grid(shape)
+    bc = boundaries.dirichlet_boundary_conditions(grid.ndim)
+    actual = bc.values(axis, grid)
+    self.assertArrayEqual(actual, expected_values)
+    self.assertIsInstance(actual, tuple)
+    for x in actual:
+      self.assertIsInstance(x, jnp.ndarray)
+
+  @parameterized.parameters(
+      dict(
+          input_data=np.array([11, 12, 13, 14]),
+          offset=(0.0,),
+          values=((1.0, 2.0),),
+          expected_data=np.array([1, 12, 13, 14])),
+      dict(
+          input_data=np.array([11, 12, 13, 14]),
+          offset=(1.0,),
+          values=((1.0, 2.0),),
+          expected_data=np.array([11, 12, 13, 2])),
+      dict(
+          input_data=np.array([11, 12, 13, 14]),
+          offset=(0.5,),
+          values=((1.0, 2.0),),
+          expected_data=np.array([11, 12, 13, 14])),
+      dict(
+          input_data=np.array([
+              [11, 12, 13, 14],
+              [21, 22, 23, 24],
+              [31, 32, 33, 34],
+          ]),
+          offset=(1.0, 0.5),
+          values=((1.0, 2.0), (3.0, 4.0)),
+          expected_data=np.array([
+              [11, 12, 13, 14],
+              [21, 22, 23, 24],
+              [2, 2, 2, 2],
+          ])),
+      dict(
+          input_data=np.array([
+              [11, 12, 13, 14],
+              [21, 22, 23, 24],
+              [31, 32, 33, 34],
+          ]),
+          offset=(0.5, 0.0),
+          values=((1.0, 2.0), (3.0, 4.0)),
+          expected_data=np.array([
+              [3, 12, 13, 14],
+              [3, 22, 23, 24],
+              [3, 32, 33, 34],
+          ])),
+  )
+  def test_impose_bc_constant_boundary(self, input_data, offset, values,
+                                       expected_data):
+    grid = grids.Grid(input_data.shape)
+    array = grids.GridArray(input_data, offset, grid)
+    bc = boundaries.dirichlet_boundary_conditions(grid.ndim, values)
+    variable = grids.GridVariable(array, bc)
+    variable.impose_bc()
+    expected = grids.GridArray(expected_data, offset, grid)
+    self.assertArrayEqual(variable.array, expected)
 
   def test_has_all_periodic_boundary_conditions(self):
     grid = grids.Grid((10, 10))

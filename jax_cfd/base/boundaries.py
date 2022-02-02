@@ -14,7 +14,7 @@
 """Classes that specify how boundary conditions are applied to arrays."""
 
 import dataclasses
-from typing import Sequence, Tuple, Optional
+from typing import Sequence, Tuple, Optional, Union
 from jax import lax
 import jax.numpy as jnp
 from jax_cfd.base import grids
@@ -24,6 +24,7 @@ BoundaryConditions = grids.BoundaryConditions
 GridArray = grids.GridArray
 GridVariable = grids.GridVariable
 GridVariableVector = grids.GridVariableVector
+Array = Union[np.ndarray, jnp.DeviceArray]
 
 
 class BCType:
@@ -184,6 +185,26 @@ class ConstantBoundaryConditions(BoundaryConditions):
     offset[axis] += padding[0]
     return GridArray(data, tuple(offset), u.grid)
 
+  def values(
+      self, axis: int,
+      grid: grids.Grid) -> Tuple[Optional[jnp.ndarray], Optional[jnp.ndarray]]:
+    """Returns boundary values on the grid along axis.
+
+    Args:
+      axis: axis along which to return boundary values.
+      grid: a `Grid` object on which to evaluate boundary conditions.
+
+    Returns:
+      A tuple of arrays of grid.ndim - 1 dimensions that specify values on the
+      boundary. In case of periodic boundaries, returns a tuple(None,None).
+    """
+    if None in self._values[axis]:
+      return (None, None)
+    bc = tuple(
+        jnp.full(grid.shape[:axis] +
+                 grid.shape[axis + 1:], self._values[axis][-i]) for i in [0, 1])
+    return bc
+
   trim = _trim
   pad = _pad
 
@@ -219,15 +240,15 @@ def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
 
 def dirichlet_boundary_conditions(
     ndim: int,
-    bc_vals: Optional[Sequence[Tuple[float,
-                                     float]]] = None,) -> BoundaryConditions:
+    bc_vals: Optional[Sequence[Tuple[float, float]]] = None,
+) -> BoundaryConditions:
   """Returns Dirichelt BCs for a variable with `ndim` spatial dimension.
 
   Args:
     ndim: spacial dimension.
     bc_vals: if None, assumes Homogeneous BC. Else needs to be a tuple of lower
-      and upper boundary values for each dimension.
-      If None, returns Homogeneous BC.
+      and upper boundary values for each dimension. If None, returns Homogeneous
+      BC.
 
   Returns:
     BoundaryCondition subclass.
@@ -242,14 +263,14 @@ def dirichlet_boundary_conditions(
 
 def neumann_boundary_conditions(
     ndim: int,
-    bc_vals: Optional[Sequence[Tuple[float,
-                                     float]]] = None,) -> BoundaryConditions:
+    bc_vals: Optional[Sequence[Tuple[float, float]]] = None,
+) -> BoundaryConditions:
   """Returns Neumann BCs for a variable with `ndim` spatial dimension.
 
   Args:
     ndim: spacial dimension.
-    bc_vals: the lower and upper boundary condition value for each dimension.
-      If None, returns Homogeneous BC.
+    bc_vals: the lower and upper boundary condition value for each dimension. If
+      None, returns Homogeneous BC.
 
   Returns:
     BoundaryCondition subclass.
@@ -267,8 +288,8 @@ def periodic_and_dirichlet_boundary_conditions(
   """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1.
 
   Args:
-    bc_vals: the lower and upper boundary condition value for each dimension.
-      If None, returns Homogeneous BC.
+    bc_vals: the lower and upper boundary condition value for each dimension. If
+      None, returns Homogeneous BC.
 
   Returns:
     BoundaryCondition subclass.
@@ -287,9 +308,8 @@ def periodic_and_neumann_boundary_conditions(
   """Returns BCs periodic for dimension 0 and Neumann for dimension 1.
 
   Args:
-    bc_vals: the lower and upper boundary condition value for each dimension.
-      If None, returns Homogeneous BC.
-
+    bc_vals: the lower and upper boundary condition value for each dimension. If
+      None, returns Homogeneous BC.
 
   Returns:
     BoundaryCondition subclass.

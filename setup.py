@@ -15,7 +15,7 @@
 """Setup JAX-CFD."""
 import setuptools
 
-base_requires = ['jax', 'numpy', 'scipy']
+base_requires = ['jax', 'numpy', 'scipy', 'tree-math']
 data_requires = ['matplotlib', 'seaborn', 'Pillow', 'xarray']
 ml_requires = ['dm-haiku', 'einops', 'gin-config']
 tests_requires = ['absl-py', 'pytest', 'pytest-xdist', 'scikit-image']

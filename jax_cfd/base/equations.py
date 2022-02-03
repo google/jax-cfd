@@ -24,7 +24,7 @@ from jax_cfd.base import diffusion
 from jax_cfd.base import grids
 from jax_cfd.base import pressure
 from jax_cfd.base import time_stepping
-from jax_cfd.base import tree_math
+import tree_math
 
 # Specifying the full signatures of Callable would get somewhat onerous
 # pylint: disable=g-bare-generic
@@ -71,7 +71,7 @@ def dynamic_time_step(v: GridVariableVector,
 
 
 def _wrap_term_as_vector(fun, *, name):
-  return tree_math.pytree_to_vector_fun(jax.named_call(fun, name=name))
+  return tree_math.unwrap(jax.named_call(fun, name=name), vector_argnums=0)
 
 
 # TODO(shoyer): rename this to explicit_diffusion_navier_stokes
@@ -106,7 +106,7 @@ def semi_implicit_navier_stokes(
   # TODO(jamieas): Consider a scheme where pressure calculations and
   # advection/diffusion are staggered in time.
 
-  @tree_math.vector_to_pytree_fun
+  @tree_math.wrap
   @functools.partial(jax.named_call, name='navier_stokes_momentum')
   def _explicit_terms(v):
     dv_dt = convection(v)

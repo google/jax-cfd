@@ -15,7 +15,7 @@
 """Implicit-explicit time stepping routines for ODEs."""
 
 from typing import Callable, Sequence, TypeVar
-from jax_cfd.base import tree_math
+import tree_math
 
 
 PyTreeState = TypeVar("PyTreeState")
@@ -67,10 +67,10 @@ def backward_forward_euler(
   """
   # pylint: disable=invalid-name
   dt = time_step
-  F = tree_math.pytree_to_vector_fun(equation.explicit_terms)
-  G_inv = tree_math.pytree_to_vector_fun(equation.implicit_solve)
+  F = tree_math.unwrap(equation.explicit_terms)
+  G_inv = tree_math.unwrap(equation.implicit_solve, vector_argnums=0)
 
-  @tree_math.vector_to_pytree_fun
+  @tree_math.wrap
   def step_fn(u0):
     g = u0 + dt * F(u0)
     u1 = G_inv(g, dt)
@@ -99,11 +99,11 @@ def crank_nicolson_rk2(
   """
   # pylint: disable=invalid-name
   dt = time_step
-  F = tree_math.pytree_to_vector_fun(equation.explicit_terms)
-  G = tree_math.pytree_to_vector_fun(equation.implicit_terms)
-  G_inv = tree_math.pytree_to_vector_fun(equation.implicit_solve)
+  F = tree_math.unwrap(equation.explicit_terms)
+  G = tree_math.unwrap(equation.implicit_terms)
+  G_inv = tree_math.unwrap(equation.implicit_solve, vector_argnums=0)
 
-  @tree_math.vector_to_pytree_fun
+  @tree_math.wrap
   def step_fn(u0):
     g = u0 + 0.5 * dt * G(u0)
     h1 = F(u0)
@@ -152,14 +152,14 @@ def low_storage_runge_kutta_crank_nicolson(
   β = betas
   γ = gammas
   dt = time_step
-  F = tree_math.pytree_to_vector_fun(equation.explicit_terms)
-  G = tree_math.pytree_to_vector_fun(equation.implicit_terms)
-  G_inv = tree_math.pytree_to_vector_fun(equation.implicit_solve)
+  F = tree_math.unwrap(equation.explicit_terms)
+  G = tree_math.unwrap(equation.implicit_terms)
+  G_inv = tree_math.unwrap(equation.implicit_solve, vector_argnums=0)
 
   if len(alphas) - 1 != len(betas) != len(gammas):
     raise ValueError("number of RK coefficients does not match")
 
-  @tree_math.vector_to_pytree_fun
+  @tree_math.wrap
   def step_fn(u):
     h = 0
     for k in range(len(β)):

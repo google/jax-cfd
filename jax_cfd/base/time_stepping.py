@@ -16,7 +16,7 @@
 import dataclasses
 from typing import Callable, Sequence, TypeVar
 import jax
-from jax_cfd.base import tree_math
+import tree_math
 
 
 PyTreeState = TypeVar("PyTreeState")
@@ -78,14 +78,14 @@ def navier_stokes_rk(
   """
   # pylint: disable=invalid-name
   dt = time_step
-  F = tree_math.pytree_to_vector_fun(equation.explicit_terms)
-  P = tree_math.pytree_to_vector_fun(equation.pressure_projection)
+  F = tree_math.unwrap(equation.explicit_terms)
+  P = tree_math.unwrap(equation.pressure_projection)
 
   a = tableau.a
   b = tableau.b
   num_steps = len(b)
 
-  @tree_math.vector_to_pytree_fun
+  @tree_math.wrap
   def step_fn(u0):
     u = [None] * num_steps
     k = [None] * num_steps

@@ -12,14 +12,18 @@ To learn more about our general approach, read our paper [Machine learning accel
 
 ## Getting started
 
-Take a look at "demo" notebook in the "notebooks" directory for an example of
-how to use JAX-CFD for simulate a 2D turbulent flow.
+The "notebooks" directory contains several demonstrations of using the JAX-CFD
+code.
 
-We are currently preparing more example notebooks, inculding:
+- Demos of different simulation setups:
+  - [2D simulation with FVM on a staggered grid](https://colab.research.google.com/github/google/jax-cfd/blob/main/notebooks/demo.ipynb)
+  - [2D simulation with a psuedo-spectral solver](https://colab.research.google.com/github/google/jax-cfd/blob/main/notebooks/spectral_forced_turbulence.ipynb)
+  - [2D simulation of channel flow](https://colab.research.google.com/github/google/jax-cfd/blob/main/notebooks/channel_flow_demo.ipynb)
+  - [2D simulation with FVM on a collocated grid](https://colab.research.google.com/github/google/jax-cfd/blob/main/notebooks/collocated_demo.ipynb) (experimental)
 
-- Reusing our training data and/or evaluation setup (without running JAX-CFD)
-- Simulations using our pre-trained turbulence models.
-- Training a simple hybrid ML + CFD model from scratch
+- Reproduce results from our PNAS paper:
+  - [Data analysis and evaluation](https://colab.research.google.com/github/google/jax-cfd/blob/main/notebooks/ml_accelerated_cfd_data_analysis.ipynb)
+  - [Running our pre-trained models](https://colab.research.google.com/github/google/jax-cfd/blob/main/notebooks/ml_model_inference_demo.ipynb)
 
 ## Organization
 

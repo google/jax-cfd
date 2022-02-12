@@ -17,9 +17,9 @@
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
+from jax import tree_util
 from jax.config import config
 import jax.numpy as jnp
-from jax import tree_util
 from jax_cfd.base import funcutils
 from jax_cfd.spectral import time_stepping
 import numpy as np
@@ -50,7 +50,7 @@ ALL_TEST_PROBLEMS = [
          outer_steps=5,
          initial_state=np.ones(10),
          closed_form=lambda x0, t: x0,
-         tolerances=[1e-12] * 4),
+         tolerances=[1e-12] * 5),
     # x(t) = 5 * t * np.ones(3)
     dict(testcase_name='_constant_derivative',
          explicit_terms=lambda x: 5 * jnp.ones_like(x),
@@ -61,7 +61,7 @@ ALL_TEST_PROBLEMS = [
          outer_steps=5,
          initial_state=np.ones(3),
          closed_form=lambda x0, t: x0 + 5 * t,
-         tolerances=[1e-12] * 4),
+         tolerances=[1e-12] * 5),
     # x(t) = np.arange(3) * np.exp(t)
     # Uses explicit terms only.
     dict(testcase_name='_linear_derivative_explicit',
@@ -73,7 +73,7 @@ ALL_TEST_PROBLEMS = [
          outer_steps=5,
          initial_state=np.arange(3.0),
          closed_form=lambda x0, t: np.arange(3) * jnp.exp(t),
-         tolerances=[5e-2, 1e-4, 1e-6, 1e-9]),
+         tolerances=[5e-2, 1e-4, 1e-6, 1e-9, 1e-6]),
     # x(t) = np.arange(3) * np.exp(t)
     # Uses implicit terms only.
     dict(testcase_name='_linear_derivative_implicit',
@@ -85,7 +85,7 @@ ALL_TEST_PROBLEMS = [
          outer_steps=5,
          initial_state=np.arange(3.0),
          closed_form=lambda x0, t: np.arange(3) * jnp.exp(t),
-         tolerances=[5e-2, 1e-4, 1e-5, 1e-5]),
+         tolerances=[5e-2, 5e-5, 1e-5, 1e-5, 3e-5]),
     # x(t) = np.arange(3) * np.exp(t)
     # Splits the equation into an implicit and explicit term.
     dict(testcase_name='_linear_derivative_semi_implicit',
@@ -97,7 +97,7 @@ ALL_TEST_PROBLEMS = [
          outer_steps=5,
          initial_state=np.arange(3) * np.exp(0),
          closed_form=lambda x0, t: np.arange(3.0) * jnp.exp(t),
-         tolerances=[1e-4, 2e-5, 2e-6, 1e-6]),
+         tolerances=[1e-4, 2e-5, 2e-6, 1e-6, 2e-5]),
     dict(testcase_name='_harmonic_oscillator_explicit',
          explicit_terms=lambda x: jnp.stack([x[1], -x[0]]),
          implicit_terms=jnp.zeros_like,
@@ -107,7 +107,7 @@ ALL_TEST_PROBLEMS = [
          outer_steps=5,
          initial_state=np.ones(2),
          closed_form=harmonic_oscillator,
-         tolerances=[1e-2, 3e-5, 6e-8, 5e-11]),
+         tolerances=[1e-2, 3e-5, 6e-8, 5e-11, 6e-8]),
     dict(testcase_name='_harmonic_oscillator_implicit',
          explicit_terms=jnp.zeros_like,
          implicit_terms=lambda x: jnp.stack([x[1], -x[0]]),
@@ -118,7 +118,7 @@ ALL_TEST_PROBLEMS = [
          outer_steps=5,
          initial_state=np.ones(2),
          closed_form=harmonic_oscillator,
-         tolerances=[1e-2, 2e-5, 2e-6, 1e-6]),
+         tolerances=[1e-2, 2e-5, 2e-6, 1e-6, 6e-6]),
 ]
 
 
@@ -127,6 +127,7 @@ ALL_TIME_STEPPERS = [
     time_stepping.crank_nicolson_rk2,
     time_stepping.crank_nicolson_rk3,
     time_stepping.crank_nicolson_rk4,
+    time_stepping.imex_rk_sil3,
 ]
 
 

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Implicit-explicit time stepping routines for ODEs."""
-
+import dataclasses
 from typing import Callable, Sequence, TypeVar
 import tree_math
 
@@ -192,6 +192,100 @@ def crank_nicolson_rk4(
       alphas=[0, 0.1496590219993, 0.3704009573644, 0.6222557631345, 0.9582821306748, 1],
       betas=[0, -0.4178904745, -1.192151694643, -1.697784692471, -1.514183444257],
       gammas=[0.1496590219993, 0.3792103129999, 0.8229550293869, 0.6994504559488, 0.1530572479681],
+      equation=equation,
+      time_step=time_step,
+  )
+
+
+@dataclasses.dataclass
+class ImExButcherTableau:
+  """Butcher Tableau for implicit-explicit Runge-Kutta methods."""
+  a_ex: Sequence[Sequence[float]]
+  a_im: Sequence[Sequence[float]]
+  b_ex: Sequence[float]
+  b_im: Sequence[float]
+
+  def __post_init__(self):
+    if len({len(self.a_ex) + 1,
+            len(self.a_im) + 1,
+            len(self.b_ex),
+            len(self.b_im)}) > 1:
+      raise ValueError("inconsistent Butcher tableau")
+
+
+def imex_runge_kutta(
+    tableau: ImExButcherTableau,
+    equation: ImplicitExplicitODE,
+    time_step: float,
+) -> TimeStepFn:
+  """Time stepping with Implicit-Explicit Runge-Kutta."""
+  # pylint: disable=invalid-name
+  dt = time_step
+  F = tree_math.unwrap(equation.explicit_terms)
+  G = tree_math.unwrap(equation.implicit_terms)
+  G_inv = tree_math.unwrap(equation.implicit_solve, vector_argnums=0)
+
+  a_ex = tableau.a_ex
+  a_im = tableau.a_im
+  b_ex = tableau.b_ex
+  b_im = tableau.b_im
+
+  num_steps = len(b_ex)
+
+  @tree_math.wrap
+  def step_fn(y0):
+    f = [None] * num_steps
+    g = [None] * num_steps
+
+    f[0] = F(y0)
+    g[0] = G(y0)
+
+    for i in range(1, num_steps):
+      ex_terms = dt * sum(a_ex[i-1][j] * f[j] for j in range(i) if a_ex[i-1][j])
+      im_terms = dt * sum(a_im[i-1][j] * g[j] for j in range(i) if a_im[i-1][j])
+      Y_star = y0 + ex_terms + im_terms
+      Y = G_inv(Y_star, dt * a_im[i-1][i])
+      if any(a_ex[j][i] for j in range(i, num_steps - 1)) or b_ex[i]:
+        f[i] = F(Y)
+      if any(a_im[j][i] for j in range(i, num_steps - 1)) or b_im[i]:
+        g[i] = G(Y)
+
+    ex_terms = dt * sum(b_ex[j] * f[j] for j in range(num_steps) if b_ex[j])
+    im_terms = dt * sum(b_im[j] * g[j] for j in range(num_steps) if b_im[j])
+    y_next = y0 + ex_terms + im_terms
+
+    return y_next
+
+  return step_fn
+
+
+def imex_rk_sil3(
+    equation: ImplicitExplicitODE, time_step: float,
+) -> TimeStepFn:
+  """Time stepping with the SIL3 implicit-explicit RK scheme.
+
+  This method is second-order accurate for the implicit terms and third-order
+  accurate for the explicit terms.
+
+  Args:
+    equation: equation to solve.
+    time_step: time step.
+
+  Returns:
+    Function that performs a time step.
+
+  Reference:
+    Whitaker, J. S. & Kar, S. K. Implicit-Explicit Runge-Kutta Methods for
+    Fast-Slow Wave Problems. Monthly Weather Review vol. 141 3426-3434 (2013)
+    http://dx.doi.org/10.1175/mwr-d-13-00132.1
+  """
+  return imex_runge_kutta(
+      tableau=ImExButcherTableau(
+          a_ex=[[1/3], [1/6, 1/2], [1/2, -1/2, 1]],
+          a_im=[[1/6, 1/6], [1/3, 0, 1/3], [3/8, 0, 3/8, 1/4]],
+          b_ex=[1/2, -1/2, 1, 0],
+          b_im=[3/8, 0, 3/8, 1/4],
+      ),
       equation=equation,
       time_step=time_step,
   )

@@ -1,6 +1,6 @@
 # JAX-CFD: Computational Fluid Dynamics in JAX
 
-Authors: Dmitrii Kochkov, Jamie A. Smith, Stephan Hoyer
+Authors: Dmitrii Kochkov, Jamie A. Smith, Peter Norgaard, Gideon Dresdner, Stephan Hoyer
 
 JAX-CFD is an experimental research project for exploring the potential of
 machine learning, automatic differentiation and hardware accelerators (GPU/TPU)

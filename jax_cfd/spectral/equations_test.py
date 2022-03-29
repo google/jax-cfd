@@ -48,6 +48,20 @@ def roll(arr, offset: Tuple[int]):
   return arr
 
 
+def get_grid(resolution, domain=(0, 2*jnp.pi)):
+  return grids.Grid((resolution,), domain=(domain,))
+
+
+def get_zeros_initial_condition(grid, dtype=jnp.complex64):
+  n, = grid.shape
+  return jnp.zeros(n // 2 + 1, dtype=dtype)
+
+
+def get_sine_initial_condition(grid):
+  xs, = grid.axes(offset=(0,))
+  return jnp.fft.rfft(jnp.sin(xs))
+
+
 class EquationsTest1D(test_util.TestCase):
 
   def test_ks_equation(self):
@@ -79,6 +93,77 @@ class EquationsTest1D(test_util.TestCase):
       initial_momentum = real_space_trajectory[0].sum()
       self.assertAllClose(
           initial_momentum, jnp.sum(real_space_trajectory, axis=1), atol=1e-3)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='one_step_zeros',
+          viscosity=0.01,
+          grid=get_grid(128),
+          time_step=0.01,
+          initial_condition_fn=get_zeros_initial_condition,
+          num_steps=1,
+      ),
+      dict(
+          testcase_name='one_step_sine',
+          viscosity=0.01,
+          grid=get_grid(128),
+          time_step=0.01,
+          initial_condition_fn=get_sine_initial_condition,
+          num_steps=1),
+      dict(
+          testcase_name='many_step_zeros',
+          viscosity=0.01,
+          grid=get_grid(128),
+          time_step=0.01,
+          initial_condition_fn=get_zeros_initial_condition,
+          num_steps=1000),
+      dict(
+          testcase_name='many_step_sine',
+          viscosity=0.01,
+          grid=get_grid(128),
+          time_step=0.01,
+          initial_condition_fn=get_sine_initial_condition,
+          num_steps=1000),
+  )
+  def test_burgers_equation(self, viscosity, grid, time_step,
+                            initial_condition_fn, num_steps):
+    """Check that the trajectories don't give NaNs."""
+    eq = spectral_equations.BurgersEquation(viscosity=viscosity, grid=grid)
+    step_fn = time_stepping.crank_nicolson_rk2(eq, time_step)
+    step_fn = cfd.funcutils.repeated(step_fn, num_steps)
+    uhat0 = initial_condition_fn(grid)
+    t0 = 0.0
+    uhat1, _ = step_fn((uhat0, t0))
+    self.assertFalse(jnp.isnan(uhat1).any())
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='one_step_zeros',
+          viscosity=0.01,
+          grid=get_grid(128),
+          time_step=0.01,
+          initial_condition_fn=get_zeros_initial_condition,
+          num_steps=1,
+      ),
+      dict(
+          testcase_name='many_step_zeros',
+          viscosity=0.01,
+          grid=get_grid(128),
+          time_step=0.01,
+          initial_condition_fn=get_zeros_initial_condition,
+          num_steps=1000),
+  )
+  def test_forced_burgers_equation(self, viscosity, grid, time_step,
+                                   initial_condition_fn, num_steps):
+    """Check that the trajectories don't give NaNs."""
+    eq = spectral_equations.ForcedBurgersEquation(
+        viscosity=viscosity, grid=grid)
+    step_fn = time_stepping.crank_nicolson_rk2(eq, time_step)
+    step_fn = cfd.funcutils.repeated(step_fn, num_steps)
+    uhat0 = initial_condition_fn(grid)
+    t0 = 0.0
+    uhat1, _ = step_fn((uhat0, t0))
+    self.assertFalse(jnp.isnan(uhat1).any())
 
 
 class EquationsTest2D(test_util.TestCase):

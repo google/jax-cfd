@@ -15,16 +15,21 @@
 """Pseudospectral equations."""
 
 import dataclasses
-from typing import Callable
-from typing import Optional
+from typing import Callable, Optional
 
 import jax.numpy as jnp
 from jax_cfd.base import boundaries
 from jax_cfd.base import forcings
 from jax_cfd.base import grids
-from jax_cfd.base import interpolation
+from jax_cfd.spectral import forcings as spectral_forcings
 from jax_cfd.spectral import time_stepping
+from jax_cfd.spectral import types
 from jax_cfd.spectral import utils as spectral_utils
+
+
+TimeDependentForcingFn = Callable[[float], types.Array]
+RandomSeed = int
+ForcingModule = Callable[[grids.Grid, RandomSeed], TimeDependentForcingFn]
 
 
 @dataclasses.dataclass
@@ -66,6 +71,54 @@ class KuramotoSivashinsky(time_stepping.ImplicitExplicitODE):
     return 1 / (1 - time_step * self.linear_term) * uhat
 
 
+@dataclasses.dataclass
+class ForcedBurgersEquation(time_stepping.ImplicitExplicitODE):
+  """Burgers' Equation with the option to add a time-dependent forcing function."""
+  viscosity: float
+  grid: grids.Grid
+  seed: int = 0
+  forcing_module: Optional[
+      ForcingModule] = spectral_forcings.random_forcing_module
+  _forcing_fn = None
+
+  def __post_init__(self):
+    self.kx, = self.grid.rfft_axes()
+    self.two_pi_i_k = 2j * jnp.pi * self.kx
+    self.linear_term = self.viscosity * self.two_pi_i_k ** 2
+    self.rfft = spectral_utils.truncated_rfft
+    self.irfft = spectral_utils.padded_irfft
+    if self.forcing_module is None:
+      self._forcing_fn = lambda t: jnp.zeros(1)
+    else:
+      self._forcing_fn = self.forcing_module(self.grid, self.seed)
+
+  def explicit_terms(self, state):
+    uhat, t = state
+    dudx = self.two_pi_i_k * uhat
+
+    f = self._forcing_fn(t)
+    fhat = jnp.fft.rfft(f)
+
+    advection = - self.rfft(self.irfft(uhat) * self.irfft(dudx))
+
+    return (fhat + advection, 1.0)
+
+  def implicit_terms(self, state):
+    uhat, _ = state
+    return (self.linear_term * uhat, 0.0)
+
+  def implicit_solve(self, state, time_step):
+    uhat, t = state
+    return (1 / (1 - time_step * self.linear_term) * uhat, t)
+
+
+def BurgersEquation(viscosity: float, grid: grids.Grid, seed: int = 0):
+  """Standard, unforced Burgers' equation."""
+  return ForcedBurgersEquation(
+      viscosity=viscosity, grid=grid, seed=seed, forcing_module=None)
+
+
+# pylint: disable=invalid-name
 def _get_grid_variable(arr,
                        grid,
                        bc=boundaries.periodic_boundary_conditions(2),

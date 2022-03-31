@@ -165,11 +165,21 @@ def block_reduce(
 
 
 def laplacian_matrix(size: int, step: float) -> np.ndarray:
-  """Create a matrix representing the Laplacian operator in 1D."""
+  """Create 1D Laplacian operator matrix, with periodic BC."""
   column = np.zeros(size)
-  column[0] = - 2 / step ** 2
-  column[1] = column[-1] = 1 / step ** 2
+  column[0] = -2 / step**2
+  column[1] = column[-1] = 1 / step**2
   return scipy.linalg.circulant(column)
+
+
+def laplacian_matrix_neumann(size: int, step: float) -> np.ndarray:
+  """Create 1D Laplacian operator matrix, with homogeneous Neumann BC."""
+  column = np.zeros(size)
+  column[0] = -2 / step ** 2
+  column[1] = 1 / step ** 2
+  matrix = scipy.linalg.toeplitz(column)
+  matrix[0, 0] = matrix[-1, -1] = -1 / step**2
+  return matrix
 
 
 def unstack(array, axis):

@@ -39,11 +39,12 @@ BoundaryConditions = grids.BoundaryConditions
 # TODO(pnorgaard) Implement bicgstab for non-symmetric operators
 
 
-def solve_cg(v: GridVariableVector,
-             q0: GridVariable,
-             rtol: float = 1e-6,
-             atol: float = 1e-6,
-             maxiter: Optional[int] = None) -> GridArray:
+def solve_cg(
+    v: GridVariableVector,
+    q0: GridVariable,
+    rtol: float = 1e-6,
+    atol: float = 1e-6,
+    maxiter: Optional[int] = None) -> GridArray:
   """Conjugate gradient solve for the pressure such that continuity is enforced.
 
   Returns a pressure correction `q` such that `div(v - grad(q)) == 0`.
@@ -80,9 +81,10 @@ def solve_cg(v: GridVariableVector,
   return q
 
 
-def solve_fast_diag(v: GridVariableVector,
-                    q0: Optional[GridVariable] = None,
-                    implementation: Optional[str] = None) -> GridArray:
+def solve_fast_diag(
+    v: GridVariableVector,
+    q0: Optional[GridVariable] = None,
+    implementation: Optional[str] = None) -> GridArray:
   """Solve for pressure using the fast diagonalization approach."""
   del q0  # unused
   if not boundaries.has_all_periodic_boundary_conditions(*v):
@@ -93,6 +95,26 @@ def solve_fast_diag(v: GridVariableVector,
   pinv = fast_diagonalization.psuedoinverse(
       laplacians, rhs.dtype,
       hermitian=True, circulant=True, implementation=implementation)
+  return grids.applied(pinv)(rhs)
+
+
+def solve_fast_diag_channel_flow(
+    v: GridVariableVector,
+    q0: Optional[GridVariable] = None,
+    implementation: Optional[str] = 'matmul') -> GridArray:
+  """Solve for channel flow pressure using fast diagonalization."""
+  del q0  # unused
+  for u in v:
+    if u.bc != boundaries.periodic_and_dirichlet_boundary_conditions():
+      raise ValueError('Only for use with channel flow boundary conditions.')
+  grid = grids.consistent_grid(*v)
+  rhs = fd.divergence(v)
+  laplacians = [
+      array_utils.laplacian_matrix(grid.shape[0], grid.step[0]),
+      array_utils.laplacian_matrix_neumann(grid.shape[1], grid.step[1])]
+  pinv = fast_diagonalization.psuedoinverse(
+      laplacians, rhs.dtype,
+      hermitian=True, circulant=False, implementation=implementation)
   return grids.applied(pinv)(rhs)
 
 
@@ -110,6 +132,11 @@ def projection(
   q = solve(v, q0)
   q = grids.GridVariable(q, pressure_bc)
   q_grad = fd.forward_difference(q)
-  v_projected = tuple(
-      grids.GridVariable(u.array - q_g, u.bc) for u, q_g in zip(v, q_grad))
+  if boundaries.has_all_periodic_boundary_conditions(*v):
+    v_projected = tuple(
+        grids.GridVariable(u.array - q_g, u.bc) for u, q_g in zip(v, q_grad))
+  else:
+    v_projected = tuple(
+        grids.GridVariable(u.array - q_g, u.bc).enforce_edge_bc()
+        for u, q_g in zip(v, q_grad))
   return v_projected

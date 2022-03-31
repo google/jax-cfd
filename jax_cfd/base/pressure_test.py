@@ -137,9 +137,13 @@ class PressureTest(test_util.TestCase):
       np.testing.assert_allclose(u.offset, u_corrected.offset)
     np.testing.assert_allclose(div.data, 0., atol=1e-4)
 
-  def test_pressure_correction_mixed_velocity_bc(self):
+  @parameterized.parameters(
+      (solve_cg,),
+      (pressure.solve_fast_diag_channel_flow,),
+  )
+  def test_pressure_correction_mixed_velocity_bc(self, solve):
     """Returned velocity should be divergence free."""
-    grid = grids.Grid((20, 20), step=0.1)
+    grid = grids.Grid((20, 10), step=0.1)
     velocity_bc = (boundaries.periodic_and_dirichlet_boundary_conditions(),
                    boundaries.periodic_and_dirichlet_boundary_conditions())
 
@@ -152,13 +156,15 @@ class PressureTest(test_util.TestCase):
          grids.GridArray(.3 * rand_array(grid.shape, seed=1),
                          offset=grid.cell_faces[1], grid=grid))
 
-    # Set y-boundary velocity to zero since it is a Dirichlet BC
-    masks = grids.domain_interior_masks(grid)
-    v = (v[0], v[1] * masks[1])
-    # Associate boundary conditions
-    v = tuple(grids.GridVariable(u, u_bc) for u, u_bc in zip(v, velocity_bc))
+    # Associate and enforce boundary conditions
+    v = tuple(grids.GridVariable(u, u_bc).enforce_edge_bc()
+              for u, u_bc in zip(v, velocity_bc))
+
+    # y-velocity = 0 for the edge y=y_max (homogeneous Diriclet BC)
+    self.assertAllClose(v[1].data[:, -1], 0)
+
     # Apply pressure correction
-    v_corrected = pressure.projection(v, solve_cg)
+    v_corrected = pressure.projection(v, solve)
 
     # The corrected velocity should be divergence free.
     div = fd.divergence(v_corrected)

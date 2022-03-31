@@ -50,6 +50,12 @@ class ArrayUtilsTest(test_util.TestCase):
         [[-2, 1, 0, 1], [1, -2, 1, 0], [0, 1, -2, 1], [1, 0, 1, -2]])
     self.assertAllClose(expected, actual)
 
+  def test_laplacian_matrix_neumann(self):
+    actual = array_utils.laplacian_matrix_neumann(4, step=0.5)
+    expected = 4.0 * np.array(
+        [[-1, 1, 0, 0], [1, -2, 1, 0], [0, 1, -2, 1], [0, 0, 1, -1]])
+    self.assertAllClose(expected, actual)
+
   @parameterized.parameters(
       dict(matrix=(np.random.RandomState(1234).randn(16, 2))),
       dict(matrix=(np.random.RandomState(1234).randn(24, 1))),

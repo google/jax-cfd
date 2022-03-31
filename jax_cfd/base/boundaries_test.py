@@ -723,13 +723,13 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
               [3, 32, 33, 34],
           ])),
   )
-  def test_impose_bc_constant_boundary(self, input_data, offset, values,
-                                       expected_data):
+  def test_enforce_edge_bc_constant_boundary(
+      self, input_data, offset, values, expected_data):
     grid = grids.Grid(input_data.shape)
     array = grids.GridArray(input_data, offset, grid)
     bc = boundaries.dirichlet_boundary_conditions(grid.ndim, values)
     variable = grids.GridVariable(array, bc)
-    variable.impose_bc()
+    variable = variable.enforce_edge_bc()
     expected = grids.GridArray(expected_data, offset, grid)
     self.assertArrayEqual(variable.array, expected)
 

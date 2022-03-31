@@ -324,15 +324,12 @@ class GridVariable:
     interior_grid = self._interior_grid()
     return GridArray(interior_array, self.array.offset, interior_grid)
 
-  def impose_bc(self, *args) -> None:
-    """Enforces boundary condition.
+  def enforce_edge_bc(self, *args) -> GridVariable:
+    """Returns the GridVariable with edge BC enforced, if applicable.
 
-    To keep consistent sizes, in case of the nonperiodic boundary with edge
-    offset, self.array stores a row of dependent boundary values.
-    impose_bc changes "boundary row" values to match the prescribed bc.
-    This allows to treat array just as a collection of interior data and
-    bc as just the boundary data, independent of each other.
-    This only has effect on nonperiodic bc with edge offset.
+    For GridVariables having nonperiodic BC and offset 0 or 1, there are values
+    in the array data that are dependent on the boundary condition.
+    enforce_edge_bc() changes these boundary values to match the prescribed BC.
 
     Args:
       *args: any optional values passed into BoundaryConditions values method.
@@ -351,8 +348,9 @@ class GridVariable:
             ] * self.grid.ndim
             all_slice[axis] = -boundary_side
             data = data.at[tuple(all_slice)].set(values[boundary_side])
-    self.array = GridArray(data, self.array.offset, self.grid)
-    return
+    return GridVariable(
+        array=GridArray(data, self.array.offset, self.grid),
+        bc=self.bc)
 
 
 GridVariableVector = Tuple[GridVariable, ...]

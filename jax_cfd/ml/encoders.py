@@ -8,11 +8,13 @@ The input state is expected to consist of arrays with `time` as a leading axis.
 
 from typing import Any, Callable, Optional, Tuple
 import gin
+import haiku as hk
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import array_utils
 from jax_cfd.base import boundaries
 from jax_cfd.base import grids
+from jax_cfd.base import interpolation
 from jax_cfd.ml import physics_specifications
 from jax_cfd.ml import towers
 
@@ -40,6 +42,29 @@ def aligned_array_encoder(
     return tuple(
         grids.GridVariable(grids.GridArray(slice_last_fn(x), offset, grid), bc)
         for x, offset in zip(inputs, data_offsets))
+
+  return encode_fn
+
+
+@gin.register
+def collocated_to_staggered_encoder(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+) -> EncodeFn:
+  """Encoder that interpolates from collocated to staggered grids."""
+  del dt, physics_specs  # unused.
+  slice_last_fn = lambda x: array_utils.slice_along_axis(x, 0, -1)
+
+  def encode_fn(inputs):
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
+    src_offset = grid.cell_center
+    pre_interp = tuple(
+        grids.GridVariable(
+            grids.GridArray(slice_last_fn(x), src_offset, grid), bc)
+        for x in inputs)
+    return tuple(interpolation.linear(c, offset)
+                 for c, offset in zip(pre_interp, grid.cell_faces))
 
   return encode_fn
 
@@ -131,7 +156,36 @@ def latent_encoder(
     encoder_tower = tower_factory(num_latent_dims, grid.ndim, name='encoder')
     return encoder_tower(inputs)
 
-  return encode_fn
+  return hk.to_module(encode_fn)()
+
+
+@gin.register
+def aligned_latent_encoder(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    tower_factory: TowerFactory,
+    num_latent_dims: int,
+    n_frames: int,
+    time_axis: int = 0,
+    data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
+):
+  """Latent encoder that decodes to GridVariables."""
+  data_offsets = data_offsets or grid.cell_faces
+  stack_inputs_fn = stack_last_n_state_encoder(
+      grid, dt, physics_specs, n_frames, time_axis)
+
+  def encode_fn(inputs):
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
+    inputs = stack_inputs_fn(inputs)
+    encoder_tower = tower_factory(num_latent_dims, grid.ndim, name='encoder')
+    raw_outputs = encoder_tower(inputs)
+    split_outputs = [raw_outputs[..., i] for i in range(raw_outputs.shape[-1])]
+    return tuple(
+        grids.GridVariable(grids.GridArray(x, offset, grid), bc)
+        for x, offset in zip(split_outputs, data_offsets))
+
+  return hk.to_module(encode_fn)()
 
 
 @gin.register

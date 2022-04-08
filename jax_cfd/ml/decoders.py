@@ -8,9 +8,11 @@ Decoders can be either fixed functions, decorators, or learned modules.
 from typing import Any, Callable, Optional
 
 import gin
+import haiku as hk
 import jax.numpy as jnp
 from jax_cfd.base import array_utils
 from jax_cfd.base import grids
+from jax_cfd.base import interpolation
 from jax_cfd.ml import physics_specifications
 from jax_cfd.ml import towers
 from jax_cfd.spectral import utils as spectral_utils
@@ -46,6 +48,21 @@ def aligned_array_decoder(
   del grid, dt, physics_specs  # unused.
   def decode_fn(inputs):
     return tuple(x.data for x in inputs)
+
+  return decode_fn
+
+
+@gin.register
+def staggered_to_collocated_decoder(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+):
+  """Decoder that interpolates from staggered to collocated grids."""
+  del dt, physics_specs  # unused.
+  def decode_fn(inputs):
+    interp_inputs = [interpolation.linear(c, grid.cell_center) for c in inputs]
+    return tuple(x.data for x in interp_inputs)
 
   return decode_fn
 
@@ -96,7 +113,27 @@ def latent_decoder(
     decoder_tower = tower_factory(num_channels, grid.ndim, name='decoder')
     return split_channels_fn(decoder_tower(inputs))
 
-  return decode_fn
+  return hk.to_module(decode_fn)()
+
+
+@gin.register
+def aligned_latent_decoder(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    tower_factory: TowerFactory,
+    num_components: Optional[int] = None,
+):
+  """Latent decoder that decodes from aligned arrays."""
+  split_channels_fn = channels_split_decoder(grid, dt, physics_specs)
+
+  def decode_fn(inputs):
+    inputs = jnp.stack([x.data for x in inputs], axis=-1)
+    num_channels = num_components or grid.ndim
+    decoder_tower = tower_factory(num_channels, grid.ndim, name='decoder')
+    return split_channels_fn(decoder_tower(inputs))
+
+  return hk.to_module(decode_fn)()
 
 
 @gin.register

@@ -186,6 +186,15 @@ def time_derivative_network_model(
 
 
 @gin.register
+def identity_model(grid, dt, physics_specs):
+  """A model that just returns the original state."""
+  del grid, dt, physics_specs
+  def step_fn(state):
+    return state
+  return step_fn
+
+
+@gin.register
 def learned_corrector(
     grid: grids.Grid,
     dt: float,
@@ -222,6 +231,26 @@ def learned_corrector_v2(
   def step_fn(state):
     next_state = base_solver(state)
     corrections = corrector(state)
+    return jax.tree_multimap(lambda x, y: x + dt * y, next_state, corrections)
+
+  return hk.to_module(step_fn)()
+
+
+@gin.register
+def learned_corrector_v3(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    base_solver_module: Callable,
+    corrector_module: Callable,
+):
+  """Like learned_corrector, but based on input & output states."""
+  base_solver = base_solver_module(grid, dt, physics_specs)
+  corrector = corrector_module(grid, dt, physics_specs)
+
+  def step_fn(state):
+    next_state = base_solver(state)
+    corrections = corrector(tuple(state) + tuple(next_state))
     return jax.tree_multimap(lambda x, y: x + dt * y, next_state, corrections)
 
   return hk.to_module(step_fn)()

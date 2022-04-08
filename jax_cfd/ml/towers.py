@@ -238,3 +238,10 @@ def residual_block_tower_factory(
   module = hk.to_module(forward_pass)(name=name)
   return hk.experimental.named_call(module, name=name)
 
+
+@gin.register
+def residual_connection(*args, module_factory, **kwargs):
+  """Apply module_factory() as a residual correction to inputs."""
+  def forward_pass(inputs):
+    return inputs + module_factory(*args, **kwargs)(inputs)
+  return hk.to_module(forward_pass)()

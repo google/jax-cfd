@@ -144,18 +144,24 @@ class NavierStokes2D(time_stepping.ImplicitExplicitODE):
   grid: grids.Grid
   drag: float = 0.
   smooth: bool = True
+  filter_constructor: Optional[Callable[[grids.Grid], types.Array]] = None
   forcing_fn: Optional[Callable[[grids.Grid], forcings.ForcingFn]] = None
   _forcing_fn_with_grid = None
 
   def __post_init__(self):
     self.kx, self.ky = self.grid.rfft_mesh()
     self.laplace = (jnp.pi * 2j)**2 * (self.kx**2 + self.ky**2)
-    self.filter_ = spectral_utils.circular_filter_2d(self.grid)
     self.linear_term = self.viscosity * self.laplace - self.drag
 
     # setup the forcing function with the caller-specified grid.
     if self.forcing_fn is not None:
       self._forcing_fn_with_grid = self.forcing_fn(self.grid)
+
+    # setup the low pass filter
+    if self.filter_constructor is None:
+      self.filter_ = spectral_utils.brick_wall_filter_2d(self.grid)
+    else:
+      self.filter_ = self.filter_constructor(self.grid)
 
   def explicit_terms(self, vorticity_hat):
     velocity_solve = spectral_utils.vorticity_to_velocity(self.grid)

@@ -89,6 +89,32 @@ def circular_filter_2d(grid: grids.Grid) -> spectral_types.Array:
   return filter_
 
 
+def brick_wall_filter_2d(grid: grids.Grid):
+  """Implements the 2/3 rule."""
+  n, _ = grid.shape
+  filter_ = jnp.zeros((n, n // 2 + 1))
+  filter_ = filter_.at[:int(2 / 3 * n) // 2, :int(2 / 3 * (n // 2 + 1))].set(1)
+  filter_ = filter_.at[-int(2 / 3 * n) // 2:, :int(2 / 3 * (n // 2 + 1))].set(1)
+  return filter_
+
+
+def exponential_filter(signal, alpha=1e-6, order=2):
+  """Apply a low-pass smoothing filter to remove noise from 2D signal."""
+  # Based on:
+  # 1. Gottlieb and Hesthaven (2001), "Spectral methods for hyperbolic problems"
+  # https://doi.org/10.1016/S0377-0427(00)00510-0
+  # 2. Also, see https://arxiv.org/pdf/math/0701337.pdf --- Eq. 5
+
+  # TODO(dresdner) save a few ffts by factoring out the actual filter, sigma.
+  alpha = -jnp.log(alpha)
+  n, _ = signal.shape  # TODO(dresdner) check square / handle 1D case
+  kx, ky = jnp.fft.fftfreq(n), jnp.fft.rfftfreq(n)
+  kx, ky = jnp.meshgrid(kx, ky, indexing="ij")
+  eta = jnp.sqrt(kx**2 + ky**2)
+  sigma = jnp.exp(-alpha * eta**(2 * order))
+  return jnp.fft.irfft2(sigma * jnp.fft.rfft2(signal))
+
+
 def vorticity_to_velocity(
     grid: grids.Grid
 ) -> Callable[[spectral_types.Array], Tuple[spectral_types.Array,

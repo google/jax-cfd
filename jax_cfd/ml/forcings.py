@@ -35,9 +35,14 @@ def linear_forcing(grid: grids.Grid,
   return forcings.linear_forcing(grid, scale)
 
 
-# register kolmogorov forcing without the linear_coefficient
-gin.external_configurable(forcings.kolmogorov_forcing,
-                          'vanilla_kolmogorov_forcing')
+# # register kolmogorov forcing without the linear_coefficient
+# gin.external_configurable(forcings.kolmogorov_forcing,
+#                           'vanilla_kolmogorov_forcing')
+
+
+@gin.register
+def spectral_kolmogorov_forcing(grid):
+  return forcings.kolmogorov_forcing(grid, 1.0, k=4, swap_xy=False, offsets=((0.0, 0.0), (0.0, 0.0)))
 
 
 @gin.register

@@ -18,6 +18,7 @@ from jax_cfd.ml import networks  # pylint: disable=unused-import
 from jax_cfd.ml import physics_specifications
 from jax_cfd.ml import pressures
 from jax_cfd.ml import time_integrators
+from jax_cfd.spectral import utils as spectral_utils
 
 ConvectionModule = advections.ConvectionModule
 DiffuseModule = diffusions.DiffuseModule
@@ -64,7 +65,9 @@ def modular_spectral_step_fn(
     grid,
     dt,
     physics_specs,
-    time_stepper=spectral.time_stepping.crank_nicolson_rk4):
+    do_filter_step=False,
+    time_stepper=spectral.time_stepping.crank_nicolson_rk4,
+    ):
   """Returns a spectral solver for Forced Navier-Stokes flows."""
   eq = spectral.equations.NavierStokes2D(
       physics_specs.viscosity,
@@ -72,9 +75,17 @@ def modular_spectral_step_fn(
       drag=physics_specs.drag,
       forcing_fn=physics_specs.forcing_module,
       smooth=physics_specs.smooth)
+
   step_fn = time_stepper(eq, dt)
-  # TODO(dresdner) do haiku
-  return hk.to_module(step_fn)()
+  if do_filter_step:
+    # lambdas don't place nice with gin config.
+    def ret(vhat):
+      v = jnp.fft.irfft2(step_fn(vhat))  # TODO(dresdner) unnecessary fft's
+      return jnp.fft.rfft2(spectral_utils.exponential_filter(v))
+  else:
+    ret = step_fn
+
+  return hk.to_module(ret)()
 
 
 @gin.configurable(denylist=("grid", "dt", "physics_specs"))

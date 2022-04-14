@@ -65,7 +65,7 @@ def kolmogorov_forcing(
     scale: float = 1,
     k: int = 2,
     swap_xy: bool = False,
-    offsets: Optional[Tuple[Tuple[float]]] = None,
+    offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
 ) -> ForcingFn:
   """Returns the Kolmogorov forcing function for turbulence in 2D."""
   if offsets is None:

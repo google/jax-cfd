@@ -88,6 +88,36 @@ def scale_to_range(
 
 
 @gin.register
+class MlpTowerFactory(hk.Module):
+  """Tower that applies shared MLP to inputs over spatial dimensions."""
+
+  def __init__(
+      self,
+      output_size: int,
+      ndim: int,
+      num_hidden_units: int,
+      num_hidden_layers: int,
+      nonlinearity: Callable[[Array], Array] = nonlinearities.relu,
+      inputs_scale_fn: ScaleFn = lambda x, axes: x,
+      output_scale_fn: ScaleFn = lambda x, axes: x,
+      name: Optional[str] = 'mlp_tower_factory',
+  ):
+    super().__init__(name=name)
+    output_sizes = [num_hidden_units] * num_hidden_layers + [output_size]
+    mlp_net = hk.nets.MLP(output_sizes, activation=nonlinearity)
+    for _ in range(ndim):
+      mlp_net = hk.vmap(mlp_net, split_rng=False)
+    ndim_axes = list(range(ndim))
+    self.inputs_scale_fn = functools.partial(inputs_scale_fn, axes=ndim_axes)
+    self.output_scale_fn = functools.partial(output_scale_fn, axes=ndim_axes)
+    self.mlp_tower = mlp_net
+
+  def __call__(self, inputs):
+    """Applied Mlp tower to `inputs`."""
+    return self.output_scale_fn(self.mlp_tower(self.inputs_scale_fn(inputs)))
+
+
+@gin.register
 def forward_tower_factory(
     num_output_channels: int,
     ndim: int,

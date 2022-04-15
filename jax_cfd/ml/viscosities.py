@@ -18,6 +18,7 @@ import numpy as np
 Array = Union[np.ndarray, jnp.DeviceArray]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
+GridVariableVector = grids.GridVariableVector
 InterpolationModule = interpolations.InterpolationModule
 ViscosityFn = Callable[[grids.GridArrayTensor, GridArrayVector, grids.Grid],
                        grids.GridArrayTensor]
@@ -55,21 +56,19 @@ def learned_scalar_viscosity(
   def interpolate(
       c: GridArray,
       offset: Tuple[float, ...],
-      v: Optional[GridArrayVector] = None,
+      v: Optional[GridVariableVector] = None,
       dt: Optional[float] = None,
-      ) -> grids.GridArray:
+  ) -> grids.GridArray:
     """Interpolation method wrapped for GridArray using periodic BC."""
     bc = boundaries.periodic_boundary_conditions(grid.ndim)
     c_bc = grids.GridVariable(c, bc)
-    v_bc = tuple(grids.GridVariable(u, bc) for u in v)
     interp_var = interpolate_module(grid, dt, physics_specs)(
-        c_bc, offset, v_bc, dt)
+        c_bc, offset, v, dt)
     return interp_var.array
 
   def viscosity_fn(
       s_ij: grids.GridArrayTensor,
       v: GridArrayVector,
-      grid: grids.Grid
   ) -> grids.GridArrayTensor:
     """Computes effective eddy viscosity using learned components.
 
@@ -80,7 +79,6 @@ def learned_scalar_viscosity(
       s_ij: strain rate tensor that is equal to the forward finite difference
         derivatives of the velocity field `(d(u_i)/d(x_j) + d(u_j)/d(x_i)) / 2`.
       v: velocity field.
-      grid: grid object.
 
     Returns:
       tensor containing values of the eddy viscosity at the same grid offsets
@@ -105,6 +103,68 @@ def learned_scalar_viscosity(
 
 
 @gin.register
+def learned_scalar_viscosity_from_gradients(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.NavierStokesPhysicsSpecs,
+    viscosity_scale: float,
+    interpolate_module: InterpolationModule = interpolations.linear,
+    tower_factory: Callable[..., Any] = towers.forward_tower_factory,
+) -> ViscosityFn:
+  """Constructs a scalar viscosity model predicted from velocity gradients."""
+  def interpolate(
+      c: GridArray,
+      offset: Tuple[float, ...],
+      v: Optional[GridVariableVector] = None,
+      dt: Optional[float] = None,
+  ) -> grids.GridArray:
+    """Interpolation method wrapped for GridArray using periodic BC."""
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
+    c_bc = grids.GridVariable(c, bc)
+    interp_var = interpolate_module(grid, dt, physics_specs)(
+        c_bc, offset, v, dt)
+    return interp_var.array
+
+  def viscosity_fn(
+      s_ij: grids.GridArrayTensor,
+      v: GridArrayVector,
+  ) -> grids.GridArrayTensor:
+    """Computes effective eddy viscosity using learned components.
+
+    This viscosity model computes parametric scalar viscosity that is
+    interpolated to the offsets of the strain rate tensor.
+
+    Args:
+      s_ij: strain rate tensor that is equal to the forward finite difference
+        derivatives of the velocity field `(d(u_i)/d(x_j) + d(u_j)/d(x_i)) / 2`.
+      v: velocity field.
+
+    Returns:
+      tensor containing values of the eddy viscosity at the same grid offsets
+      as the strain tensor `s_ij`.
+    """
+    s_ij_offsets = [array.offset for array in s_ij.ravel()]
+    unique_offsets = list(set(s_ij_offsets))
+    viscosity_net = tower_factory(1, grid.ndim)
+    cell_center = grid.cell_center
+    interpolate_to_center = lambda x: interpolate(x, cell_center, v, dt)
+    centered_s_ij = np.vectorize(interpolate_to_center)(s_ij)
+    inputs = jnp.stack([array.data for array in centered_s_ij.ravel()], axis=-1)
+    predicted_viscosity = (viscosity_scale + 1e-6) * viscosity_net(inputs)
+    predicted_viscosity = grids.GridArray(
+        data=jnp.squeeze(predicted_viscosity, -1),
+        offset=grid.cell_center, grid=grid)
+    interpolated_viscosities = {
+        offset: interpolate(predicted_viscosity, offset, v, dt)
+        for offset in unique_offsets}
+    viscosities = [interpolated_viscosities[offset] for offset in s_ij_offsets]
+    tree_def = jax.tree_util.tree_structure(s_ij)
+    return jax.tree_unflatten(tree_def, [x.data for x in viscosities])
+
+  return hk.to_module(viscosity_fn)()
+
+
+@gin.register
 def learned_tensor_viscosity(
     grid: grids.Grid,
     dt: float,
@@ -113,12 +173,11 @@ def learned_tensor_viscosity(
     tower_factory: Callable[..., Any] = towers.forward_tower_factory,
 ) -> ViscosityFn:
   """Constructs an learned, tensor-valued viscosity model."""
-  del grid, dt, physics_specs
+  del dt, physics_specs
 
   def viscosity_fn(
       s_ij: grids.GridArrayTensor,
       v: GridArrayVector,
-      grid: grids.Grid
   ) -> grids.GridArrayTensor:
     """Computes effective eddy viscosity using learned components.
 
@@ -129,7 +188,6 @@ def learned_tensor_viscosity(
       s_ij: strain rate tensor that is equal to the forward finite difference
         derivatives of the velocity field `(d(u_i)/d(x_j) + d(u_j)/d(x_i)) / 2`.
       v: velocity field.
-      grid: grid object.
 
     Returns:
       tensor containing values of the eddy viscosity at the same grid offsets
@@ -157,6 +215,7 @@ def eddy_viscosity_model(
     grid: grids.Grid,
     dt: float,
     physics_specs: physics_specifications.NavierStokesPhysicsSpecs,
+    v: Optional[GridArrayVector] = None,
     viscosity_scale: Optional[float] = None,
     viscosity_model: ViscosityModule = smagorinsky_viscosity,
 ):
@@ -174,12 +233,14 @@ def eddy_viscosity_model(
     grid: grid on which the Navier-Stokes equation is discretized.
     dt: time step to use for time evolution.
     physics_specs: physical parameters of the simulation module.
+    v: optional velocity field that is used to precompute values in models.
     viscosity_scale: the kinematic viscosity of the fluid.
     viscosity_model: function that generates a `viscosity_fn`.
 
   Returns:
     Function that computes accelerations due to eddy viscosity model.
   """
+  del v  # unused.
   if viscosity_scale is None:
     viscosity_scale = physics_specs.viscosity
   viscosity = viscosity_model(

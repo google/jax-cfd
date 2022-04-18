@@ -104,14 +104,18 @@ def solve_fast_diag_channel_flow(
     implementation: Optional[str] = 'matmul') -> GridArray:
   """Solve for channel flow pressure using fast diagonalization."""
   del q0  # unused
+  ndim = len(v)
   for u in v:
-    if u.bc != boundaries.periodic_and_dirichlet_boundary_conditions():
+    if u.bc != boundaries.channel_flow_boundary_conditions(ndim):
       raise ValueError('Only for use with channel flow boundary conditions.')
   grid = grids.consistent_grid(*v)
   rhs = fd.divergence(v)
   laplacians = [
       array_utils.laplacian_matrix(grid.shape[0], grid.step[0]),
-      array_utils.laplacian_matrix_neumann(grid.shape[1], grid.step[1])]
+      array_utils.laplacian_matrix_neumann(grid.shape[1], grid.step[1]),
+  ]
+  for d in range(2, ndim):
+    laplacians += [array_utils.laplacian_matrix(grid.shape[d], grid.step[d])]
   pinv = fast_diagonalization.psuedoinverse(
       laplacians, rhs.dtype,
       hermitian=True, circulant=False, implementation=implementation)

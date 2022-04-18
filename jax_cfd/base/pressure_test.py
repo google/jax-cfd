@@ -138,30 +138,34 @@ class PressureTest(test_util.TestCase):
     np.testing.assert_allclose(div.data, 0., atol=1e-4)
 
   @parameterized.parameters(
-      (solve_cg,),
-      (pressure.solve_fast_diag_channel_flow,),
+      dict(ndim=2, solve=pressure.solve_cg),
+      dict(ndim=2, solve=pressure.solve_fast_diag_channel_flow),
+      dict(ndim=3, solve=pressure.solve_cg),
+      dict(ndim=3, solve=pressure.solve_fast_diag_channel_flow),
   )
-  def test_pressure_correction_mixed_velocity_bc(self, solve):
+  def test_pressure_correction_mixed_velocity_bc(self, ndim, solve):
     """Returned velocity should be divergence free."""
-    grid = grids.Grid((20, 10), step=0.1)
-    velocity_bc = (boundaries.periodic_and_dirichlet_boundary_conditions(),
-                   boundaries.periodic_and_dirichlet_boundary_conditions())
+    shape = (20,) * ndim
+    grid = grids.Grid(shape, step=0.1)
+    velocity_bc = (boundaries.channel_flow_boundary_conditions(ndim),) * ndim
 
-    def rand_array(shape, seed):
+    def rand_array(seed):
       key = jax.random.split(jax.random.PRNGKey(seed))
       return jax.random.normal(key[0], shape)
 
-    v = (grids.GridArray(1. + .3 * rand_array(grid.shape, seed=0),
-                         offset=grid.cell_faces[0], grid=grid),
-         grids.GridArray(.3 * rand_array(grid.shape, seed=1),
-                         offset=grid.cell_faces[1], grid=grid))
+    v = tuple(
+        grids.GridArray(
+            1. + .3 * rand_array(seed=d), offset=grid.cell_faces[d], grid=grid)
+        for d in range(ndim))
 
     # Associate and enforce boundary conditions
     v = tuple(grids.GridVariable(u, u_bc).enforce_edge_bc()
               for u, u_bc in zip(v, velocity_bc))
 
     # y-velocity = 0 for the edge y=y_max (homogeneous Diriclet BC)
-    self.assertAllClose(v[1].data[:, -1], 0)
+    # y-velocity on lower y-boundary is not on an edge
+    # Note, x- and z-velocity do not have an edge value on the y-boundaries
+    self.assertAllClose(v[1].data[:, -1, ...], 0)
 
     # Apply pressure correction
     v_corrected = pressure.projection(v, solve)

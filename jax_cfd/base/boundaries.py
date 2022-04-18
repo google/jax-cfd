@@ -245,10 +245,9 @@ def dirichlet_boundary_conditions(
   """Returns Dirichelt BCs for a variable with `ndim` spatial dimension.
 
   Args:
-    ndim: spacial dimension.
-    bc_vals: if None, assumes Homogeneous BC. Else needs to be a tuple of lower
-      and upper boundary values for each dimension. If None, returns Homogeneous
-      BC.
+    ndim: spatial dimension.
+    bc_vals: A tuple of lower and upper boundary values for each dimension.
+      If None, returns Homogeneous BC.
 
   Returns:
     BoundaryCondition subclass.
@@ -268,9 +267,9 @@ def neumann_boundary_conditions(
   """Returns Neumann BCs for a variable with `ndim` spatial dimension.
 
   Args:
-    ndim: spacial dimension.
-    bc_vals: the lower and upper boundary condition value for each dimension. If
-      None, returns Homogeneous BC.
+    ndim: spatial dimension.
+    bc_vals: A tuple of lower and upper boundary values for each dimension.
+      If None, returns Homogeneous BC.
 
   Returns:
     BoundaryCondition subclass.
@@ -283,24 +282,29 @@ def neumann_boundary_conditions(
         ((BCType.NEUMANN, BCType.NEUMANN),) * ndim, bc_vals)
 
 
-def periodic_and_dirichlet_boundary_conditions(
-    bc_vals: Optional[Tuple[float, float]] = None) -> BoundaryConditions:
+def channel_flow_boundary_conditions(
+    ndim: int,
+    bc_vals: Optional[Sequence[Tuple[float, float]]] = None,
+) -> BoundaryConditions:
   """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1.
 
   Args:
-    bc_vals: the lower and upper boundary condition value for each dimension. If
-      None, returns Homogeneous BC.
+    ndim: spatial dimension.
+    bc_vals: A tuple of lower and upper boundary values for each dimension.
+      If None, returns Homogeneous BC. For periodic dimensions the lower, upper
+      boundary values should be (None, None).
 
   Returns:
     BoundaryCondition subclass.
   """
+  bc_type = ((BCType.PERIODIC, BCType.PERIODIC),
+             (BCType.DIRICHLET, BCType.DIRICHLET))
+  for _ in range(ndim - 2):
+    bc_type += ((BCType.PERIODIC, BCType.PERIODIC),)
   if not bc_vals:
-    return HomogeneousBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
-                                          (BCType.DIRICHLET, BCType.DIRICHLET)))
+    return HomogeneousBoundaryConditions(bc_type)
   else:
-    return ConstantBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
-                                       (BCType.DIRICHLET, BCType.DIRICHLET)),
-                                      ((None, None), bc_vals))
+    return ConstantBoundaryConditions(bc_type, bc_vals)
 
 
 def periodic_and_neumann_boundary_conditions(

@@ -90,9 +90,14 @@ class InitialConditionsTest(test_util.TestCase):
           pressure_solve=pressure.solve_cg,
           ),
       dict(
-          velocity_bc=(boundaries.periodic_and_dirichlet_boundary_conditions(),
-                       boundaries.periodic_and_dirichlet_boundary_conditions()),
+          velocity_bc=(boundaries.channel_flow_boundary_conditions(2),
+                       boundaries.channel_flow_boundary_conditions(2)),
           pressure_solve=pressure.solve_cg,
+          ),
+      dict(
+          velocity_bc=(boundaries.channel_flow_boundary_conditions(2),
+                       boundaries.channel_flow_boundary_conditions(2)),
+          pressure_solve=pressure.solve_fast_diag_channel_flow,
           ),
       dict(velocity_bc=None,  # default is all periodic BC.
            pressure_solve=pressure.solve_fast_diag,

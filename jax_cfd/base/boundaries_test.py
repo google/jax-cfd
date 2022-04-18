@@ -68,11 +68,19 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
           ('neumann', 'neumann'),
       ))
 
-    with self.subTest('periodic and dirichlet bc utility'):
-      bc = boundaries.periodic_and_dirichlet_boundary_conditions()
+    with self.subTest('channel flow 2d bc utility'):
+      bc = boundaries.channel_flow_boundary_conditions(ndim=2)
       self.assertEqual(bc.types, (
           ('periodic', 'periodic'),
           ('dirichlet', 'dirichlet'),
+      ))
+
+    with self.subTest('channel flow 3d bc utility'):
+      bc = boundaries.channel_flow_boundary_conditions(ndim=3)
+      self.assertEqual(bc.types, (
+          ('periodic', 'periodic'),
+          ('dirichlet', 'dirichlet'),
+          ('periodic', 'periodic'),
       ))
 
     with self.subTest('periodic and neumann bc utility'):
@@ -737,7 +745,7 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
     grid = grids.Grid((10, 10))
     array = grids.GridArray(np.zeros((10, 10)), (0.5, 0.5), grid)
     periodic_bc = boundaries.periodic_boundary_conditions(ndim=2)
-    nonperiodic_bc = boundaries.periodic_and_dirichlet_boundary_conditions()
+    nonperiodic_bc = boundaries.periodic_and_neumann_boundary_conditions()
 
     with self.subTest('returns True'):
       c = grids.GridVariable(array, periodic_bc)
@@ -751,17 +759,30 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
            grids.GridVariable(array, nonperiodic_bc))
       self.assertFalse(boundaries.has_all_periodic_boundary_conditions(c, *v))
 
-  def test_get_pressure_bc_from_velocity(self):
+  def test_get_pressure_bc_from_velocity_2d(self):
     grid = grids.Grid((10, 10))
     u_array = grids.GridArray(jnp.zeros(grid.shape), (1, 0.5), grid)
     v_array = grids.GridArray(jnp.zeros(grid.shape), (0.5, 1), grid)
-    velocity_bc = boundaries.periodic_and_dirichlet_boundary_conditions()
+    velocity_bc = boundaries.channel_flow_boundary_conditions(ndim=2)
     v = (grids.GridVariable(u_array, velocity_bc),
          grids.GridVariable(v_array, velocity_bc))
     pressure_bc = boundaries.get_pressure_bc_from_velocity(v)
     self.assertEqual(pressure_bc.types, ((BCType.PERIODIC, BCType.PERIODIC),
                                          (BCType.NEUMANN, BCType.NEUMANN)))
 
+  def test_get_pressure_bc_from_velocity_3d(self):
+    grid = grids.Grid((10, 10, 10))
+    u_array = grids.GridArray(jnp.zeros(grid.shape), (1, 0.5, 0.5), grid)
+    v_array = grids.GridArray(jnp.zeros(grid.shape), (0.5, 1, 0.5), grid)
+    w_array = grids.GridArray(jnp.zeros(grid.shape), (0.5, 0.5, 1), grid)
+    velocity_bc = boundaries.channel_flow_boundary_conditions(ndim=3)
+    v = (grids.GridVariable(u_array, velocity_bc),
+         grids.GridVariable(v_array, velocity_bc),
+         grids.GridVariable(w_array, velocity_bc))
+    pressure_bc = boundaries.get_pressure_bc_from_velocity(v)
+    self.assertEqual(pressure_bc.types, ((BCType.PERIODIC, BCType.PERIODIC),
+                                         (BCType.NEUMANN, BCType.NEUMANN),
+                                         (BCType.PERIODIC, BCType.PERIODIC)))
 
 if __name__ == '__main__':
   absltest.main()

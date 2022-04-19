@@ -132,7 +132,7 @@ class NavierStokesModulesTest(test_util.TestCase):
       self.assertEqual(u_output.shape, u_input.shape)
 
   def test_smagorinsky(self):
-    """Integration test checking that smag-LES produces expected shape."""
+    """Tests that eddy viscosity models predict expected shapes."""
     diffusion_solver = 'implicit_diffusion_navier_stokes'
     evm_module_name = 'implicit_evm_solve_with_diffusion'
     config = [
@@ -149,6 +149,34 @@ class NavierStokesModulesTest(test_util.TestCase):
     inputs, outputs = self._generate_inputs_and_outputs(config, grid)
     for u_output, u_input in zip(outputs, inputs):
       self.assertEqual(u_output.shape, u_input.shape)
+
+  def test_learned_viscosity_modules(self,):
+    """Intgeration tests checking that `step_fn` produces expected shape."""
+    ns_module_name = 'equations.modular_navier_stokes_model'
+    model_gin_config = '\n'.join([
+        f'{ns_module_name}.pressure_module = @fast_diagonalization',
+        f'{ns_module_name}.convection_module = @self_advection',
+        f'{ns_module_name}.acceleration_modules = (@eddy_viscosity_model,)',
+        'eddy_viscosity_model.viscosity_model = @learned_scalar_viscosity',
+        'learned_scalar_viscosity.tower_factory = @MlpTowerFactory',
+        'MlpTowerFactory.num_hidden_units = 16',
+        'MlpTowerFactory.num_hidden_layers = 3',
+        f'{ns_module_name}.equation_solver = @semi_implicit_navier_stokes',
+        'semi_implicit_navier_stokes.diffusion_module = @diffuse',
+        'self_advection.advection_module = @modular_advection',
+        'modular_advection.u_interpolation_module = @linear',
+        'modular_advection.c_interpolation_module = @transformed',
+        'transformed.base_interpolation_module = @lax_wendroff',
+        'transformed.transformation = @tvd_limiter_transformation',
+        'NavierStokesPhysicsSpecs.forcing_module = @kolmogorov_forcing',
+        'NavierStokesPhysicsSpecs.density = 1.',
+        'NavierStokesPhysicsSpecs.viscosity = 0.1',
+        'get_physics_specs.physics_specs_cls = @NavierStokesPhysicsSpecs',
+    ])
+    grid = GRIDS[0]
+    inputs, outputs = self._generate_inputs_and_outputs(model_gin_config, grid)
+    for u_input, u_output in zip(inputs, outputs):
+      self.assertEqual(u_input.shape, u_output.shape)
 
   def test_alternate_implementation_consistency(self):
     convection_module = 'advections.self_advection'

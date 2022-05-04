@@ -1,6 +1,8 @@
 """Network modules that interface with numerical methods."""
 
+import itertools
 from typing import Callable, Optional, Tuple
+
 import gin
 import haiku as hk
 import jax
@@ -11,6 +13,7 @@ from jax_cfd.base import finite_differences
 from jax_cfd.base import grids
 from jax_cfd.ml import physics_specifications
 from jax_cfd.ml import towers
+import numpy as np
 
 
 def _identity(grid, dt, physics_specs):
@@ -83,6 +86,29 @@ def aligned_field_from_split_divergence(
 
 
 @gin.register
+def stack_aligned_field_with_neighbors(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    n_neighbors: int = 1,
+):
+  """Returns a module that stacks input field with neighbors along channels."""
+  del dt, physics_specs  # unused.
+  shifts = [i for i in np.arange(-n_neighbors, n_neighbors + 1) if i != 0]
+  shifts_and_axis = list(itertools.product(shifts, np.arange(grid.ndim)))
+  shifts_and_axis.append([0, 0])
+
+  def process(inputs):
+    inputs = tuple(jnp.expand_dims(x.data, axis=-1) for x in inputs)
+    array = array_utils.concat_along_axis(jax.tree_leaves(inputs), axis=-1)
+    arrays = tuple(
+        jnp.roll(array, *shift_and_axis) for shift_and_axis in shifts_and_axis)
+    return array_utils.concat_along_axis(arrays, axis=-1)
+
+  return hk.to_module(process)()
+
+
+@gin.register
 def stack_aligned_field(
     grid: grids.Grid,
     dt: float,
@@ -148,10 +174,10 @@ def flux_corrector_network(
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
     tower_factory: towers.TowerFactory,
+    pre_process_module: Callable = stack_aligned_field,  # pylint: disable=g-bare-generic
     name: Optional[str] = None,
 ):
   """Returns a module that computes corrections to the velocity fluxes."""
-  pre_process_module = stack_aligned_field
   post_process_module = aligned_field_from_split_divergence
   num_output_channels = grid.ndim ** 2
   return tower_module(

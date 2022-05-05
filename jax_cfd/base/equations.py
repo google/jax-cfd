@@ -74,17 +74,14 @@ def _wrap_term_as_vector(fun, *, name):
   return tree_math.unwrap(jax.named_call(fun, name=name), vector_argnums=0)
 
 
-# TODO(shoyer): rename this to explicit_diffusion_navier_stokes
-def semi_implicit_navier_stokes(
+def navier_stokes_explicit_terms(
     density: float,
     viscosity: float,
     dt: float,
     grid: grids.Grid,
     convect: Optional[ConvectFn] = None,
     diffuse: DiffuseFn = diffusion.diffuse,
-    pressure_solve: Callable = pressure.solve_fast_diag,
     forcing: Optional[ForcingFn] = None,
-    time_stepper: Callable = time_stepping.forward_euler,
 ) -> Callable[[GridVariableVector], GridVariableVector]:
   """Returns a function that performs a time step of Navier Stokes."""
   del grid  # unused
@@ -101,10 +98,6 @@ def semi_implicit_navier_stokes(
   diffusion_ = _wrap_term_as_vector(diffuse_velocity, name='diffusion')
   if forcing is not None:
     forcing = _wrap_term_as_vector(forcing, name='forcing')
-  pressure_projection = jax.named_call(pressure.projection, name='pressure')
-
-  # TODO(jamieas): Consider a scheme where pressure calculations and
-  # advection/diffusion are staggered in time.
 
   @tree_math.wrap
   @functools.partial(jax.named_call, name='navier_stokes_momentum')
@@ -120,8 +113,38 @@ def semi_implicit_navier_stokes(
     dv_dt = _explicit_terms(v)
     return tuple(grids.GridVariable(a, u.bc) for a, u in zip(dv_dt, v))
 
+  return explicit_terms_with_same_bcs
+
+
+# TODO(shoyer): rename this to explicit_diffusion_navier_stokes
+def semi_implicit_navier_stokes(
+    density: float,
+    viscosity: float,
+    dt: float,
+    grid: grids.Grid,
+    convect: Optional[ConvectFn] = None,
+    diffuse: DiffuseFn = diffusion.diffuse,
+    pressure_solve: Callable = pressure.solve_fast_diag,
+    forcing: Optional[ForcingFn] = None,
+    time_stepper: Callable = time_stepping.forward_euler,
+) -> Callable[[GridVariableVector], GridVariableVector]:
+  """Returns a function that performs a time step of Navier Stokes."""
+
+  explicit_terms = navier_stokes_explicit_terms(
+      density=density,
+      viscosity=viscosity,
+      dt=dt,
+      grid=grid,
+      convect=convect,
+      diffuse=diffuse,
+      forcing=forcing)
+
+  pressure_projection = jax.named_call(pressure.projection, name='pressure')
+
+  # TODO(jamieas): Consider a scheme where pressure calculations and
+  # advection/diffusion are staggered in time.
   ode = time_stepping.ExplicitNavierStokesODE(
-      explicit_terms_with_same_bcs,
+      explicit_terms,
       lambda v: pressure_projection(v, pressure_solve)
   )
   step_fn = time_stepper(ode, dt)

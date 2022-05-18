@@ -137,6 +137,26 @@ def aligned_latent_decoder(
 
 
 @gin.register
+def vorticity_decoder(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+) -> DecodeFn:
+  """Solves for velocity and converts into GridVariables."""
+  del dt, physics_specs  # unused.
+  velocity_solve = spectral_utils.vorticity_to_velocity(grid)
+  def decode_fn(vorticity):
+    # TODO(dresdner) note the main difference is the input, which is in real space instead of vorticity space
+    vorticity = jnp.squeeze(vorticity, axis=-1)  # remove channel dim
+    vorticity_hat = jnp.fft.rfft2(vorticity)
+    uhat, vhat = velocity_solve(vorticity_hat)
+    v = (jnp.fft.irfft2(uhat), jnp.fft.irfft2(vhat))
+    return v
+
+  return decode_fn
+
+
+@gin.register
 def spectral_vorticity_decoder(
     grid: grids.Grid,
     dt: float,

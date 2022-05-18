@@ -189,6 +189,53 @@ def aligned_latent_encoder(
 
 
 @gin.register
+def vorticity_encoder(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
+) -> EncodeFn:
+  """Maps velocity to vorticity."""
+  del dt, physics_specs, data_offsets  # unused.
+  slice_last_fn = lambda x: array_utils.slice_along_axis(x, 0, -1)
+
+  def encode_fn(inputs):
+    u, v = inputs
+    u, v = slice_last_fn(u), slice_last_fn(v)
+    uhat, vhat = jnp.fft.rfft2(u), jnp.fft.rfft2(v)
+    kx, ky = grid.rfft_mesh()
+    vorticity_hat = 2j * jnp.pi * (vhat * kx - uhat * ky)
+    # TODO(dresdner) main difference is that the output is ifft'ed.
+    # TODO(dresdner) and also that the output has a channel dim.
+    return jnp.fft.irfft2(vorticity_hat)[..., jnp.newaxis]
+
+  return encode_fn
+
+
+@gin.register
+def vorticity_velocity_encoder(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
+) -> EncodeFn:
+  """Maps velocity to [velocity; vorticity]."""
+  del dt, physics_specs, data_offsets  # unused.
+  slice_last_fn = lambda x: array_utils.slice_along_axis(x, 0, -1)
+  ifft = jnp.fft.irfft2
+
+  def encode_fn(inputs):
+    u, v = inputs
+    u, v = slice_last_fn(u), slice_last_fn(v)
+    uhat, vhat = jnp.fft.rfft2(u), jnp.fft.rfft2(v)
+    kx, ky = grid.rfft_mesh()
+    vorticity_hat = 2j * jnp.pi * (vhat * kx - uhat * ky)
+    return jnp.stack([u, v, ifft(vorticity_hat)], axis=-1)
+
+  return encode_fn
+
+
+@gin.register
 def spectral_vorticity_encoder(
     grid: grids.Grid,
     dt: float,

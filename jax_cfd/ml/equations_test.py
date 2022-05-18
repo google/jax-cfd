@@ -2,9 +2,9 @@
 
 import copy
 import itertools
+
 from absl.testing import absltest
 from absl.testing import parameterized
-
 import gin
 import haiku as hk
 import jax

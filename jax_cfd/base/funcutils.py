@@ -57,7 +57,7 @@ def init_context():
 
 def _tree_stack(trees: Sequence[PyTree]) -> PyTree:
   if trees:
-    return tree_util.tree_multimap(lambda *xs: jnp.stack(xs), *trees)
+    return tree_util.tree_map(lambda *xs: jnp.stack(xs), *trees)
   else:
     return trees
 

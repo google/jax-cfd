@@ -222,7 +222,7 @@ def learned_corrector(
   def step_fn(state):
     next_state = base_solver(state)
     corrections = corrector(next_state)
-    return jax.tree_multimap(lambda x, y: x + y, next_state, corrections)
+    return jax.tree_map(lambda x, y: x + y, next_state, corrections)
 
   return hk.to_module(step_fn)()
 
@@ -242,7 +242,7 @@ def learned_corrector_v2(
   def step_fn(state):
     next_state = base_solver(state)
     corrections = corrector(state)
-    return jax.tree_multimap(lambda x, y: x + dt * y, next_state, corrections)
+    return jax.tree_map(lambda x, y: x + dt * y, next_state, corrections)
 
   return hk.to_module(step_fn)()
 
@@ -262,6 +262,6 @@ def learned_corrector_v3(
   def step_fn(state):
     next_state = base_solver(state)
     corrections = corrector(tuple(state) + tuple(next_state))
-    return jax.tree_multimap(lambda x, y: x + dt * y, next_state, corrections)
+    return jax.tree_map(lambda x, y: x + dt * y, next_state, corrections)
 
   return hk.to_module(step_fn)()

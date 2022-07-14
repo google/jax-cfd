@@ -129,7 +129,7 @@ def split_axis(
 def concat_along_axis(pytrees, axis):
   """Concatenates `pytrees` along `axis`."""
   concat_leaves_fn = lambda *args: jnp.concatenate(args, axis)
-  return jax.tree_multimap(concat_leaves_fn, *pytrees)
+  return jax.tree_map(concat_leaves_fn, *pytrees)
 
 
 def block_reduce(

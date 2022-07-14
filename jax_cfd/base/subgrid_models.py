@@ -127,7 +127,7 @@ def evm_model(
        for j in range(grid.ndim)]
       for i in range(grid.ndim)])
   viscosity = viscosity_fn(s_ij, v)
-  tau = jax.tree_multimap(lambda x, y: -2. * x * y, viscosity, s_ij)
+  tau = jax.tree_map(lambda x, y: -2. * x * y, viscosity, s_ij)
   return tuple(-finite_differences.divergence(  # pylint: disable=g-complex-comprehension
       tuple(grids.GridVariable(t, bc)  # use velocity bc to compute diverence
             for t in tau[i, :]))

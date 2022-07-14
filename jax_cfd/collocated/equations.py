@@ -35,7 +35,7 @@ ForcingFn = Callable[[GridVariableVector], GridArrayVector]
 
 
 def sum_fields(*args):
-  return jax.tree_multimap(lambda *a: sum(a), *args)
+  return jax.tree_map(lambda *a: sum(a), *args)
 
 
 def semi_implicit_navier_stokes(

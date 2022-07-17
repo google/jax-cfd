@@ -186,6 +186,69 @@ class BoundaryConditions:
     raise NotImplementedError(
         'values() not implemented in BoundaryConditions base class.')
 
+  def pad(
+      self,
+      u: GridArray,
+      width: int,
+      axis: int,
+  ) -> GridArray:
+    """Returns Arrays padded according to boundary condition.
+
+    Args:
+      u: a `GridArray` object.
+      width: number of elements to pad along axis. Use negative value for lower
+        boundary or positive value for upper boundary.
+      axis: axis to pad along.
+
+    Returns:
+      An array that is elongated along axis with padded values.
+    """
+    raise NotImplementedError(
+        'pad() not implemented in BoundaryConditions base class.')
+
+  def trim_bc(self, u: GridArray) -> GridArray:
+    """Returns GridArray without the grid points on the boundary.
+
+    Some grid points of GridArray might coincide with boundary. This trims those
+    values.
+    Args:
+      u: a `GridArray` object.
+
+    Returns:
+      A GridArray shrunk along certain dimensions.
+    """
+    raise NotImplementedError(
+        'trim_bc() not implemented in BoundaryConditions base class.')
+
+  def pad_and_impose_bc(self, u: GridArray) -> GridArray:
+    """Returns GridVariable with correct boundary condition.
+
+    Some grid points of GridArray might coincide with boundary. This ensures
+    that the GridVariable.array agrees with GridVariable.bc.
+    Args:
+      u: a `GridArray` object that specifies only scalar values on the internal
+        nodes.
+
+    Returns:
+      A GridVariable that has correct boundary.
+    """
+    raise NotImplementedError(
+        'pad_and_impose_bc() not implemented in BoundaryConditions base class.')
+
+  def impose_bc(self, u: GridArray) -> GridVariable:
+    """Returns GridVariable with correct boundary condition.
+
+    Some grid points of GridArray might coincide with boundary. This ensures
+    that the GridVariable.array agrees with GridVariable.bc.
+    Args:
+      u: a `GridArray` object.
+
+    Returns:
+      A GridVariable that has correct boundary.
+    """
+    raise NotImplementedError(
+        'impose_bc() not implemented in BoundaryConditions base class.')
+
 
 @register_pytree_node_class
 @dataclasses.dataclass

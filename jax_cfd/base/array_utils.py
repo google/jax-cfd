@@ -30,7 +30,7 @@ PyTree = Any
 Array = Union[np.ndarray, jnp.DeviceArray]
 
 
-def _normalize_axis(axis: int, ndim: int) -> int:
+def normalize_axis(axis: int, ndim: int) -> int:
   """Validates and returns positive `axis` value."""
   if not -ndim <= axis < ndim:
     raise ValueError(f'invalid axis {axis} for ndim {ndim}')
@@ -64,7 +64,7 @@ def slice_along_axis(
   sliced = []
   for array in arrays:
     ndim = array.ndim
-    slc = tuple(idx if j == _normalize_axis(axis, ndim) else slice(None)
+    slc = tuple(idx if j == normalize_axis(axis, ndim) else slice(None)
                 for j in range(ndim))
     sliced.append(array[slc])
   return jax.tree_unflatten(tree_def, sliced)

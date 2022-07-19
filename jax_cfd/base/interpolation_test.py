@@ -369,5 +369,167 @@ class PointInterpolationTest(test_util.TestCase):
             outside_domain_point, c, mode='constant', cval=1234))
 
 
+class Interp1DTest(test_util.TestCase):
+
+  @parameterized.named_parameters(
+      dict(testcase_name='FillWithExtrapolate', fill_value='extrapolate'),
+      dict(testcase_name='FillWithScalar', fill_value=123),
+  )
+  def test_same_as_scipy_on_scalars_and_check_grads(self, fill_value):
+    rng = np.random.RandomState(45)
+
+    n = 10
+    y = rng.randn(n)
+
+    x_low = 5.
+    x_high = 9.
+    x = np.linspace(x_low, x_high, num=n)
+
+    sp_func = spi.interp1d(
+        x,
+        y,
+        kind='linear',
+        fill_value=fill_value,
+        bounds_error=False)
+    cfd_func = interpolation.interp1d(x, y, fill_value=fill_value)
+
+    # Check x_new at the table definition points `x`, points outside, and points
+    # in between.
+    x_to_check = np.concatenate(([x_low - 1], x, x * 1.051, [x_high + 1]))
+
+    for x_new in x_to_check:
+      sp_y_new = sp_func(x_new).astype(np.float32)
+      cfd_y_new = cfd_func(x_new)
+      self.assertAllClose(sp_y_new, cfd_y_new, rtol=1e-5, atol=1e-6)
+
+      grad_cfd_y_new = jax.grad(cfd_func)(x_new)
+
+      # Gradients should be nonzero except when outside the range of `x` and
+      # filling with a constant.
+      # Why check this? Because, some indexing methods result in gradients == 0
+      # at the interpolation table points.
+      if fill_value == 'extrapolate' or x_low <= x_new <= x_high:
+        self.assertLess(0, np.abs(grad_cfd_y_new))
+      else:
+        self.assertTrue(np.isfinite(grad_cfd_y_new))
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='TableIs1D_XNewIs1D_Axis0_FillWithScalar',
+          table_ndim=1,
+          x_new_ndim=1,
+          axis=0,
+          fill_value=12345,
+      ),
+      dict(
+          testcase_name='TableIs1D_XNewIs1D_Axis0_FillWithExtrapolate',
+          table_ndim=1,
+          x_new_ndim=1,
+          axis=0,
+          fill_value='extrapolate',
+      ),
+      dict(
+          testcase_name='TableIs2D_XNewIs1D_Axis0_FillWithExtrapolate',
+          table_ndim=2,
+          x_new_ndim=1,
+          axis=0,
+          fill_value='extrapolate',
+      ),
+      dict(
+          testcase_name='TableIs3D_XNewIs2D_Axis1_FillWithScalar',
+          table_ndim=3,
+          x_new_ndim=2,
+          axis=1,
+          fill_value=12345,
+      ),
+      dict(
+          testcase_name='TableIs3D_XNewIs2D_Axisn1_FillWithScalar',
+          table_ndim=3,
+          x_new_ndim=2,
+          axis=-1,
+          fill_value=12345,
+      ),
+      dict(
+          testcase_name='TableIs3D_XNewIs2D_Axisn1_FillWithExtrapolate',
+          table_ndim=3,
+          x_new_ndim=2,
+          axis=-1,
+          fill_value='extrapolate',
+      ),
+      dict(
+          testcase_name='TableIs3D_XNewIs2D_Axisn3_FillWithScalar',
+          table_ndim=3,
+          x_new_ndim=2,
+          axis=-3,
+          fill_value=1234,
+      ),
+      dict(
+          testcase_name='TableIs3D_XNewIs2D_Axisn3_FillWithConstantExtension',
+          table_ndim=3,
+          x_new_ndim=2,
+          axis=-3,
+          fill_value='constant_extension',
+      ),
+  )
+  def test_same_as_scipy_on_arrays(
+      self,
+      table_ndim,
+      x_new_ndim,
+      axis,
+      fill_value,
+  ):
+    """Test results are the same as scipy.interpolate.interp1d."""
+    rng = np.random.RandomState(45)
+
+    # Arbitrary shape that ensures all dims are different to prevent
+    # broadcasting from hiding bugs.
+    y_shape = tuple(range(5, 5 + table_ndim))
+    y = rng.randn(*y_shape)
+    n = y_shape[axis]
+
+    x_low = 5
+    x_high = 9
+    x = np.linspace(x_low, x_high, num=n)**2  # Arbitrary non-linearly spaced x
+
+    # Scipy doesn't have 'constant_extension', so treat it special.
+    # Here use np.nan as the fill value, which will be easy to spot if we handle
+    # it wrong.
+    if fill_value == 'constant_extension':
+      sp_fill_value = np.nan
+    else:
+      sp_fill_value = fill_value
+
+    sp_func = spi.interp1d(
+        x,
+        y,
+        kind='linear',
+        axis=axis,
+        fill_value=sp_fill_value,
+        bounds_error=False)
+    cfd_func = interpolation.interp1d(x, y, axis=axis, fill_value=fill_value)
+
+    # Make n_x_new > n, so we can selectively fill values as below.
+    n_x_new = max(2 * n, 20)
+
+    # Make x_new over the same range as x.
+    x_new_shape = tuple(range(2, x_new_ndim + 1)) + (n_x_new,)
+    x_new = (x_low + rng.rand(*x_new_shape) * (x_high - x_low))**2
+
+    x_new[..., 0] = np.min(x) - 1  # Out of bounds low
+    x_new[..., -1] = np.max(x) + 1  # Out of bounds high
+    x_new[..., 1:n + 1] = x  # All the grid points
+
+    # Scipy doesn't have the 'constant_extension' feature, but
+    # constant_extension is achieved by clipping the input.
+    if fill_value == 'constant_extension':
+      sp_x_new = np.clip(x_new, np.min(x), np.max(x))
+    else:
+      sp_x_new = x_new
+
+    sp_y_new = sp_func(sp_x_new).astype(np.float32)
+    cfd_y_new = cfd_func(x_new)
+    self.assertAllClose(sp_y_new, cfd_y_new, rtol=1e-6, atol=1e-6)
+
+
 if __name__ == '__main__':
   absltest.main()

@@ -18,6 +18,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import array_utils
 from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 import numpy as np
@@ -357,3 +358,121 @@ def point_interpolation(
 
   return jax.scipy.ndimage.map_coordinates(
       c.data, coordinates=index, order=order, mode=mode, cval=cval)
+
+
+def interp1d(
+    x: Array,
+    y: Array,
+    axis: int = -1,
+    fill_value: Union[str, Array] = jnp.nan,
+) -> Callable[[Array], jnp.DeviceArray]:
+  """Build a function to interpolate `y = f(x)`.
+
+  x and y are arrays of values used to approximate some function f: y = f(x).
+  This returns a function that uses linear interpolation to find the value of
+  new points.
+
+  ```
+  x = jnp.linspace(0, 10)
+  y = jnp.sin(x)
+  f = interp1d(x, y)
+
+  x_new = 1.23
+  f(x_new)
+  ==> Approximately sin(1.23).
+
+  x_new = ...  # Shape (4, 5) array
+  f(x_new)
+  ==> Shape (4, 5) array, approximating sin(x_new).
+  ```
+
+  Args:
+    x: Length N 1-D array of values to build the interpolation function with.
+      x is assumed to be strictly increasing, but this is not checked. If x is
+      not strictly increasing, unpredictable behavior will result.
+    y: Shape (..., N, ...) array of values corresponding to f(x).
+    axis: Specifies the axis of y along which to interpolate. Interpolation
+      defaults to the last axis of y.
+    fill_value: Scalar array or string. If array, this value will be used to
+      fill in for requested points outside of the data range. If not provided,
+      then the default is NaN. If "extrapolate", then extrapolation is used.
+      If "constant_extension", then the function is extended as a constant equal
+      to the value at the edge of the data.
+
+  Returns:
+    Callable mapping array x_new to values y_new, where
+      y_new.shape = y.shape[:axis] + x_new.shape + y.shape[axis + 1:]
+  """
+  allowed_fill_value_strs = {'constant_extension', 'extrapolate'}
+  if isinstance(fill_value, str):
+    if fill_value not in allowed_fill_value_strs:
+      raise ValueError(
+          f'`fill_value` "{fill_value}" not in {allowed_fill_value_strs}')
+  else:
+    fill_value = np.asarray(fill_value)
+    if fill_value.ndim > 0:
+      raise ValueError(f'Only scalar `fill_value` supported. '
+                       f'Found shape: {fill_value.shape}')
+
+  x = jnp.asarray(x)
+  if x.ndim != 1:
+    raise ValueError(f'Expected `x` to be 1D. Found shape {x.shape}')
+  n_x = x.shape[0]
+
+  y = jnp.asarray(y)
+  if y.ndim < 1:
+    raise ValueError(f'Expected `y` to have rank >= 1. Found shape {y.shape}')
+
+  if x.size < 2:
+    raise ValueError(f'`x` must have at least 2 entries. Found shape {x.shape}')
+
+  if x.size != y.shape[axis]:
+    raise ValueError(
+        f'x and y arrays must be equal in length along interpolation axis. '
+        f'Found x.shape={x.shape} and y.shape={y.shape} and axis={axis}')
+
+  axis = array_utils.normalize_axis(axis, ndim=y.ndim)
+
+  def interp_func(x_new: jnp.DeviceArray) -> jnp.DeviceArray:
+    """Implementation of the interpolation function."""
+    x_new = jnp.asarray(x_new)
+
+    # It is easiest if we assume x_new is 1D
+    x_new_shape = x_new.shape
+    x_new = jnp.ravel(x_new)
+
+    # This construction of indices ensures that below_idx < above_idx, even at
+    # x_new = x[i] exactly for some i.
+    x_new_clipped = jnp.clip(x_new, np.min(x), np.max(x))
+    above_idx = jnp.minimum(n_x - 1,
+                            jnp.searchsorted(x, x_new_clipped, side='right'))
+    below_idx = jnp.maximum(0, above_idx - 1)
+
+    def expand(array):
+      """Add singletons to rightmost dims of `array` so it bcasts with y."""
+      array = jnp.asarray(array)
+      return jnp.reshape(array, array.shape + (1,) * (y.ndim - axis - 1))
+
+    x_above = jnp.take(x, above_idx)
+    x_below = jnp.take(x, below_idx)
+    y_above = jnp.take(y, above_idx, axis=axis)
+    y_below = jnp.take(y, below_idx, axis=axis)
+    slope = (y_above - y_below) / expand(x_above - x_below)
+
+    if isinstance(fill_value, str) and fill_value == 'extrapolate':
+      delta_x = expand(x_new - x_below)
+      y_new = y_below + delta_x * slope
+    elif isinstance(fill_value, str) and fill_value == 'constant_extension':
+      delta_x = expand(x_new_clipped - x_below)
+      y_new = y_below + delta_x * slope
+    else:  # Else fill_value is an Array.
+      delta_x = expand(x_new - x_below)
+      fill_value_ = expand(fill_value)
+      y_new = y_below + delta_x * slope
+      y_new = jnp.where(
+          delta_x < 0, fill_value_,
+          jnp.where(delta_x > expand(x_above - x_below), fill_value_, y_new))
+    return jnp.reshape(
+        y_new, y_new.shape[:axis] + x_new_shape + y_new.shape[axis + 1:])
+
+  return interp_func

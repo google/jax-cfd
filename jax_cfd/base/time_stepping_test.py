@@ -39,7 +39,7 @@ ALL_TEST_PROBLEMS = [
          outer_steps=5,
          initial_state=np.ones(2),
          closed_form=harmonic_oscillator,
-         tolerances=[1e-2, 3e-5, 3e-5, 2e-10]),
+         tolerances=[1e-2, 3e-5, 3e-5, 4e-7]),
 ]
 
 

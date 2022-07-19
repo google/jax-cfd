@@ -100,6 +100,8 @@ Did we miss something? Please let us know!
 
 ## Citation
 
+If you use our finite volume method (FVM) or ML models, please cite:
+
 ```
 @article{Kochkov2021-ML-CFD,
   author = {Kochkov, Dmitrii and Smith, Jamie A. and Alieva, Ayya and Wang, Qing and Brenner, Michael P. and Hoyer, Stephan},
@@ -115,7 +117,20 @@ Did we miss something? Please let us know!
   eprint = {https://www.pnas.org/content/118/21/e2101784118.full.pdf},
   journal = {Proceedings of the National Academy of Sciences}
 }
+```
 
+If you use our spectral code, please cite:
+
+```
+@article{Dresdner2022-Spectral-ML,
+  doi = {10.48550/ARXIV.2207.00556},
+  url = {https://arxiv.org/abs/2207.00556},
+  author = {Dresdner, Gideon and Kochkov, Dmitrii and Norgaard, Peter and Zepeda-Núñez, Leonardo and Smith, Jamie A. and Brenner, Michael P. and Hoyer, Stephan},
+  title = {Learning to correct spectral methods for simulating turbulent flows},
+  publisher = {arXiv},
+  year = {2022},
+  copyright = {arXiv.org perpetual, non-exclusive license}
+}
 ```
 
 ## Local development

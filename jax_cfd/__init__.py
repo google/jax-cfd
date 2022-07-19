@@ -14,6 +14,6 @@
 
 """Defines the JAX-CFD module for computational fluid dynamics."""
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 import jax_cfd.base

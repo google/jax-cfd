@@ -204,7 +204,7 @@ class FiniteDifferenceTest(test_util.TestCase):
           shape=(21, 21),
           f=lambda x, y: (x * (y - 1.), y * (x - 2.)),
           g=lambda x, y: np.array([[y - 1., y], [x, x - 2.]]),
-          atol=2e-6),
+          atol=3e-6),
       dict(
           testcase_name='_2D_quartic',
           shape=(21, 21),

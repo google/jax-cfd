@@ -220,8 +220,8 @@ class RescaleToRangeTest(test_util.TestCase):
     actual_max = jnp.max(output)
     actual_min = jnp.min(output)
     self.assertEqual(shape, output.shape)  # shape shouldn't change
-    self.assertAllClose(min_value, actual_min)
-    self.assertAllClose(max_value, actual_max)
+    self.assertAllClose(min_value, actual_min, atol=1e-6)
+    self.assertAllClose(max_value, actual_max, atol=1e-6)
 
   @parameterized.named_parameters([
       ('rescale_1d', (32,)),

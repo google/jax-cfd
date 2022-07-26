@@ -75,7 +75,7 @@ def smagorinsky_viscosity(
   # conversion hacks are needed.
   if not boundaries.has_all_periodic_boundary_conditions(*v):
     raise ValueError('smagorinsky_viscosity only valid for periodic BC.')
-  bc = grids.consistent_boundary_conditions(*v)
+  bc = grids.unique_boundary_conditions(*v)
 
   def wrapped_interp_fn(c, offset, v, dt):
     return interpolate_fn(grids.GridVariable(c, bc), offset, v, dt).array
@@ -166,7 +166,7 @@ def implicit_evm_solve_with_diffusion(
   if not boundaries.has_all_periodic_boundary_conditions(*v):
     raise ValueError(
         'implicit_evm_solve_with_diffusion only valid for periodic BC.')
-  bc = grids.consistent_boundary_conditions(*v)
+  bc = grids.unique_boundary_conditions(*v)
   vector_laplacian = np.vectorize(finite_differences.laplacian)
 
   # the arg v from the outer function.

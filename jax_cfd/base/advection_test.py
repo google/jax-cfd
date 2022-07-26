@@ -292,6 +292,48 @@ class AdvectionTest(test_util.TestCase):
       self.assertLessEqual(current_total_variation, initial_total_variation)
 
   @parameterized.named_parameters(
+      dict(
+          testcase_name='upwind_1D',
+          shape=(101,),
+          method=_euler_step(adv.advect_upwind)),
+      dict(
+          testcase_name='van_leer_1D',
+          shape=(101,),
+          method=_euler_step(adv.advect_van_leer)),
+  )
+  def test_mass_conservation(self, shape, method):
+    atol = 1e-6
+    offset = 0.5
+    cfl_number = 0.1
+    dt = cfl_number / shape[0]
+    num_steps = 1000
+
+    grid = grids.Grid(shape, domain=([-1., 1.],))
+    bc = boundaries.dirichlet_boundary_conditions(grid.ndim)
+    c_bc = boundaries.dirichlet_boundary_conditions(grid.ndim, ((-1., 1.),))
+
+    def u(grid, offset):
+      x = grid.mesh((offset,))[0]
+      return grids.GridArray(-jnp.sin(jnp.pi * x), (offset,), grid)
+
+    def c0(grid, offset):
+      x = grid.mesh((offset,))[0]
+      return grids.GridArray(x, (offset,), grid)
+
+    v = (bc.impose_bc(u(grid, 1.)),)
+    c = c_bc.impose_bc(c0(grid, offset))
+
+    ct = c
+
+    advect = jax.jit(functools.partial(method, v=v, dt=dt))
+
+    initial_mass = np.sum(c.data)
+    for _ in range(num_steps):
+      ct = advect(ct)
+      current_total_mass = np.sum(ct.data)
+      self.assertAllClose(current_total_mass, initial_mass, atol=atol)
+
+  @parameterized.named_parameters(
       dict(testcase_name='van_leers_equivalence_1d',
            shape=(101,), v_sign=1.),
       dict(testcase_name='van_leers_equivalence_3d',

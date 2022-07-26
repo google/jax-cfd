@@ -70,8 +70,10 @@ def _advect_aligned(cs: GridVariableVector, v: GridVariableVector) -> GridArray:
     raise ValueError('`cs` and `v` must have the same length;'
                      f'got {len(cs)} vs. {len(v)}.')
   flux = tuple(c.array * u.array for c, u in zip(cs, v))
-  # Flux inherits boundary conditions from cs
-  flux = tuple(grids.GridVariable(f, c.bc) for f, c in zip(flux, cs))
+  bcs = tuple(
+      boundaries.get_flux_bc_from_velocity_and_scalar(v[i], cs[i], i)
+      for i in range(len(v)))
+  flux = tuple(bc.impose_bc(f) for f, bc in zip(flux, bcs))
   return -fd.divergence(flux)
 
 
@@ -166,10 +168,10 @@ def _velocities_to_flux(
   for i in range(ndim):
     for j in range(ndim):
       if i <= j:
-        bc = grids.consistent_boundary_conditions(
-            aligned_v[i][j], aligned_v[j][i])
-        flux[i] += (GridVariable(aligned_v[i][j].array * aligned_v[j][i].array,
-                                 bc),)
+        bc = boundaries.get_flux_bc_from_velocity_and_scalar(
+            aligned_v[j][i], aligned_v[i][j], j)
+        flux[i] += (bc.impose_bc(aligned_v[i][j].array *
+                                 aligned_v[j][i].array),)
       else:
         flux[i] += (flux[j][i],)
   return tuple(flux)
@@ -273,7 +275,12 @@ def advect_van_leer(
         u.array > 0, forward_correction, backward_correction)
     flux.append(upwind_flux + flux_correction)
   # Assign flux boundary condition
-  flux = tuple(GridVariable(f, c.bc) for f in flux)
+  flux_bc = [
+      boundaries.get_flux_bc_from_velocity_and_scalar(u, c, direction)
+      for direction, u in enumerate(v)
+  ]
+  flux = tuple(
+      flux_bc[axis].impose_bc(flux[axis]) for axis in range(c.grid.ndim))
   advection = -fd.divergence(flux)
   return advection
 

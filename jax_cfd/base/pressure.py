@@ -141,6 +141,6 @@ def projection(
         grids.GridVariable(u.array - q_g, u.bc) for u, q_g in zip(v, q_grad))
   else:
     v_projected = tuple(
-        grids.GridVariable(u.array - q_g, u.bc).enforce_edge_bc()
+        grids.GridVariable(u.array - q_g, u.bc).impose_bc()
         for u, q_g in zip(v, q_grad))
   return v_projected

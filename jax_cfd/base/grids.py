@@ -22,7 +22,6 @@ from typing import Any, Callable, Optional, Sequence, Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
-from jax_cfd.base import array_utils
 import numpy as np
 
 # TODO(jamieas): consider moving common types to a separate module.
@@ -186,6 +185,76 @@ class BoundaryConditions:
     raise NotImplementedError(
         'values() not implemented in BoundaryConditions base class.')
 
+  def pad(
+      self,
+      u: GridArray,
+      width: int,
+      axis: int,
+  ) -> GridArray:
+    """Returns Arrays padded according to boundary condition.
+
+    Args:
+      u: a `GridArray` object.
+      width: number of elements to pad along axis. Use negative value for lower
+        boundary or positive value for upper boundary.
+      axis: axis to pad along.
+
+    Returns:
+      A GridArray that is elongated along axis with padded values.
+    """
+    raise NotImplementedError(
+        'pad() not implemented in BoundaryConditions base class.')
+
+  def trim_boundary(self, u: GridArray) -> GridArray:
+    """Returns GridArray without the grid points on the boundary.
+
+    Some grid points of GridArray might coincide with boundary. This trims those
+    values.
+
+    Args:
+      u: a `GridArray` object.
+
+    Returns:
+      A GridArray shrunk along certain dimensions.
+    """
+    raise NotImplementedError(
+        'trim_boundary() not implemented in BoundaryConditions base class.')
+
+  def pad_and_impose_bc(
+      self,
+      u: GridArray,
+      offset_to_pad_to: Optional[Tuple[float, ...]] = None) -> GridVariable:
+    """Returns GridVariable with correct boundary condition.
+
+    Some grid points of GridArray might coincide with boundary. This ensures
+    that the GridVariable.array agrees with GridVariable.bc.
+    Args:
+      u: a `GridArray` object that specifies only scalar values on the internal
+        nodes.
+      offset_to_pad_to: a Tuple of desired offset to pad to. Note that if the
+        function is given just an interior array in dirichlet case, it can pad
+        to both 0 offset and 1 offset.
+
+    Returns:
+      A GridVariable that has correct boundary.
+    """
+    raise NotImplementedError(
+        'pad_and_impose_bc() not implemented in BoundaryConditions base class.')
+
+  def impose_bc(self, u: GridArray) -> GridVariable:
+    """Returns GridVariable with correct boundary condition.
+
+    Some grid points of GridArray might coincide with boundary. This ensures
+    that the GridVariable.array agrees with GridVariable.bc.
+    Args:
+      u: a `GridArray` object.
+
+    Returns:
+      A GridVariable that has correct boundary.
+    """
+    raise NotImplementedError(
+        'impose_bc() not implemented in BoundaryConditions base class.')
+
 
 @register_pytree_node_class
 @dataclasses.dataclass
@@ -289,22 +358,7 @@ class GridVariable:
         domain[axis] = (domain[axis][0] + grid.step[axis], domain[axis][1])
     return Grid(shape, domain=tuple(domain))
 
-  def _interior_array(self) -> Array:
-    """Returns only the interior points of self.array."""
-    data = self.array.data
-    for axis in range(self.grid.ndim):
-      # nothing happens in periodic case
-      if self.bc.types[axis][1] == 'periodic':
-        continue
-      # nothing happens if the offset is not 0.0 or 1.0
-      if np.isclose(self.offset[axis], 1.0):
-        data, _ = array_utils.split_along_axis(data, -1, axis)
-      elif np.isclose(self.offset[axis], 0.0):
-        _, data = array_utils.split_along_axis(data, 1, axis)
-
-    return data
-
-  def interior(self) -> GridArray:
+  def trim_boundary(self) -> GridArray:
     """Returns a GridArray associated only with interior points.
 
      Interior is defined as the following:
@@ -320,37 +374,16 @@ class GridVariable:
     since one scalar lies exactly on the boundary. In all other cases,
     self.grid and self.array are returned.
     """
-    interior_array = self._interior_array()
-    interior_grid = self._interior_grid()
-    return GridArray(interior_array, self.array.offset, interior_grid)
+    return self.bc.trim_boundary(self.array)
 
-  def enforce_edge_bc(self, *args) -> GridVariable:
+  def impose_bc(self) -> GridVariable:
     """Returns the GridVariable with edge BC enforced, if applicable.
 
     For GridVariables having nonperiodic BC and offset 0 or 1, there are values
     in the array data that are dependent on the boundary condition.
-    enforce_edge_bc() changes these boundary values to match the prescribed BC.
-
-    Args:
-      *args: any optional values passed into BoundaryConditions values method.
+    impose_bc() changes these boundary values to match the prescribed BC.
     """
-    if self.grid.shape != self.array.data.shape:
-      raise ValueError('Stored array and grid have mismatched sizes.')
-    data = jnp.array(self.array.data)
-    for axis in range(self.grid.ndim):
-      if 'periodic' not in self.bc.types[axis]:
-        values = self.bc.values(axis, self.grid, *args)
-        for boundary_side in range(2):
-          if np.isclose(self.array.offset[axis], boundary_side):
-            # boundary data is set to match self.bc:
-            all_slice = [
-                slice(None, None, None),
-            ] * self.grid.ndim
-            all_slice[axis] = -boundary_side
-            data = data.at[tuple(all_slice)].set(values[boundary_side])
-    return GridVariable(
-        array=GridArray(data, self.array.offset, self.grid),
-        bc=self.bc)
+    return self.bc.impose_bc(self.array)
 
 
 GridVariableVector = Tuple[GridVariable, ...]

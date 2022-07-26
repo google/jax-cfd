@@ -50,14 +50,14 @@ class ConstantBoundaryConditions(BoundaryConditions):
       dimension `i`.
   """
   types: Tuple[Tuple[str, str], ...]
-  _values: Tuple[Tuple[Optional[float], Optional[float]], ...]
+  bc_values: Tuple[Tuple[Optional[float], Optional[float]], ...]
 
   def __init__(self, types: Sequence[Tuple[str, str]],
                values: Sequence[Tuple[Optional[float], Optional[float]]]):
     types = tuple(types)
     values = tuple(values)
     object.__setattr__(self, 'types', types)
-    object.__setattr__(self, '_values', values)
+    object.__setattr__(self, 'bc_values', values)
 
   def shift(
       self,
@@ -86,10 +86,15 @@ class ConstantBoundaryConditions(BoundaryConditions):
       width: int,
       axis: int,
   ) -> GridArray:
-    """Pad a GridArray by `padding`.
+    """Pad a GridArray.
 
-    Important: _pad makes no sense past 1 ghost cell for nonperiodic
-    boundaries. This is sufficient for jax_cfd finite difference code.
+    For dirichlet boundary, u is mirrored.
+
+    Important: For jax_cfd finite difference/finite-volume code, no more than 1
+    ghost cell is required. More ghost cells are used only in LES filtering/CNN
+    application.
+
+    No padding past 1 ghost cell is implemented for Neumann BC.
 
     Args:
       u: a `GridArray` object.
@@ -100,40 +105,120 @@ class ConstantBoundaryConditions(BoundaryConditions):
     Returns:
       Padded array, elongated along the indicated axis.
     """
-    if width < 0:  # pad lower boundary
-      bc_type = self.types[axis][0]
-      padding = (-width, 0)
-    else:  # pad upper boundary
-      bc_type = self.types[axis][1]
-      padding = (0, width)
 
-    full_padding = [(0, 0)] * u.grid.ndim
-    full_padding[axis] = padding
+    def make_padding(width):
+      if width < 0:  # pad lower boundary
+        bc_type = self.types[axis][0]
+        padding = (-width, 0)
+      else:  # pad upper boundary
+        bc_type = self.types[axis][1]
+        padding = (0, width)
 
+      full_padding = [(0, 0)] * u.grid.ndim
+      full_padding[axis] = padding
+      return full_padding, padding, bc_type
+
+    full_padding, padding, bc_type = make_padding(width)
     offset = list(u.offset)
     offset[axis] -= padding[0]
-
-    if bc_type != BCType.PERIODIC and abs(width) > 1:
+    if not (bc_type == BCType.PERIODIC or
+            bc_type == BCType.DIRICHLET) and abs(width) > 1:
       raise ValueError(
-          'Padding past 1 ghost cell is not defined in nonperiodic case.')
+          f'Padding past 1 ghost cell is not defined in {bc_type} case.')
+
+    u, trimmed_padding = self._trim_padding(u)
+    data = u.data
+    full_padding[axis] = tuple(
+        pad + trimmed_pad
+        for pad, trimmed_pad in zip(full_padding[axis], trimmed_padding))
 
     if bc_type == BCType.PERIODIC:
+      # for periodic, all grid points must be there. Otherwise padding doesn't
+      # make sense.
+      # Don't pad a trimmed periodic array.
+      if u.grid.shape[axis] > u.shape[axis]:
+        raise ValueError('the GridArray shape does not match the grid.')
       # self.values are ignored here
       pad_kwargs = dict(mode='wrap')
+      data = jnp.pad(data, full_padding, **pad_kwargs)
+
     elif bc_type == BCType.DIRICHLET:
       if np.isclose(u.offset[axis] % 1, 0.5):  # cell center
         # make the linearly interpolated value equal to the boundary by setting
         # the padded values to the negative symmetric values
+        # for dirichlet 0.5 offset, all grid points must be there.
+        # Otherwise padding doesn't make sense.
+        if u.grid.shape[axis] > u.shape[axis]:
+          raise ValueError('the GridArray shape does not match the grid.')
         data = (2 * jnp.pad(
-            u.data, full_padding, mode='constant', constant_values=self._values)
-                - jnp.pad(u.data, full_padding, mode='symmetric'))
-        return GridArray(data, tuple(offset), u.grid)
+            data, full_padding, mode='constant', constant_values=self.bc_values)
+                - jnp.pad(data, full_padding, mode='symmetric'))
       elif np.isclose(u.offset[axis] % 1, 0):  # cell edge
-        pad_kwargs = dict(mode='constant', constant_values=self._values)
+        # u specifies the values on the interior CV. Thus, first the value on
+        # the boundary needs to be added to the array, if not specified by the
+        # interior CV values.
+        # Then the mirrored ghost cells need to be appended.
+
+        # for dirichlet cell-face aligned offset, 1 grid_point can be missing.
+        # Otherwise padding doesn't make sense.
+        if u.grid.shape[axis] > u.shape[axis] + 1:
+          raise ValueError('For a dirichlet cell-face boundary condition, ' +
+                           'the GridArray has more than 1 grid point missing.')
+        elif u.grid.shape[axis] == u.shape[axis] + 1 and not np.isclose(
+            u.offset[axis], 1):
+          raise ValueError('For a dirichlet cell-face boundary condition, ' +
+                           'the GridArray has more than 1 grid point missing.')
+
+        def _needs_pad_with_boundary_value():
+          if (np.isclose(u.offset[axis], 0) and
+              width > 0) or (np.isclose(u.offset[axis], 1) and width < 0):
+            return True
+          elif u.grid.shape[axis] == u.shape[axis] + 1:
+            return True
+          else:
+            return False
+
+        if _needs_pad_with_boundary_value():
+          if np.isclose(abs(width), 1):
+            data = jnp.pad(
+                data,
+                full_padding,
+                mode='constant',
+                constant_values=self.bc_values)
+          elif abs(width) > 1:
+            bc_padding, _, _ = make_padding(int(width /
+                                                abs(width)))  # makes it 1 pad
+            # subtract the padded cell
+            full_padding_past_bc, _, _ = make_padding(
+                (abs(width) - 1) * int(width / abs(width)))  # makes it 1 pad
+            # here we are adding 0 boundary cell with 0 value
+            expanded_data = jnp.pad(
+                data, bc_padding, mode='constant', constant_values=(0, 0))
+            padding_values = list(self.bc_values)
+            padding_values[axis] = [pad / 2 for pad in padding_values[axis]]
+            data = 2 * jnp.pad(
+                data,
+                full_padding,
+                mode='constant',
+                constant_values=tuple(padding_values)) - jnp.pad(
+                    expanded_data, full_padding_past_bc, mode='reflect')
+        else:  # dirichlet cell-face aligned
+          padding_values = list(self.bc_values)
+          padding_values[axis] = [pad / 2 for pad in padding_values[axis]]
+          data = 2 * jnp.pad(
+              data,
+              full_padding,
+              mode='constant',
+              constant_values=tuple(padding_values)) - jnp.pad(
+                  data, full_padding, mode='reflect')
       else:
         raise ValueError('expected offset to be an edge or cell center, got '
                          f'offset[axis]={u.offset[axis]}')
     elif bc_type == BCType.NEUMANN:
+      # for neumann, all grid points must be there.
+      # Otherwise padding doesn't make sense.
+      if u.grid.shape[axis] > u.shape[axis]:
+        raise ValueError('the GridArray shape does not match the grid.')
       if not (np.isclose(u.offset[axis] % 1, 0) or
               np.isclose(u.offset[axis] % 1, 0.5)):
         raise ValueError('expected offset to be an edge or cell center, got '
@@ -143,18 +228,15 @@ class ConstantBoundaryConditions(BoundaryConditions):
         # When the data is on cell edges, boundary is set such that
         # (u_last_interior - u_boundary)/grid_step = neumann_bc_value.
         data = (
-            jnp.pad(u.data, full_padding, mode='edge') + u.grid.step[axis] *
-            (jnp.pad(u.data, full_padding, mode='constant') - jnp.pad(
-                u.data,
+            jnp.pad(data, full_padding, mode='edge') + u.grid.step[axis] *
+            (jnp.pad(data, full_padding, mode='constant') - jnp.pad(
+                data,
                 full_padding,
                 mode='constant',
-                constant_values=self._values)))
-        return GridArray(data, tuple(offset), u.grid)
-
+                constant_values=self.bc_values)))
     else:
       raise ValueError('invalid boundary type')
 
-    data = jnp.pad(u.data, full_padding, **pad_kwargs)
     return GridArray(data, tuple(offset), u.grid)
 
   def _trim(
@@ -185,6 +267,32 @@ class ConstantBoundaryConditions(BoundaryConditions):
     offset[axis] += padding[0]
     return GridArray(data, tuple(offset), u.grid)
 
+  def _trim_padding(self, u: grids.GridArray, axis=0):
+    """Trim all padding from a GridArray.
+
+    Args:
+      u: a `GridArray` object.
+      axis: axis to trim along.
+
+    Returns:
+      Trimmed array, shrunk along the indicated axis to match
+      u.grid.shape[axis].
+    """
+    padding = (0, 0)
+    if u.shape[axis] > u.grid.shape[axis]:
+      # number of cells that were padded on the left
+      negative_trim = 0
+      if u.offset[axis] < 0:
+        negative_trim = -round(-u.offset[axis])
+        u = self._trim(u, negative_trim, axis)
+      # number of cells that were padded on the right
+      positive_trim = u.shape[axis] - u.grid.shape[axis]
+      if positive_trim > 0:
+        u = self._trim(u, positive_trim, axis)
+      # combining existing padding with new padding
+      padding = (negative_trim, positive_trim)
+    return u, padding
+
   def values(
       self, axis: int,
       grid: grids.Grid) -> Tuple[Optional[jnp.ndarray], Optional[jnp.ndarray]]:
@@ -198,12 +306,84 @@ class ConstantBoundaryConditions(BoundaryConditions):
       A tuple of arrays of grid.ndim - 1 dimensions that specify values on the
       boundary. In case of periodic boundaries, returns a tuple(None,None).
     """
-    if None in self._values[axis]:
+    if None in self.bc_values[axis]:
       return (None, None)
-    bc = tuple(
+    bc_values = tuple(
         jnp.full(grid.shape[:axis] +
-                 grid.shape[axis + 1:], self._values[axis][-i]) for i in [0, 1])
-    return bc
+                 grid.shape[axis + 1:], self.bc_values[axis][-i])
+        for i in [0, 1])
+    return bc_values
+
+  def trim_boundary(self, u: grids.GridArray) -> grids.GridArray:
+    """Returns GridArray without the grid points on the boundary.
+
+    Some grid points of GridArray might coincide with boundary. This trims those
+    values. If the array was padded beforehand, removes the padding.
+
+    Args:
+      u: a `GridArray` object.
+
+    Returns:
+      A GridArray shrunk along certain dimensions.
+    """
+    for axis in range(u.grid.ndim):
+      u, _ = self._trim_padding(u, axis)
+    if u.shape != u.grid.shape:
+      raise ValueError('the GridArray has already been trimmed.')
+    for axis in range(u.grid.ndim):
+      if np.isclose(u.offset[axis],
+                    0.0) and self.types[axis][0] == BCType.DIRICHLET:
+        u = self._trim(u, -1, axis)
+      elif np.isclose(u.offset[axis],
+                      1.0) and self.types[axis][1] == BCType.DIRICHLET:
+        u = self._trim(u, 1, axis)
+    return u
+
+  def pad_and_impose_bc(
+      self,
+      u: grids.GridArray,
+      offset_to_pad_to: Optional[Tuple[float,
+                                       ...]] = None) -> grids.GridVariable:
+    """Returns GridVariable with correct boundary condition.
+
+    Some grid points of GridArray might coincide with boundary. This ensures
+    that the GridVariable.array agrees with GridVariable.bc.
+    Args:
+      u: a `GridArray` object that specifies only scalar values on the internal
+        nodes.
+      offset_to_pad_to: a Tuple of desired offset to pad to. Note that if the
+        function is given just an interior array in dirichlet case, it can pad
+        to both 0 offset and 1 offset.
+
+    Returns:
+      A GridVariable that has correct boundary.
+    """
+    if offset_to_pad_to is None:
+      offset_to_pad_to = u.offset
+    for axis in range(u.grid.ndim):
+      if self.types[axis][0] == BCType.DIRICHLET and np.isclose(
+          u.offset[axis], 1.0):
+        if np.isclose(offset_to_pad_to[axis], 1.0):
+          u = self._pad(u, 1, axis)
+        elif np.isclose(offset_to_pad_to[axis], 0.0):
+          u = self._pad(u, -1, axis)
+    return grids.GridVariable(u, self)
+
+  def impose_bc(self, u: grids.GridArray) -> grids.GridVariable:
+    """Returns GridVariable with correct boundary condition.
+
+    Some grid points of GridArray might coincide with boundary. This ensures
+    that the GridVariable.array agrees with GridVariable.bc.
+    Args:
+      u: a `GridArray` object.
+
+    Returns:
+      A GridVariable that has correct boundary.
+    """
+    offset = u.offset
+    if u.shape == u.grid.shape:
+      u = self.trim_boundary(u)
+    return self.pad_and_impose_bc(u, offset)
 
   trim = _trim
   pad = _pad
@@ -232,7 +412,7 @@ class HomogeneousBoundaryConditions(ConstantBoundaryConditions):
 
 
 # Convenience utilities to ease updating of BoundaryConditions implementation
-def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
+def periodic_boundary_conditions(ndim: int) -> ConstantBoundaryConditions:
   """Returns periodic BCs for a variable with `ndim` spatial dimension."""
   return HomogeneousBoundaryConditions(
       ((BCType.PERIODIC, BCType.PERIODIC),) * ndim)
@@ -241,7 +421,7 @@ def periodic_boundary_conditions(ndim: int) -> BoundaryConditions:
 def dirichlet_boundary_conditions(
     ndim: int,
     bc_vals: Optional[Sequence[Tuple[float, float]]] = None,
-) -> BoundaryConditions:
+) -> ConstantBoundaryConditions:
   """Returns Dirichelt BCs for a variable with `ndim` spatial dimension.
 
   Args:
@@ -250,7 +430,7 @@ def dirichlet_boundary_conditions(
       If None, returns Homogeneous BC.
 
   Returns:
-    BoundaryCondition subclass.
+    BoundaryCondition instance.
   """
   if not bc_vals:
     return HomogeneousBoundaryConditions(
@@ -263,7 +443,7 @@ def dirichlet_boundary_conditions(
 def neumann_boundary_conditions(
     ndim: int,
     bc_vals: Optional[Sequence[Tuple[float, float]]] = None,
-) -> BoundaryConditions:
+) -> ConstantBoundaryConditions:
   """Returns Neumann BCs for a variable with `ndim` spatial dimension.
 
   Args:
@@ -272,7 +452,7 @@ def neumann_boundary_conditions(
       If None, returns Homogeneous BC.
 
   Returns:
-    BoundaryCondition subclass.
+    BoundaryCondition instance.
   """
   if not bc_vals:
     return HomogeneousBoundaryConditions(
@@ -285,7 +465,7 @@ def neumann_boundary_conditions(
 def channel_flow_boundary_conditions(
     ndim: int,
     bc_vals: Optional[Sequence[Tuple[float, float]]] = None,
-) -> BoundaryConditions:
+) -> ConstantBoundaryConditions:
   """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1.
 
   Args:
@@ -295,7 +475,7 @@ def channel_flow_boundary_conditions(
       boundary values should be (None, None).
 
   Returns:
-    BoundaryCondition subclass.
+    BoundaryCondition instance.
   """
   bc_type = ((BCType.PERIODIC, BCType.PERIODIC),
              (BCType.DIRICHLET, BCType.DIRICHLET))
@@ -308,7 +488,8 @@ def channel_flow_boundary_conditions(
 
 
 def periodic_and_neumann_boundary_conditions(
-    bc_vals: Optional[Tuple[float, float]] = None) -> BoundaryConditions:
+    bc_vals: Optional[Tuple[float,
+                            float]] = None) -> ConstantBoundaryConditions:
   """Returns BCs periodic for dimension 0 and Neumann for dimension 1.
 
   Args:
@@ -316,7 +497,7 @@ def periodic_and_neumann_boundary_conditions(
       None, returns Homogeneous BC.
 
   Returns:
-    BoundaryCondition subclass.
+    BoundaryCondition instance.
   """
   if not bc_vals:
     return HomogeneousBoundaryConditions(
@@ -325,6 +506,35 @@ def periodic_and_neumann_boundary_conditions(
     return ConstantBoundaryConditions(
         ((BCType.PERIODIC, BCType.PERIODIC), (BCType.NEUMANN, BCType.NEUMANN)),
         ((None, None), bc_vals))
+
+
+def periodic_and_dirichlet_boundary_conditions(
+    bc_vals: Optional[Tuple[float, float]] = None,
+    periodic_axis=0) -> ConstantBoundaryConditions:
+  """Returns BCs periodic for dimension 0 and Dirichlet for dimension 1.
+
+  Args:
+    bc_vals: the lower and upper boundary condition value for each dimension. If
+      None, returns Homogeneous BC.
+    periodic_axis: specifies which axis is periodic.
+
+  Returns:
+    BoundaryCondition subclass.
+  """
+  periodic = (BCType.PERIODIC, BCType.PERIODIC)
+  dirichlet = (BCType.DIRICHLET, BCType.DIRICHLET)
+  if periodic_axis == 0:
+    if not bc_vals:
+      return HomogeneousBoundaryConditions((periodic, dirichlet))
+    else:
+      return ConstantBoundaryConditions((periodic, dirichlet),
+                                        ((None, None), bc_vals))
+  else:
+    if not bc_vals:
+      return HomogeneousBoundaryConditions((dirichlet, periodic))
+    else:
+      return ConstantBoundaryConditions((dirichlet, periodic),
+                                        (bc_vals, (None, None)))
 
 
 def has_all_periodic_boundary_conditions(*arrays: GridVariable) -> bool:

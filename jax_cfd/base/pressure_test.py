@@ -159,7 +159,7 @@ class PressureTest(test_util.TestCase):
         for d in range(ndim))
 
     # Associate and enforce boundary conditions
-    v = tuple(grids.GridVariable(u, u_bc).enforce_edge_bc()
+    v = tuple(grids.GridVariable(u, u_bc).impose_bc()
               for u, u_bc in zip(v, velocity_bc))
 
     # y-velocity = 0 for the edge y=y_max (homogeneous Diriclet BC)

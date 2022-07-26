@@ -435,7 +435,7 @@ class GridVariableTest(test_util.TestCase):
         bc = boundaries.periodic_boundary_conditions(ndim=2)  # 2D
         grids.GridVariable(array, bc)
 
-  def test_consistent_boundary_conditions(self):
+  def test_unique_boundary_conditions(self):
     grid = grids.Grid((5,))
     array = grids.GridArray(np.arange(5), offset=(0.5,), grid=grid)
     bc1 = boundaries.periodic_boundary_conditions(grid.ndim)
@@ -444,11 +444,11 @@ class GridVariableTest(test_util.TestCase):
     y_bc1 = grids.GridVariable(array, bc1)
     z_bc2 = grids.GridVariable(array, bc2)
 
-    bc = grids.consistent_boundary_conditions(x_bc1, y_bc1)
+    bc = grids.unique_boundary_conditions(x_bc1, y_bc1)
     self.assertEqual(bc, bc1)
 
     with self.assertRaises(grids.InconsistentBoundaryConditionsError):
-      grids.consistent_boundary_conditions(x_bc1, y_bc1, z_bc2)
+      grids.unique_boundary_conditions(x_bc1, y_bc1, z_bc2)
 
 
 class GridArrayTensorTest(test_util.TestCase):

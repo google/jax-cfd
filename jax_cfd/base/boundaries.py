@@ -537,35 +537,79 @@ def periodic_and_dirichlet_boundary_conditions(
                                         (bc_vals, (None, None)))
 
 
+def is_periodic_boundary_conditions(c: grids.GridVariable, axis: int) -> bool:
+  """Returns true if scalar has periodic bc along axis."""
+  if c.bc.types[axis][0] != BCType.PERIODIC:
+    return False
+  return True
+
+
 def has_all_periodic_boundary_conditions(*arrays: GridVariable) -> bool:
   """Returns True if arrays have periodic BC in every dimension, else False."""
   for array in arrays:
-    for lower_bc_type, upper_bc_type in array.bc.types:
-      if lower_bc_type != BCType.PERIODIC or upper_bc_type != BCType.PERIODIC:
+    for axis in range(array.grid.ndim):
+      if not is_periodic_boundary_conditions(array, axis):
         return False
   return True
 
 
+def consistent_boundary_conditions(*arrays: GridVariable) -> Tuple[str, ...]:
+  """Returns whether BCs are periodic.
+
+  Mixed periodic/nonperiodic boundaries along the same boundary do not make
+  sense. The function checks that the boundary is either periodic or not and
+  throws an error if its mixed.
+
+  Args:
+    *arrays: a list of gridvariables.
+
+  Returns:
+    a list of types of boundaries if they are consistent.
+  """
+  bc_types = []
+  for axis in range(arrays[0].grid.ndim):
+    bcs = {is_periodic_boundary_conditions(array, axis) for array in arrays}
+    if len(bcs) != 1:
+      raise grids.InconsistentBoundaryConditionsError(
+          f'arrays do not have consistent bc: {arrays}')
+    elif bcs.pop():
+      bc_types.append('periodic')
+    else:
+      bc_types.append('nonperiodic')
+  return tuple(bc_types)
+
+
 def get_pressure_bc_from_velocity(v: GridVariableVector) -> BoundaryConditions:
   """Returns pressure boundary conditions for the specified velocity."""
-  # Expect each component of v to have the same BC, either both PERIODIC or
-  # both DIRICHLET.
-  velocity_bc_types = grids.consistent_boundary_conditions(*v).types
+  # assumes that if the boundary is not periodic, pressure BC is zero flux.
+  velocity_bc_types = consistent_boundary_conditions(*v)
   pressure_bc_types = []
-  for velocity_bc_lower, velocity_bc_upper in velocity_bc_types:
-    if velocity_bc_lower == BCType.PERIODIC:
-      pressure_bc_lower = BCType.PERIODIC
-    elif velocity_bc_lower == BCType.DIRICHLET:
-      pressure_bc_lower = BCType.NEUMANN
+  for velocity_bc_type in velocity_bc_types:
+    if velocity_bc_type == 'periodic':
+      pressure_bc_types.append((BCType.PERIODIC, BCType.PERIODIC))
     else:
-      raise ValueError('Expected periodic or dirichlete velocity BC, '
-                       f'got {velocity_bc_lower}')
-    if velocity_bc_upper == BCType.PERIODIC:
-      pressure_bc_upper = BCType.PERIODIC
-    elif velocity_bc_upper == BCType.DIRICHLET:
-      pressure_bc_upper = BCType.NEUMANN
-    else:
-      raise ValueError('Expected periodic or dirichlete velocity BC, '
-                       f'got {velocity_bc_upper}')
-    pressure_bc_types.append((pressure_bc_lower, pressure_bc_upper))
+      pressure_bc_types.append((BCType.NEUMANN, BCType.NEUMANN))
   return HomogeneousBoundaryConditions(pressure_bc_types)
+
+
+def get_flux_bc_from_velocity_and_scalar(u: GridVariable, c: GridVariable,
+                                         flux_dir: int) -> BoundaryConditions:
+  """Returns flux boundary conditions for the specified velocity."""
+  # only no penetration and periodic boundaries are supported.
+  flux_bc_types = []
+  if not isinstance(u.bc, ConstantBoundaryConditions):
+    raise NotImplementedError(
+        f'Flux boundary condition is not implemented for {u.bc, c.bc}')
+  for axis in range(c.grid.ndim):
+    if u.bc.types[axis][0] == 'periodic':
+      flux_bc_types.append((BCType.PERIODIC, BCType.PERIODIC))
+    elif flux_dir != axis:
+      flux_bc_types.append((BCType.DIRICHLET, BCType.DIRICHLET))
+    elif (u.bc.types[axis][0] == BCType.DIRICHLET and
+          u.bc.types[axis][1] == BCType.DIRICHLET and
+          u.bc.bc_values[axis][0] == 0.0 and u.bc.bc_values[axis][1] == 0.0):
+      flux_bc_types.append((BCType.DIRICHLET, BCType.DIRICHLET))
+    else:
+      raise NotImplementedError(
+          f'Flux boundary condition is not implemented for {u.bc, c.bc}')
+  return HomogeneousBoundaryConditions(flux_bc_types)

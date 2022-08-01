@@ -32,16 +32,23 @@ def aligned_array_encoder(
     data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
 ) -> EncodeFn:
   """Generates encoder that wraps last data slice as GridVariables."""
-  del dt, physics_specs  # unused.
-  data_offsets = data_offsets or grid.cell_faces
+  del dt  # unused.
+  if hasattr(physics_specs, 'combo_offsets'):
+    data_offsets = physics_specs.combo_offsets()
+  else:
+    data_offsets = data_offsets or grid.cell_faces
   slice_last_fn = lambda x: array_utils.slice_along_axis(x, 0, -1)
 
-  # TODO(pnorgaard) Make the encoder/decoder/network register for BC
   def encode_fn(inputs):
-    bc = boundaries.periodic_boundary_conditions(grid.ndim)
+    if hasattr(physics_specs, 'combo_boundaries'):
+      bcs = physics_specs.combo_boundaries()
+    else:
+      bcs = tuple(
+          boundaries.periodic_boundary_conditions(grid.ndim)
+          for _ in range(len(inputs)))
     return tuple(
-        grids.GridVariable(grids.GridArray(slice_last_fn(x), offset, grid), bc)
-        for x, offset in zip(inputs, data_offsets))
+        bc.impose_bc(grids.GridArray(slice_last_fn(x), offset, grid))
+        for x, offset, bc in zip(inputs, data_offsets, bcs))
 
   return encode_fn
 
@@ -255,3 +262,4 @@ def spectral_vorticity_encoder(
     return vorticity
 
   return encode_fn
+

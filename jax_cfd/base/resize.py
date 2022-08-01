@@ -13,11 +13,14 @@
 # limitations under the License.
 
 """Resize velocity fields to a different resolution grid."""
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
+import jax
 import jax.numpy as jnp
 from jax_cfd.base import array_utils as arr_utils
 from jax_cfd.base import grids
+from jax_cfd.base import interpolation
+import numpy as np
 
 Array = grids.Array
 Field = Tuple[Array, ...]
@@ -68,6 +71,101 @@ def downsample_staggered_velocity_component(u: Array, direction: int,
   w = arr_utils.slice_along_axis(u, direction, slice(factor - 1, None, factor))
   block_size = tuple(1 if j == direction else factor for j in range(u.ndim))
   return arr_utils.block_reduce(w, block_size, jnp.mean)
+
+
+def top_hat_downsample(
+    source_grid: grids.Grid,
+    destination_grid: grids.Grid,
+    variables: GridVariableVector,
+    filter_size: Optional[Union[int, Tuple[int, ...]]] = None
+) -> GridVariableVector:
+  """Filters each variable by filter_size and subsamples onto destination_grid.
+
+  Downsampling consists of the following steps:
+    * Filter the data by averaging
+    * Interpolate the averaged data onto the destination_grid
+
+
+  This procedure corresponds to standard top-hat filter + comb downsampling.
+
+  Note that the filter size does not have to equal the factor difference between
+  the two grids. The intended use case is for filter size >= factor.
+
+  Args:
+    source_grid: the grid of variable u. Note: this is legacy implementation,
+      variables[i] is an instance of GridVariable and has a grid attribute.
+    destination_grid: the grid on which to interpolate filtered variables.
+    variables: a tuple of GridVariables. Note that the  grid attribute of each
+      variable has to agree with source_grid.
+    filter_size: the number of grid points used in the filter. If it's an int,
+      it specifies the same number of points to filter in all directions. If it
+      is a tuple. each direction is specified separately.
+
+  Returns:
+    a tuple of GridVariables interpolated on destination_grid
+  """
+  # assumes different filtering can be done in different directions
+  factor = tuple(
+      dx / dx_source
+      for dx, dx_source in zip(destination_grid.step, source_grid.step))
+  if filter_size is None:
+    filter_size = factor
+  if isinstance(filter_size, int):
+    filter_size = tuple(filter_size for _ in range(source_grid.ndim))
+  assert destination_grid.domain == source_grid.domain
+  assert all([round(f) == f for f in factor])
+  assert all([round(f) == f for f in filter_size])  # this can be relaxed
+  assert all(abs(
+      np.array(filter_size) % 2)) == 0  # only even filters are implemented
+  assert all(abs(
+      np.array(factor) % 2)) == 0  # only even factors are implemented
+  result = []
+  for c in variables:
+    if c.grid != source_grid:
+      raise grids.InconsistentGridError(
+          f'source_grid for downsampling is {source_grid}, but c is defined'
+          f' on {c.grid}')
+    bc = c.bc
+    offset = c.offset
+    c_centered = interpolation.linear(c, c.grid.cell_center).array
+    center_offset = np.array(source_grid.cell_center)
+    grid_shape = np.array(source_grid.shape)
+    for axis in range(c.grid.ndim):
+      c_centered = bc.pad(
+          c_centered, round(filter_size[axis]) // 2, axis=axis)
+      c_centered = bc.pad(
+          c_centered, -(round(filter_size[axis]) // 2), axis=axis)
+      convolution_filter = jnp.ones(round(
+          filter_size[axis])) / filter_size[axis]
+      convolve_1d = lambda arr, convolution_filter=convolution_filter: jnp.convolve(  # pylint: disable=g-long-lambda
+          arr, convolution_filter, 'valid')
+      axes = list(range(source_grid.ndim))
+      axes.remove(axis)
+      for ax in axes:
+        convolve_1d = jax.vmap(convolve_1d, in_axes=ax, out_axes=ax)
+      c_centered = convolve_1d(c_centered.data)
+      if np.isclose(offset[axis], 0):
+        start = 0
+        end = c_centered.shape[axis] - 1
+      elif np.isclose(offset[axis], 0.5):
+        start = int(factor[axis]) // 2
+        end = None
+      elif np.isclose(offset[axis], 1.0):
+        start = int(factor[axis])
+        end = None
+      else:
+        raise NotImplementedError(f'offset {offset} is not implemented.')
+      c_centered = arr_utils.slice_along_axis(
+          c_centered, axis, slice(start, end, int(factor[axis])))
+      center_offset[axis] = offset[axis]
+      grid_shape[axis] = destination_grid.shape[axis]
+      c_centered = grids.GridArray(
+          c_centered,
+          offset=tuple(center_offset),
+          grid=grids.Grid(shape=tuple(grid_shape), domain=source_grid.domain))
+    c = grids.GridVariable(c_centered, bc)
+    result.append(c)
+  return tuple(result)
 
 
 def downsample_staggered_velocity(

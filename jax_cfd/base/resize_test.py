@@ -225,6 +225,24 @@ class ResizeTopHatTest(test_util.TestCase):
           expected_data=np.array([3., 4.]),
           filter_size=4,
       ),
+      dict(
+          input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          input_offset=(1.,),
+          expected_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          filter_size=None,
+      ),
+      dict(
+          input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          input_offset=(.5,),
+          expected_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          filter_size=None,
+      ),
+      dict(
+          input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          input_offset=(0.,),
+          expected_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          filter_size=None,
+      ),
   )
   def test_downsample_velocity_1d_2x_grid(self, input_data, input_offset,
                                           expected_data, filter_size):

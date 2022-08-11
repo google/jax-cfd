@@ -591,3 +591,26 @@ def get_pressure_bc_from_velocity(v: GridVariableVector) -> BoundaryConditions:
     else:
       pressure_bc_types.append((BCType.NEUMANN, BCType.NEUMANN))
   return HomogeneousBoundaryConditions(pressure_bc_types)
+
+
+def get_flux_bc_from_velocity_and_scalar(u: GridVariable, c: GridVariable,
+                                         flux_dir: int) -> BoundaryConditions:
+  """Returns flux boundary conditions for the specified velocity."""
+  # only no penetration and periodic boundaries are supported.
+  flux_bc_types = []
+  if not isinstance(u.bc, ConstantBoundaryConditions):
+    raise NotImplementedError(
+        f'Flux boundary condition is not implemented for {u.bc, c.bc}')
+  for axis in range(c.grid.ndim):
+    if u.bc.types[axis][0] == 'periodic':
+      flux_bc_types.append((BCType.PERIODIC, BCType.PERIODIC))
+    elif flux_dir != axis:
+      flux_bc_types.append((BCType.DIRICHLET, BCType.DIRICHLET))
+    elif (u.bc.types[axis][0] == BCType.DIRICHLET and
+          u.bc.types[axis][1] == BCType.DIRICHLET and
+          u.bc.bc_values[axis][0] == 0.0 and u.bc.bc_values[axis][1] == 0.0):
+      flux_bc_types.append((BCType.DIRICHLET, BCType.DIRICHLET))
+    else:
+      raise NotImplementedError(
+          f'Flux boundary condition is not implemented for {u.bc, c.bc}')
+  return HomogeneousBoundaryConditions(flux_bc_types)

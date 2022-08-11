@@ -477,7 +477,7 @@ class InconsistentBoundaryConditionsError(Exception):
   """Raised for cases of inconsistent bc between GridVariables."""
 
 
-def consistent_boundary_conditions(*arrays: GridVariable) -> BoundaryConditions:
+def unique_boundary_conditions(*arrays: GridVariable) -> BoundaryConditions:
   """Returns the unique BCs, or raises InconsistentBoundaryConditionsError."""
   bcs = {array.bc for array in arrays}
   if len(bcs) != 1:

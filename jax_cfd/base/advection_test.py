@@ -20,7 +20,7 @@ from absl.testing import parameterized
 
 import jax
 import jax.numpy as jnp
-from jax_cfd.base import advection as adv
+from jax_cfd.base import advection
 from jax_cfd.base import boundaries
 from jax_cfd.base import funcutils
 from jax_cfd.base import grids
@@ -78,68 +78,68 @@ class AdvectionTest(test_util.TestCase):
   @parameterized.named_parameters(
       dict(testcase_name='linear_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_linear),
+           method=_euler_step(advection.advect_linear),
            num_steps=1000,
            cfl_number=0.01,
            atol=5e-2),
       dict(testcase_name='linear_3D',
            shape=(101, 101, 101),
-           method=_euler_step(adv.advect_linear),
+           method=_euler_step(advection.advect_linear),
            num_steps=1000,
            cfl_number=0.01,
            atol=5e-2),
       dict(testcase_name='upwind_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_upwind),
+           method=_euler_step(advection.advect_upwind),
            num_steps=100,
            cfl_number=0.5,
            atol=7e-2),
       dict(testcase_name='upwind_3D',
            shape=(101, 5, 5),
-           method=_euler_step(adv.advect_upwind),
+           method=_euler_step(advection.advect_upwind),
            num_steps=100,
            cfl_number=0.5,
            atol=7e-2),
       dict(testcase_name='van_leer_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_van_leer),
+           method=_euler_step(advection.advect_van_leer),
            num_steps=100,
            cfl_number=0.5,
            atol=2e-2),
       dict(testcase_name='van_leer_1D_negative_v',
            shape=(101,),
-           method=_euler_step(adv.advect_van_leer),
+           method=_euler_step(advection.advect_van_leer),
            num_steps=100,
            cfl_number=0.5,
            atol=2e-2,
            v_sign=-1.),
       dict(testcase_name='van_leer_3D',
            shape=(101, 5, 5),
-           method=_euler_step(adv.advect_van_leer),
+           method=_euler_step(advection.advect_van_leer),
            num_steps=100,
            cfl_number=0.5,
            atol=2e-2),
       dict(testcase_name='van_leer_using_limiters_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_van_leer_using_limiters),
+           method=_euler_step(advection.advect_van_leer_using_limiters),
            num_steps=100,
            cfl_number=0.5,
            atol=2e-2),
       dict(testcase_name='van_leer_using_limiters_3D',
            shape=(101, 5, 5),
-           method=_euler_step(adv.advect_van_leer_using_limiters),
+           method=_euler_step(advection.advect_van_leer_using_limiters),
            num_steps=100,
            cfl_number=0.5,
            atol=2e-2),
       dict(testcase_name='semilagrangian_1D',
            shape=(101,),
-           method=adv.advect_step_semilagrangian,
+           method=advection.advect_step_semilagrangian,
            num_steps=100,
            cfl_number=0.5,
            atol=7e-2),
       dict(testcase_name='semilagrangian_3D',
            shape=(101, 5, 5),
-           method=adv.advect_step_semilagrangian,
+           method=advection.advect_step_semilagrangian,
            num_steps=100,
            cfl_number=0.5,
            atol=7e-2),
@@ -164,58 +164,58 @@ class AdvectionTest(test_util.TestCase):
   @parameterized.named_parameters(
       dict(testcase_name='linear_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_linear),
+           method=_euler_step(advection.advect_linear),
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='linear_3D',
            shape=(101, 101, 101),
-           method=_euler_step(adv.advect_linear),
+           method=_euler_step(advection.advect_linear),
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='upwind_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_upwind),
+           method=_euler_step(advection.advect_upwind),
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='upwind_3D',
            shape=(101, 101, 101),
-           method=_euler_step(adv.advect_upwind),
+           method=_euler_step(advection.advect_upwind),
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='van_leer_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_van_leer),
+           method=_euler_step(advection.advect_van_leer),
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='van_leer_1D_negative_v',
            shape=(101,),
-           method=_euler_step(adv.advect_van_leer),
+           method=_euler_step(advection.advect_van_leer),
            atol=1e-2,
            rtol=1e-2,
            v_sign=-1.),
       dict(testcase_name='van_leer_3D',
            shape=(101, 101, 101),
-           method=_euler_step(adv.advect_van_leer),
+           method=_euler_step(advection.advect_van_leer),
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='van_leer_using_limiters_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_van_leer_using_limiters),
+           method=_euler_step(advection.advect_van_leer_using_limiters),
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='van_leer_using_limiters_3D',
            shape=(101, 101, 101),
-           method=_euler_step(adv.advect_van_leer_using_limiters),
+           method=_euler_step(advection.advect_van_leer_using_limiters),
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='semilagrangian_1D',
            shape=(101,),
-           method=adv.advect_step_semilagrangian,
+           method=advection.advect_step_semilagrangian,
            atol=1e-2,
            rtol=1e-2),
       dict(testcase_name='semilagrangian_3D',
            shape=(101, 101, 101),
-           method=adv.advect_step_semilagrangian,
+           method=advection.advect_step_semilagrangian,
            atol=1e-2,
            rtol=1e-2),
   )
@@ -240,12 +240,12 @@ class AdvectionTest(test_util.TestCase):
   @parameterized.named_parameters(
       dict(testcase_name='_linear_1D',
            shape=(101,),
-           advection_method=adv.advect_linear,
-           convection_method=adv.convect_linear),
+           advection_method=advection.advect_linear,
+           convection_method=advection.convect_linear),
       dict(testcase_name='_linear_3D',
            shape=(101, 101, 101),
-           advection_method=adv.advect_linear,
-           convection_method=adv.convect_linear)
+           advection_method=advection.advect_linear,
+           convection_method=advection.convect_linear)
   )
   def test_convection_vs_advection(
       self, shape, advection_method, convection_method,
@@ -264,13 +264,13 @@ class AdvectionTest(test_util.TestCase):
   @parameterized.named_parameters(
       dict(testcase_name='upwind_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_upwind)),
+           method=_euler_step(advection.advect_upwind)),
       dict(testcase_name='van_leer_1D',
            shape=(101,),
-           method=_euler_step(adv.advect_van_leer)),
+           method=_euler_step(advection.advect_van_leer)),
       dict(testcase_name='semilagrangian_1D',
            shape=(101,),
-           method=adv.advect_step_semilagrangian),
+           method=advection.advect_step_semilagrangian),
   )
   def test_tvd_property(self, shape, method):
     atol = 1e-6
@@ -292,6 +292,47 @@ class AdvectionTest(test_util.TestCase):
       self.assertLessEqual(current_total_variation, initial_total_variation)
 
   @parameterized.named_parameters(
+      dict(
+          testcase_name='upwind_1D',
+          shape=(101,),
+          method=_euler_step(advection.advect_upwind)),
+      dict(
+          testcase_name='van_leer_1D',
+          shape=(101,),
+          method=_euler_step(advection.advect_van_leer)),
+  )
+  def test_mass_conservation(self, shape, method):
+    offset = 0.5
+    cfl_number = 0.1
+    dt = cfl_number / shape[0]
+    num_steps = 1000
+
+    grid = grids.Grid(shape, domain=([-1., 1.],))
+    bc = boundaries.dirichlet_boundary_conditions(grid.ndim)
+    c_bc = boundaries.dirichlet_boundary_conditions(grid.ndim, ((-1., 1.),))
+
+    def u(grid, offset):
+      x = grid.mesh((offset,))[0]
+      return grids.GridArray(-jnp.sin(jnp.pi * x), (offset,), grid)
+
+    def c0(grid, offset):
+      x = grid.mesh((offset,))[0]
+      return grids.GridArray(x, (offset,), grid)
+
+    v = (bc.impose_bc(u(grid, 1.)),)
+    c = c_bc.impose_bc(c0(grid, offset))
+
+    ct = c
+
+    advect = jax.jit(functools.partial(method, v=v, dt=dt))
+
+    initial_mass = np.sum(c.data)
+    for _ in range(num_steps):
+      ct = advect(ct)
+      current_total_mass = np.sum(ct.data)
+      self.assertAllClose(current_total_mass, initial_mass, atol=1e-6)
+
+  @parameterized.named_parameters(
       dict(testcase_name='van_leers_equivalence_1d',
            shape=(101,), v_sign=1.),
       dict(testcase_name='van_leers_equivalence_3d',
@@ -310,10 +351,10 @@ class AdvectionTest(test_util.TestCase):
     dt = min(step) / 100.
     num_steps = 100
     advect_vl = jax.jit(
-        functools.partial(_euler_step(adv.advect_van_leer), v=v, dt=dt))
+        functools.partial(_euler_step(advection.advect_van_leer), v=v, dt=dt))
     advect_vl_using_limiter = jax.jit(
         functools.partial(
-            _euler_step(adv.advect_van_leer_using_limiters), v=v, dt=dt))
+            _euler_step(advection.advect_van_leer_using_limiters), v=v, dt=dt))
     c_vl = c
     c_vl_using_limiter = c
     for _ in range(num_steps):

@@ -54,7 +54,7 @@ def _velocities_to_flux(v: GridVariableVector) -> Tuple[GridVariableVector]:
   for i in range(ndim):
     for j in range(ndim):
       if i <= j:
-        bc = grids.consistent_boundary_conditions(v[i], v[j])
+        bc = grids.unique_boundary_conditions(v[i], v[j])
         flux[i] += (GridVariable(v[i].array * v[j].array, bc),)
       else:
         flux[i] += (flux[j][i],)

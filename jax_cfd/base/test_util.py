@@ -69,7 +69,7 @@ class TestCase(parameterized.TestCase):
       except grids.InconsistentGridError as e:
         raise AssertionError(str(e)) from None
       try:
-        grids.consistent_boundary_conditions(*arrays)
+        grids.unique_boundary_conditions(*arrays)
       except grids.InconsistentBoundaryConditionsError as e:
         raise AssertionError(str(e)) from None
       arrays = tuple(array.array.data for array in arrays)
@@ -87,3 +87,5 @@ class TestCase(parameterized.TestCase):
     np.testing.assert_allclose(expected, actual, **kwargs)
 
   # pylint: enable=unbalanced-tuple-unpacking
+
+  

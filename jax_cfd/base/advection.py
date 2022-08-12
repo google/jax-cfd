@@ -166,7 +166,7 @@ def _velocities_to_flux(
   for i in range(ndim):
     for j in range(ndim):
       if i <= j:
-        bc = grids.consistent_boundary_conditions(
+        bc = grids.unique_boundary_conditions(
             aligned_v[i][j], aligned_v[j][i])
         flux[i] += (GridVariable(aligned_v[i][j].array * aligned_v[j][i].array,
                                  bc),)

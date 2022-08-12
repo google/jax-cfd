@@ -115,10 +115,13 @@ def top_hat_downsample(
   assert destination_grid.domain == source_grid.domain
   assert all([round(f) == f for f in factor])
   assert all([round(f) == f for f in filter_size])  # this can be relaxed
-  assert all(abs(
-      np.array(filter_size) % 2)) == 0  # only even filters are implemented
-  assert all(abs(
-      np.array(factor) % 2)) == 0  # only even factors are implemented
+  acceptable_filter = lambda f: f % 2 == 0 or f == 1
+  assert all(map(acceptable_filter,
+                 filter_size))  # only even filters are implemented
+  assert all(list(map(acceptable_filter,
+                      factor)))  # only even factors are implemented
+  # filter has to be at least as large as the factor.
+  assert all(filt >= f for f, filt in zip(factor, filter_size))
   result = []
   for c in variables:
     if c.grid != source_grid:
@@ -127,8 +130,10 @@ def top_hat_downsample(
           f' on {c.grid}')
     bc = c.bc
     offset = c.offset
-    c_centered = interpolation.linear(c, c.grid.cell_center).array
-    center_offset = np.array(source_grid.cell_center)
+    center_offset = tuple(
+        0.5 if f > 1 else o for o, f in zip(offset, filter_size))
+    c_centered = interpolation.linear(c, center_offset).array
+    center_offset = np.array(center_offset)
     grid_shape = np.array(source_grid.shape)
     for axis in range(c.grid.ndim):
       c_centered = bc.pad(
@@ -144,17 +149,21 @@ def top_hat_downsample(
       for ax in axes:
         convolve_1d = jax.vmap(convolve_1d, in_axes=ax, out_axes=ax)
       c_centered = convolve_1d(c_centered.data)
-      if np.isclose(offset[axis], 0):
-        start = 0
-        end = c_centered.shape[axis] - 1
-      elif np.isclose(offset[axis], 0.5):
-        start = int(factor[axis]) // 2
-        end = None
-      elif np.isclose(offset[axis], 1.0):
-        start = int(factor[axis])
-        end = None
+      if filter_size[axis] > 1:
+        if np.isclose(offset[axis], 0):
+          start = 0
+          end = c_centered.shape[axis] - 1
+        elif np.isclose(offset[axis], 0.5):
+          start = int(factor[axis]) // 2
+          end = None
+        elif np.isclose(offset[axis], 1.0):
+          start = int(factor[axis])
+          end = None
+        else:
+          raise NotImplementedError(f'offset {offset} is not implemented.')
       else:
-        raise NotImplementedError(f'offset {offset} is not implemented.')
+        start = 0
+        end = None
       c_centered = arr_utils.slice_along_axis(
           c_centered, axis, slice(start, end, int(factor[axis])))
       center_offset[axis] = offset[axis]

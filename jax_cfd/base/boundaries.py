@@ -580,7 +580,8 @@ def consistent_boundary_conditions(*arrays: GridVariable) -> Tuple[str, ...]:
   return tuple(bc_types)
 
 
-def get_pressure_bc_from_velocity(v: GridVariableVector) -> BoundaryConditions:
+def get_pressure_bc_from_velocity(
+    v: GridVariableVector) -> HomogeneousBoundaryConditions:
   """Returns pressure boundary conditions for the specified velocity."""
   # assumes that if the boundary is not periodic, pressure BC is zero flux.
   velocity_bc_types = consistent_boundary_conditions(*v)

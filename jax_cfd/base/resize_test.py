@@ -176,66 +176,99 @@ class ResizeTopHatTest(test_util.TestCase):
           input_offset=(.5,),
           expected_data=np.array([0.5, 2.5]),
           filter_size=None,
+          destination_grid_shape=2,
       ),
       dict(
           input_data=np.array([-1, 1, 2, 3]),
           input_offset=(1.,),
           expected_data=np.array([.75, 1.75]),
           filter_size=None,
+          destination_grid_shape=2,
       ),
       dict(
           input_data=np.array([-1, 1, 2, 3]),
           input_offset=(0.,),
-          expected_data=np.array([.5, 2.,]),
+          expected_data=np.array([
+              .5,
+              2.,
+          ]),
           filter_size=None,
+          destination_grid_shape=2,
       ),
       dict(
           input_data=np.array([0, 1, 2, 3, 4, 5]),
           input_offset=(1.,),
           expected_data=np.array([1.75, 3., 2.75]),
           filter_size=4,
+          destination_grid_shape=3,
       ),
       dict(
           input_data=np.array([0, 1, 2, 3, 4, 5]),
           input_offset=(.5,),
           expected_data=np.array([2., 2.5, 3.]),
           filter_size=4,
+          destination_grid_shape=3,
       ),
       dict(
           input_data=np.array([0, 1, 2, 3, 4, 5]),
           input_offset=(0.,),
           expected_data=np.array([2.25, 2, 3.25]),
           filter_size=4,
+          destination_grid_shape=3,
       ),
       dict(
           input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
           input_offset=(1.,),
           expected_data=np.array([3., 4.]),
           filter_size=4,
+          destination_grid_shape=2,
       ),
       dict(
           input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
           input_offset=(.5,),
           expected_data=np.array([1.5, 5.5]),
           filter_size=4,
+          destination_grid_shape=2,
       ),
       dict(
           input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
           input_offset=(0.,),
           expected_data=np.array([3., 4.]),
           filter_size=4,
+          destination_grid_shape=2,
+      ),
+      dict(
+          input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          input_offset=(1.,),
+          expected_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          filter_size=None,
+          destination_grid_shape=8,
+      ),
+      dict(
+          input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          input_offset=(.5,),
+          expected_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          filter_size=None,
+          destination_grid_shape=8,
+      ),
+      dict(
+          input_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          input_offset=(0.,),
+          expected_data=np.array([0, 1, 2, 3, 4, 5, 6, 7]),
+          filter_size=None,
+          destination_grid_shape=8,
       ),
   )
-  def test_downsample_velocity_1d_2x_grid(self, input_data, input_offset,
-                                          expected_data, filter_size):
+  def test_downsample_velocity_1d_grid(self, input_data, input_offset,
+                                       expected_data, filter_size,
+                                       destination_grid_shape):
     source_grid = grids.Grid(
         input_data.shape, domain=[
             (0, 1),
         ])
-    destination_grid = grids.Grid(
-        np.array(expected_data.shape), domain=[
-            (0, 1),
-        ])
+    destination_grid = grids.Grid((destination_grid_shape,), domain=[
+        (0, 1),
+    ])
     v = grids.GridVariable(
         grids.GridArray(input_data, input_offset, source_grid),
         boundaries.periodic_boundary_conditions(1))

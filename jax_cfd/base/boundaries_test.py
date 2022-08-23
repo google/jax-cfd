@@ -209,23 +209,23 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       # Dirichlet BC
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14]),
           input_offset=(0,),
           shift_offset=-1,
-          expected_data=np.array([-12, 11, 12, 13]),
+          expected_data=np.array([-12, 0, 12, 13]),
           expected_offset=(-1,),
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14]),
           input_offset=(0,),
           shift_offset=0,
-          expected_data=np.array([11, 12, 13, 14]),
+          expected_data=np.array([0, 12, 13, 14]),
           expected_offset=(0,),
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14]),
           input_offset=(0,),
           shift_offset=1,
           expected_data=np.array([12, 13, 14, 0]),
@@ -235,42 +235,42 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       dict(
           bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(1,),
           shift_offset=-1,
           expected_data=np.array([11, 11, 12, 13]),
-          expected_offset=(-1,),
-      ),
-      dict(
-          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
-          input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
-          shift_offset=0,
-          expected_data=np.array([11, 12, 13, 14]),
           expected_offset=(0,),
       ),
       dict(
           bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
           input_data=np.array([11, 12, 13, 14]),
+          input_offset=(1,),
+          shift_offset=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(1,),
+      ),
+      dict(
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          input_data=np.array([11, 11, 12, 13, 14]),
           input_offset=(0,),
           shift_offset=1,
-          expected_data=np.array([12, 13, 14, 14]),
+          expected_data=np.array([11, 12, 13, 14, 14]),
           expected_offset=(1,),
       ),
       # Dirichlet / Neumann BC
       dict(
           bc_types=((BCType.DIRICHLET, BCType.NEUMANN),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14, 15]),
           input_offset=(0,),
           shift_offset=-1,
-          expected_data=np.array([-12, 11, 12, 13]),
+          expected_data=np.array([-12, 0, 12, 13, 14]),
           expected_offset=(-1,),
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.NEUMANN),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14, 15]),
           input_offset=(0,),
           shift_offset=1,
-          expected_data=np.array([12, 13, 14, 14]),
+          expected_data=np.array([12, 13, 14, 15, 15]),
           expected_offset=(1,),
       ),
   )
@@ -328,42 +328,42 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       # Dirichlet BC
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14]),
           input_offset=(0,),
           width=-1,
-          expected_data=np.array([-12, 11, 12, 13, 14]),
+          expected_data=np.array([-12, 0, 12, 13, 14]),
           expected_offset=(-1,),
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14]),
           input_offset=(0,),
           width=0,
-          expected_data=np.array([11, 12, 13, 14]),
+          expected_data=np.array([0, 12, 13, 14]),
           expected_offset=(0,),
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14]),
           input_offset=(0,),
           width=1,
-          expected_data=np.array([11, 12, 13, 14, 0]),
+          expected_data=np.array([0, 12, 13, 14, 0]),
           expected_offset=(0,),
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14]),
           input_offset=(0,),
           width=-3,
-          expected_data=np.array([-14, -13, -12, 11, 12, 13, 14]),
+          expected_data=np.array([-14, -13, -12, 0, 12, 13, 14]),
           expected_offset=(-3,),
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 13, 14]),
           input_offset=(0,),
           width=3,
-          expected_data=np.array([11, 12, 13, 14, 0, -14, -13]),
+          expected_data=np.array([0, 12, 13, 14, 0, -14, -13]),
           expected_offset=(0,),
       ),
       dict(
@@ -376,52 +376,52 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([11, 12, 13, 0]),
           input_offset=(1.,),
           width=3,
-          expected_data=np.array([11, 12, 13, 14, -13, -12, -11]),
+          expected_data=np.array([11, 12, 13, 0, -13, -12, -11]),
           expected_offset=(1.,),
       ),
       # Neumann BC
       dict(
           bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(1,),
           width=-1,
           expected_data=np.array([11, 11, 12, 13, 14]),
-          expected_offset=(-1,),
+          expected_offset=(0,),
       ),
       dict(
           bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(0.5,),
           width=0,
           expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
+          expected_offset=(0.5,),
       ),
       dict(
           bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(1,),
           width=1,
           expected_data=np.array([11, 12, 13, 14, 14]),
-          expected_offset=(0,),
+          expected_offset=(1,),
       ),
       # Dirichlet / Neumann BC
       dict(
           bc_types=((BCType.DIRICHLET, BCType.NEUMANN),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 12, 11, 13, 14]),
           input_offset=(0,),
           width=-1,
-          expected_data=np.array([-12, 11, 12, 13, 14]),
+          expected_data=np.array([-12, 0, 12, 11, 13, 14]),
           expected_offset=(-1,),
       ),
       dict(
           bc_types=((BCType.DIRICHLET, BCType.NEUMANN),),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([0, 11, 12, 13, 14,]),
           input_offset=(0,),
           width=1,
-          expected_data=np.array([11, 12, 13, 14, 14]),
+          expected_data=np.array([0, 11, 12, 13, 14, 14]),
           expected_offset=(0,),
       ),
   )
@@ -430,7 +430,7 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
     grid = grids.Grid(input_data.shape)
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.HomogeneousBoundaryConditions(bc_types)
-    actual = bc._pad(array, width, axis=0)
+    actual = bc.pad(array, width, axis=0)
     expected = grids.GridArray(expected_data, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 
@@ -438,68 +438,68 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       # Dirichlet BC
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.DIRICHLET),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          width=-3,
-          input_data=np.array([-14, -13, -12, 11, 12, 13, 14]),
+          expected_data=np.array([12, 13, 14]),
+          expected_offset=(1,),
+          grid_shape=4,
+          input_data=np.array([-13, -12, -11, 1, 12, 13, 14]),
           input_offset=(-3,),
       ),
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.DIRICHLET),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          width=0,
-          input_data=np.array([11, 12, 13, 14]),
+          expected_data=np.array([12, 13, 14]),
+          expected_offset=(1,),
+          grid_shape=4,
+          input_data=np.array([1, 12, 13, 14]),
           input_offset=(0,),
       ),
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.DIRICHLET),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          width=3,
-          input_data=np.array([11, 12, 13, 14, 2, -12, -11]),
+          expected_data=np.array([12, 13, 14]),
+          expected_offset=(1,),
+          grid_shape=4,
+          input_data=np.array([1, 12, 13, 14, 2, -12, -11]),
           input_offset=(0,),
       ),
       # Neumann BC
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
           expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          width=-1,
+          expected_offset=(1,),
+          grid_shape=4,
           input_data=np.array([10, 11, 12, 13, 14]),
-          input_offset=(-1,),
-      ),
-      dict(
-          bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          width=0,
-          input_data=np.array([11, 12, 13, 14]),
           input_offset=(0,),
       ),
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          width=1,
+          expected_data=np.array([12, 13, 14, 15]),
+          expected_offset=(1,),
+          grid_shape=4,
+          input_data=np.array([11, 12, 13, 14, 15]),
+          input_offset=(0,),
+      ),
+      dict(
+          bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
+          expected_data=np.array([12, 13, 14, 12]),
+          expected_offset=(1,),
+          grid_shape=4,
           input_data=np.array([11, 12, 13, 14, 12]),
           input_offset=(0,),
       ),
       # Dirichlet / Neumann BC
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.NEUMANN),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          width=-1,
-          input_data=np.array([-12, 11, 12, 13, 14]),
+          expected_data=np.array([12, 13, 14, 12]),
+          expected_offset=(1,),
+          grid_shape=4,
+          input_data=np.array([-12, 1, 12, 13, 14, 12]),
           input_offset=(-1,),
       ),
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.NEUMANN),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          width=1,
-          input_data=np.array([11, 12, 13, 14, 12]),
+          expected_data=np.array([12, 13, 14, 12]),
+          expected_offset=(1,),
+          grid_shape=4,
+          input_data=np.array([1, 12, 13, 14, 12]),
           input_offset=(0,),
       ),
       # Periodic BC
@@ -507,7 +507,7 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
           bc_types=(((BCType.PERIODIC, BCType.PERIODIC),), (None,)),
           expected_data=np.array([11, 12, 13, 14]),
           expected_offset=(0,),
-          width=-1,
+          grid_shape=4,
           input_data=np.array([-12, 11, 12, 13, 14]),
           input_offset=(-1,),
       ),
@@ -515,16 +515,16 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
           bc_types=(((BCType.PERIODIC, BCType.PERIODIC),), (None,)),
           expected_data=np.array([11, 12, 13, 14]),
           expected_offset=(0,),
-          width=1,
+          grid_shape=4,
           input_data=np.array([11, 12, 13, 14, 12]),
           input_offset=(0,),
       ),
   )
   def test_trim_padding_1d(self, bc_types, expected_data, expected_offset,
-                           width, input_data, input_offset):
-    grid = grids.Grid(expected_data.shape)
+                           grid_shape, input_data, input_offset):
+    grid = grids.Grid((grid_shape,))
     array = grids.GridArray(input_data, input_offset, grid)
-    bc = boundaries.HomogeneousBoundaryConditions(bc_types)
+    bc = boundaries.ConstantBoundaryConditions(bc_types[0], bc_types[1])
     actual, _ = bc._trim_padding(array, axis=0)
     expected = grids.GridArray(expected_data, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
@@ -574,24 +574,24 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       # Neumann BC
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
-          input_data=np.array([10, 11, 12, 13, 14]),
+          expected_data=np.array([12, 13, 14, 15]),
+          expected_offset=(1,),
+          input_data=np.array([10, 11, 12, 13, 14, 15]),
           input_offset=(-1,),
           grid_size=4,
       ),
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
           expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
+          expected_offset=(1,),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(1,),
           grid_size=4,
       ),
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
-          expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
+          expected_data=np.array([12, 13, 14, 12]),
+          expected_offset=(1,),
           input_data=np.array([11, 12, 13, 14, 12]),
           input_offset=(0,),
           grid_size=4,
@@ -617,6 +617,8 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
   def test_trim_boundary_1d(self, bc_types, expected_data, expected_offset,
                             input_data, input_offset, grid_size):
     grid = grids.Grid((grid_size,))
+    input_data = input_data.astype(
+        'float')  # tests fail with integer input_data
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.ConstantBoundaryConditions(bc_types[0], bc_types[1])
     actual = bc.trim_boundary(array)
@@ -653,17 +655,17 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
           expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
+          expected_offset=(1,),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(1,),
           grid_size=4,
       ),
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
           expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
+          expected_offset=(0.5,),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(0.5,),
           grid_size=4,
       ),
       # Periodic BC
@@ -679,6 +681,8 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
   def test_pad_and_impose_bc_1d(self, bc_types, expected_data, expected_offset,
                                 input_data, input_offset, grid_size):
     grid = grids.Grid((grid_size,))
+    input_data = input_data.astype(
+        'float')  # tests fail with integer input_data
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.ConstantBoundaryConditions(bc_types[0], bc_types[1])
     actual = bc.pad_and_impose_bc(array, expected_offset).array
@@ -715,17 +719,17 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
           expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
+          expected_offset=(1,),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(1,),
           grid_size=4,
       ),
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
           expected_data=np.array([11, 12, 13, 14]),
-          expected_offset=(0,),
+          expected_offset=(0.5,),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(0.5,),
           grid_size=4,
       ),
       # Periodic BC
@@ -741,6 +745,8 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
   def test_impose_bc_1d(self, bc_types, expected_data, expected_offset,
                         input_data, input_offset, grid_size):
     grid = grids.Grid((grid_size,))
+    input_data = input_data.astype(
+        'float')  # tests fail with integer input_data
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.ConstantBoundaryConditions(bc_types[0], bc_types[1])
     actual = bc.impose_bc(array).array
@@ -751,77 +757,139 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       # Dirichlet BC
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.DIRICHLET),), ((1.0, 2.0),)),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([1, 12, 13, 14]),
           input_offset=(0,),
           width=-3,
-          expected_data=np.array([-14, -13, -12, 11, 12, 13, 14]),
+          expected_data=np.array([-13, -12, -11, 1, 12, 13, 14]),
           expected_offset=(-3,),
       ),
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.DIRICHLET),), ((1.0, 2.0),)),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([1, 12, 13, 14]),
           input_offset=(0,),
           width=0,
-          expected_data=np.array([11, 12, 13, 14]),
+          expected_data=np.array([1, 12, 13, 14]),
           expected_offset=(0,),
       ),
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.DIRICHLET),), ((1.0, 2.0),)),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([1, 12, 13, 14]),
           input_offset=(0,),
           width=3,
-          expected_data=np.array([11, 12, 13, 14, 2, -12, -11]),
+          expected_data=np.array([1, 12, 13, 14, 2, -12, -11]),
           expected_offset=(0,),
       ),
       # Neumann BC
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
           input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
+          input_offset=(1,),
           width=-1,
           expected_data=np.array([10, 11, 12, 13, 14]),
-          expected_offset=(-1,),
-      ),
-      dict(
-          bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
-          input_data=np.array([11, 12, 13, 14]),
-          input_offset=(0,),
-          width=0,
-          expected_data=np.array([11, 12, 13, 14]),
           expected_offset=(0,),
       ),
       dict(
           bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
           input_data=np.array([11, 12, 13, 14]),
+          input_offset=(1,),
+          width=0,
+          expected_data=np.array([11, 12, 13, 14]),
+          expected_offset=(1,),
+      ),
+      dict(
+          bc_types=(((BCType.NEUMANN, BCType.NEUMANN),), ((1.0, 2.0),)),
+          input_data=np.array([12, 11, 12, 13, 14]),
           input_offset=(0,),
           width=1,
-          expected_data=np.array([11, 12, 13, 14, 12]),
+          expected_data=np.array([12, 11, 12, 13, 14, 12]),
           expected_offset=(0,),
       ),
       # Dirichlet / Neumann BC
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.NEUMANN),), ((1.0, 2.0),)),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([1, 12, 11, 13, 14]),
           input_offset=(0,),
           width=-1,
-          expected_data=np.array([-12, 11, 12, 13, 14]),
+          expected_data=np.array([-11, 1, 12, 11, 13, 14]),
           expected_offset=(-1,),
       ),
       dict(
           bc_types=(((BCType.DIRICHLET, BCType.NEUMANN),), ((1.0, 2.0),)),
-          input_data=np.array([11, 12, 13, 14]),
+          input_data=np.array([1, 11, 12, 13, 14]),
           input_offset=(0,),
           width=1,
-          expected_data=np.array([11, 12, 13, 14, 12]),
+          expected_data=np.array([1, 11, 12, 13, 14, 12]),
           expected_offset=(0,),
+      ),
+      # Dirichlet / Neumann BC
+      dict(
+          bc_types=(((BCType.DIRICHLET, BCType.NEUMANN),), ((1.0, 2.0),)),
+          input_data=np.array([1, 11, 12, 13, 14]),
+          input_offset=(0,),
+          width=(2, 1),
+          expected_data=np.array([-11, -10, 1, 11, 12, 13, 14, 12]),
+          expected_offset=(-2,),
       ),
   )
   def test_pad_1d_inhomogeneous(self, bc_types, input_data, input_offset, width,
                                 expected_data, expected_offset):
-    grid = grids.Grid(input_data.shape)
+    grid = grids.Grid((4,))
+    input_data = input_data.astype(
+        'float')  # tests fail with integer input_data
     array = grids.GridArray(input_data, input_offset, grid)
-    bc = boundaries.ConstantBoundaryConditions(*bc_types)
-    actual = bc._pad(array, width, axis=0)
+    bc = boundaries.ConstantBoundaryConditions(bc_types[0], bc_types[1])
+    actual = bc.pad(array, width, axis=0)
+    expected = grids.GridArray(expected_data, expected_offset, grid)
+    self.assertArrayEqual(actual, expected)
+
+  @parameterized.parameters(
+      dict(
+          bc_types=(((BCType.DIRICHLET, BCType.NEUMANN),), ((1.0, 2.0),)),
+          input_data=np.array([1, 12, 11, 13, 14]),
+          input_offset=(0,),
+          width=((2, 1),),
+          expected_data=np.array([-10, -11, 1, 12, 11, 13, 14, 12]),
+          expected_offset=(-2,),
+      ),
+      dict(
+          bc_types=(((BCType.DIRICHLET, BCType.NEUMANN),), ((1.0, 2.0),)),
+          input_data=np.array([1, 12, 11, 13, 14]),
+          input_offset=(0,),
+          width=((2, 0),),
+          expected_data=np.array([-10, -11, 1, 12, 11, 13, 14]),
+          expected_offset=(-2,),
+      ),
+      dict(
+          bc_types=(((BCType.PERIODIC, BCType.PERIODIC),
+                     (BCType.DIRICHLET, BCType.NEUMANN)), ((0.0, 0.0), (0.0,
+                                                                        0.0))),
+          input_data=np.array([
+              [11, 12, 13, 14],
+              [21, 22, 23, 24],
+              [31, 32, 33, 34],
+          ]),
+          input_offset=(0.5, 1),
+          width=((1, 1), (1, 1)),
+          expected_data=np.array([
+              [0, 31, 32, 33, 34, 34],
+              [0, 11, 12, 13, 14, 14],
+              [0, 21, 22, 23, 24, 24],
+              [0, 31, 32, 33, 34, 34],
+              [0, 11, 12, 13, 14, 14],
+          ]),
+          expected_offset=(-0.5, 0.),
+      ),
+  )
+  def test_pad_all(self, bc_types, input_data, input_offset, width,
+                   expected_data, expected_offset):
+    grid = grids.Grid(input_data.shape)
+    input_data = input_data.astype(
+        'float')  # tests fail with integer input_data
+    expected_data = expected_data.astype(
+        'float')  # tests fail with integer input_data
+    array = grids.GridArray(input_data, input_offset, grid)
+    bc = boundaries.ConstantBoundaryConditions(bc_types[0], bc_types[1])
+    actual = bc.pad_all(array, width)
     expected = grids.GridArray(expected_data, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 
@@ -862,17 +930,17 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       ),
       dict(
           input_data=np.array([
-              [11, 12, 13, 14],
-              [21, 22, 23, 24],
-              [31, 32, 33, 34],
+              [11, 12, 13, 0],
+              [21, 22, 23, 0],
+              [31, 32, 33, 0],
           ]),
           input_offset=(0.5, 1),  # edge aligned offset
           width=-2,
           axis=1,
           expected_data=np.array([
-              [-11, 0, 11, 12, 13, 14],
-              [-21, 0, 21, 22, 23, 24],
-              [-31, 0, 31, 32, 33, 34],
+              [-11, 0, 11, 12, 13, 0],
+              [-21, 0, 21, 22, 23, 0],
+              [-31, 0, 31, 32, 33, 0],
           ]),
           expected_offset=(0.5, -1),
       ),
@@ -880,9 +948,11 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
   def test_pad_dirichlet_cell_center(self, input_data, input_offset, width,
                                      axis, expected_data, expected_offset):
     grid = grids.Grid(input_data.shape)
+    input_data = input_data.astype(
+        'float')  # tests fail with integer input_data
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.dirichlet_boundary_conditions(grid.ndim)
-    actual = bc._pad(array, width, axis)
+    actual = bc.pad(array, width, axis)
     expected = grids.GridArray(expected_data, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 
@@ -921,9 +991,9 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
     grid = grids.Grid((4, 4))
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.periodic_boundary_conditions(grid.ndim)
-    error_msg = 'the GridArray shape does not match the grid.'
+    error_msg = 'the GridArray does not contain all interior grid values.'
     with self.assertRaisesRegex(ValueError, error_msg):
-      _ = bc._pad(array, width, axis)
+      _ = bc.pad(array, width, axis)
 
   @parameterized.parameters(
       dict(
@@ -955,14 +1025,25 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
           input_offset=(1.0, 0.5),
           width=-1,
           axis=0,
+      ),
+      dict(
+          input_data=np.array([
+              [1, 2, 3, 4],
+              [11, 12, 13, 14],
+              [21, 22, 23, 24],
+              [31, 32, 33, 34],
+          ]),
+          input_offset=(0.0, 0.5),
+          width=-1,
+          axis=0,
       ))
   def test_pad_neumann_raises(self, input_data, input_offset, width, axis):
     grid = grids.Grid((4, 4))
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.neumann_boundary_conditions(grid.ndim)
-    error_msg = 'the GridArray shape does not match the grid.'
+    error_msg = 'the GridArray does not contain all interior grid values.'
     with self.assertRaisesRegex(ValueError, error_msg):
-      _ = bc._pad(array, width, axis)
+      _ = bc.pad(array, width, axis)
 
   @parameterized.parameters(
       dict(
@@ -990,13 +1071,9 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
     grid = grids.Grid((4, 4))
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.dirichlet_boundary_conditions(grid.ndim)
-    if input_offset[axis] == 0.5:
-      error_msg = 'the GridArray shape does not match the grid.'
-    else:
-      error_msg = ('For a dirichlet cell-face boundary condition, the GridArray'
-                   ' has more than 1 grid point missing.')
+    error_msg = 'the GridArray does not contain all interior grid values.'
     with self.assertRaisesRegex(ValueError, error_msg):
-      _ = bc._pad(array, width, axis)
+      _ = bc.pad(array, width, axis)
 
   @parameterized.parameters(
       dict(
@@ -1037,18 +1114,18 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
       ),
       dict(
           input_data=np.array([
-              [11, 12, 13, 14],
-              [21, 22, 23, 24],
-              [31, 32, 33, 34],
+              [11, 12, 13, 4],
+              [21, 22, 23, 4],
+              [31, 32, 33, 4],
           ]),
           input_offset=(0.5, 1),  # edge aligned offset
           values=((1.0, 2.0), (3.0, 4.0)),
           width=-2,
           axis=1,
           expected_data=np.array([
-              [-8, 3, 11, 12, 13, 14],
-              [-18, 3, 21, 22, 23, 24],
-              [-28, 3, 31, 32, 33, 34],
+              [-8, 3, 11, 12, 13, 4],
+              [-18, 3, 21, 22, 23, 4],
+              [-28, 3, 31, 32, 33, 4],
           ]),
           expected_offset=(0.5, -1),
       ),
@@ -1057,12 +1134,14 @@ class ConstantBoundaryConditionsTest(test_util.TestCase):
                                                    input_offset, values, width,
                                                    axis, expected_data,
                                                    expected_offset):
-    input_data = input_data.astype('float')
-    expected_data = expected_data.astype('float')
+    input_data = input_data.astype(
+        'float')  # tests fail with integer input_data
+    expected_data = expected_data.astype(
+        'float')  # tests fail with integer input_data
     grid = grids.Grid(input_data.shape)
     array = grids.GridArray(input_data, input_offset, grid)
     bc = boundaries.dirichlet_boundary_conditions(grid.ndim, values)
-    actual = bc._pad(array, width, axis)
+    actual = bc.pad(array, width, axis)
     expected = grids.GridArray(expected_data, expected_offset, grid)
     self.assertArrayEqual(actual, expected)
 

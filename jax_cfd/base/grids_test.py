@@ -168,7 +168,7 @@ class GridVariableTest(test_util.TestCase):
       array = grids.GridArray(data, offset=(0.5,), grid=grid)
       bc = boundaries.periodic_boundary_conditions(grid.ndim)
       variable = grids.GridVariable(array, bc)
-      self.assertEqual(variable.array, array)
+      self.assertArrayEqual(variable.array, array)
       self.assertEqual(variable.bc, bc)
       self.assertEqual(variable.dtype, np.float32)
       self.assertEqual(variable.shape, (10,))
@@ -182,7 +182,7 @@ class GridVariableTest(test_util.TestCase):
       array = grids.GridArray(data, offset=(0.5, 0.5), grid=grid)
       bc = boundaries.periodic_boundary_conditions(grid.ndim)
       variable = grids.GridVariable(array, bc)
-      self.assertEqual(variable.array, array)
+      self.assertArrayEqual(variable.array, array)
       self.assertEqual(variable.bc, bc)
       self.assertEqual(variable.dtype, np.float32)
       self.assertEqual(variable.shape, (10, 10))
@@ -196,7 +196,7 @@ class GridVariableTest(test_util.TestCase):
       array = grids.GridArray(data, offset=(0.5, 0.5), grid=grid)
       bc = boundaries.periodic_boundary_conditions(grid.ndim)
       variable = grids.GridVariable(array, bc)
-      self.assertEqual(variable.array, array)
+      self.assertArrayEqual(variable.array, array)
       self.assertEqual(variable.bc, bc)
       self.assertEqual(variable.dtype, np.float32)
       self.assertEqual(variable.shape, (5, 10, 10))
@@ -242,7 +242,7 @@ class GridVariableTest(test_util.TestCase):
     bc = boundaries.periodic_boundary_conditions(ndim=len(shape))
     u = grids.GridVariable(array, bc)
     u_interior = u.trim_boundary()
-    self.assertEqual(u_interior, u.array)
+    self.assertArrayEqual(u_interior, u.array)
 
   @parameterized.parameters(
       dict(
@@ -276,21 +276,21 @@ class GridVariableTest(test_util.TestCase):
     array = grids.GridArray(data, offset=(0.5,) * len(shape), grid=grid)
     u = grids.GridVariable(array, bc)
     u_interior = u.trim_boundary()
-    self.assertEqual(u_interior, u.array)
+    self.assertArrayEqual(u_interior, u.array)
 
   @parameterized.parameters(
       dict(
           shape=(10,),
           bc=boundaries.neumann_boundary_conditions(ndim=1),
-          offset=(0.0,)),
+          offset=(1.0,)),
       dict(
           shape=(10, 10),
           bc=boundaries.neumann_boundary_conditions(ndim=2),
-          offset=(0.0, 0.0)),
+          offset=(1.0, 1.0)),
       dict(
           shape=(10, 10, 10),
           bc=boundaries.neumann_boundary_conditions(ndim=3),
-          offset=(0.0, 0.0, 0.0)),
+          offset=(1.0, 1.0, 1.0)),
   )
   def test_interior_consistency_edge_offsets_neumann(self, shape, bc, offset):
     grid = grids.Grid(shape)

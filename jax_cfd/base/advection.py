@@ -15,6 +15,7 @@
 """Module for functionality related to advection."""
 
 from typing import Optional, Tuple
+
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import boundaries
@@ -104,6 +105,9 @@ def advect_general(
   Returns:
     The time derivative of `c` due to advection by `v`.
   """
+  if not boundaries.has_all_periodic_boundary_conditions(c):
+    raise NotImplementedError(
+        'Non-periodic boundary conditions are not implemented.')
   target_offsets = grids.control_volume_offsets(c)
   aligned_v = tuple(u_interpolation_fn(u, target_offset, v, dt)
                     for u, target_offset in zip(v, target_offsets))
@@ -206,7 +210,8 @@ def convect_linear(v: GridVariableVector) -> GridArrayVector:
 def advect_van_leer(
     c: GridVariable,
     v: GridVariableVector,
-    dt: float
+    dt: float,
+    mode: str = boundaries.Padding.MIRROR,
 ) -> GridArray:
   """Computes advection of a scalar quantity `c` by the velocity field `v`.
 
@@ -216,18 +221,28 @@ def advect_van_leer(
   limitor transformes the scheme into a first order method. For [1] for
   reference. This function follows the following procedure:
 
-    1. Interpolate each component of `v` to the corresponding face of the
-       control volume centered on `c`. In most cases satisfied by design.
-    2. Computes upwind flux for each direction.
-    3. Computes higher order flux correction based on neighboring values of `c`.
-    4. Combines fluxes and assigns flux boundary condition.
-    5. Returns the negative divergence of fluxes.
+    1. Shifts c to offset < 1 if necessary.
+    2. Scalar c now has a well defined right-hand (upwind) value.
+    3. Computes upwind flux for each direction.
+    4. Computes van leer flux limiter:
+      a. Use the shifted c to interpolate each component of `v` to the
+        right-hand (upwind) face of the control volume centered on  `c`.
+      b. Compute the ratio of successive gradients:
+        In nonperiodic case, the value outside the boundary is not defined.
+        Mode is used to interpolate past the boundary.
+      c. Compute flux limiter function.
+      d. Computes higher order flux correction.
+    5. Combines fluxes and assigns flux boundary condition.
+    6. Computes the negative divergence of fluxes.
+    7. Shifts the computed values back to original offset of c.
 
   Args:
     c: the quantity to be transported.
     v: a velocity field. Should be defined on the same Grid as c.
     dt: time step for which this scheme is TVD and second order accurate
       in time.
+    mode: For non-periodic BC, specifies extrapolation of values beyond the
+      boundary, which is used by nonlinear interpolation.
 
   Returns:
     The time derivative of `c` due to advection by `v`.
@@ -236,52 +251,88 @@ def advect_van_leer(
 
   [1]:  MIT 18.336 spring 2009 Finite Volume Methods Lecture 19.
         go/mit-18.336-finite_volume_methods-19
+  [2]:
+    www.ita.uni-heidelberg.de/~dullemond/lectures/num_fluid_2012/Chapter_4.pdf
 
   """
   # TODO(dkochkov) reimplement this using apply_limiter method.
-  offsets = grids.control_volume_offsets(c)
+  c_left_var = c
+  # if the offset is 1., shift by 1 to offset 0.
+  # otherwise c_right is not defined.
+  for ax in range(c.grid.ndim):
+    # int(c.offset[ax] % 1 - c.offset[ax]) = -1 if c.offset[ax] is 1 else
+    # int(c.offset[ax] % 1 - c.offset[ax]) = 0.
+    # i.e. this shifts the 1 aligned data to 0 offset, the rest is unchanged.
+    c_left_var = c.bc.impose_bc(
+        c_left_var.shift(int(c.offset[ax] % 1 - c.offset[ax]), axis=ax))
+  offsets = grids.control_volume_offsets(c_left_var)
+  # if c offset is 0, aligned_v is at 0.5.
+  # if c offset is at .5, aligned_v is at 1.
   aligned_v = tuple(interpolation.linear(u, offset)
                     for u, offset in zip(v, offsets))
   flux = []
-  for axis, (u, h) in enumerate(zip(aligned_v, c.grid.step)):
-    c_center = c.data
-    c_left = c.shift(-1, axis=axis).data
-    c_right = c.shift(+1, axis=axis).data
-    upwind_flux = grids.applied(jnp.where)(
-        u.array > 0, u.array * c_center, u.array * c_right)
-
-    # Van-Leer Flux correction is computed in steps to avoid `nan`s.
-    # Formula for the flux correction df for advection with positive velocity is
-    # df_{i} = 0.5 * (1-gamma) * dc_{i}
-    # dc_{i} = 2(c_{i+1} - c_{i})(c_{i} - c_{i-1})/(c_{i+1}-c_{i})
-    # gamma is the courant number = u * dt / h
-    diffs_prod = 2 * (c_right - c_center) * (c_center - c_left)
-    neighbor_diff = c_right - c_left
-    safe = diffs_prod > 0
-    # https://jax.readthedocs.io/en/latest/faq.html#gradients-contain-nan-where-using-where
-    forward_correction = jnp.where(
-        safe, diffs_prod / jnp.where(safe, neighbor_diff, 1), 0
-    )
-    # for negative velocity we simply need to shift the correction along v axis.
-    # Cast to GridVariable so that we can apply a shift() operation.
-    forward_correction_array = grids.GridVariable(
-        grids.GridArray(forward_correction, u.offset, u.grid), u.bc)
-    backward_correction_array = forward_correction_array.shift(+1, axis)
-    backward_correction = backward_correction_array.data
-    abs_velocity = abs(u.array)
-    courant_numbers = (dt / h) * abs_velocity
-    pre_factor = 0.5 * (1 - courant_numbers) * abs_velocity
-    flux_correction = pre_factor * grids.applied(jnp.where)(
-        u.array > 0, forward_correction, backward_correction)
-    flux.append(upwind_flux + flux_correction)
   # Assign flux boundary condition
   flux_bc = [
       boundaries.get_advection_flux_bc_from_velocity_and_scalar(u, c, direction)
       for direction, u in enumerate(v)
   ]
-  flux = tuple(
-      flux_bc[axis].impose_bc(flux[axis]) for axis in range(c.grid.ndim))
+  # first, compute upwind flux.
+  for axis, u in enumerate(aligned_v):
+    c_center = c_left_var.data
+    # by shifting c_left + 1, c_right is well-defined.
+    c_right = c_left_var.shift(+1, axis=axis).data
+    upwind_flux = grids.applied(jnp.where)(
+        u.array > 0, u.array * c_center, u.array * c_right)
+    flux.append(upwind_flux)
+  # next, compute van_leer correction.
+  for axis, (u, h) in enumerate(zip(aligned_v, c.grid.step)):
+    u = u.bc.shift(u.array, int(u.offset[axis] % 1 - u.offset[axis]), axis=axis)
+    # c is put to offset .5 or 1.
+    c_center_arr = c.shift(int(1 - c.offset[ax]), axis=ax)
+    # if c offset is 1, u offset is .5.
+    # if c offset is .5, u offset is 0.
+    # u_i is always on the left of c_center_var_i
+    c_center = c_center_arr.data
+    # shift -1 are well defined now
+    # shift +1 is not well defined for c offset 1 because then c(wall + 1) is
+    # not defined.
+    # However, the flux that uses c(wall + 1) offset gets overridden anyways
+    # when flux boundary condition is overridden.
+    # Thus, any mode can be used here.
+    c_right = c.bc.shift(c_center_arr, +1, axis=axis, mode=mode).data
+    c_left = c.bc.shift(c_center_arr, -1, axis=axis).data
+    # shift -2 is tricky:
+    # It is well defined if c is periodic.
+    # Else, c(-1) or c(-1.5) are not defined.
+    # Then, mode is used to interpolate the values.
+    c_left_left = c.bc.shift(
+        c_center_arr, -2, axis, mode=mode).data
+
+    numerator_positive = c_left - c_left_left
+    numerator_negative = c_right - c_center
+    numerator = grids.applied(jnp.where)(u > 0, numerator_positive,
+                                         numerator_negative)
+    denominator = grids.GridArray(c_center - c_left, u.offset, u.grid)
+    phi_van_leer_denominator_inv = grids.applied(jnp.where)(
+        abs(denominator) > 0, denominator /
+        (abs(denominator) + abs(numerator)), 0)
+    phi_van_leer = numerator * (grids.applied(jnp.sign)(denominator) +
+                                grids.applied(jnp.sign)
+                                (numerator)) * phi_van_leer_denominator_inv
+    abs_velocity = abs(u)
+    courant_numbers = (dt / h) * abs_velocity
+    pre_factor = 0.5 * (1 - courant_numbers) * abs_velocity
+    flux_correction = pre_factor * phi_van_leer
+    # Shift back onto original offset.
+    flux_correction = flux_bc[axis].shift(
+        flux_correction, int(offsets[axis][axis] - u.offset[axis]), axis=axis)
+    flux[axis] += flux_correction
+  flux = tuple(flux_bc[axis].impose_bc(f) for axis, f in enumerate(flux))
   advection = -fd.divergence(flux)
+  # shift the variable back onto the original offset
+  for ax in range(c.grid.ndim):
+    advection = c.bc.shift(
+        advection, -int(c.offset[ax] % 1 - c.offset[ax]), axis=ax)
   return advection
 
 

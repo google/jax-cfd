@@ -152,6 +152,7 @@ class BoundaryConditions:
       u: GridArray,
       offset: int,
       axis: int,
+      mode: Optional[str] = None,
   ) -> GridArray:
     """Shift an GridArray by `offset`.
 
@@ -159,6 +160,8 @@ class BoundaryConditions:
       u: an `GridArray` object.
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
+      mode: specifies how to extend past the boundary/ghost cells.
+        Valid options contained in boundaries.Padding.
 
     Returns:
       A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
@@ -190,6 +193,7 @@ class BoundaryConditions:
       u: GridArray,
       width: int,
       axis: int,
+      mode: Optional[str] = None,
   ) -> GridArray:
     """Returns Arrays padded according to boundary condition.
 
@@ -198,6 +202,8 @@ class BoundaryConditions:
       width: number of elements to pad along axis. Use negative value for lower
         boundary or positive value for upper boundary.
       axis: axis to pad along.
+      mode: specifies how to extend past the boundary/ghost cells.
+        Valid options contained in boundaries.Padding.
 
     Returns:
       A GridArray that is elongated along axis with padded values.
@@ -326,18 +332,21 @@ class GridVariable:
       self,
       offset: int,
       axis: int,
+      mode: Optional[str] = None,
   ) -> GridArray:
     """Shift this GridVariable by `offset`.
 
     Args:
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
+      mode: specifies how to extend past the boundary/ghost cells.
+        Valid options contained in boundaries.Padding.
 
     Returns:
       A copy of the encapsulated GridArray, shifted by `offset`. The returned
       GridArray has offset `u.offset + offset`.
     """
-    return self.bc.shift(self.array, offset, axis)
+    return self.bc.shift(self.array, offset, axis, mode)
 
   def _interior_grid(self) -> Grid:
     """Returns only the interior grid points."""

@@ -35,6 +35,11 @@ class BCType:
   NEUMANN = 'neumann'
 
 
+class Padding:
+  MIRROR = 'mirror'
+  EXTEND = 'extend'
+
+
 @dataclasses.dataclass(init=False, frozen=True)
 class ConstantBoundaryConditions(BoundaryConditions):
   """Boundary conditions for a PDE variable that are constant in space and time.
@@ -66,6 +71,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
       u: GridArray,
       offset: int,
       axis: int,
+      mode: Optional[str] = None,
   ) -> GridArray:
     """Shift an GridArray by `offset`.
 
@@ -73,12 +79,15 @@ class ConstantBoundaryConditions(BoundaryConditions):
       u: an `GridArray` object.
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
+      mode: type of padding to use in non-periodic case.
+        Mirror mirrors the flow across the boundary.
+        Extend extends the last well-defined value past the boundary.
 
     Returns:
       A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
       `u.offset + offset`.
     """
-    padded = self._pad(u, offset, axis)
+    padded = self._pad(u, offset, axis, mode=mode)
     trimmed = self._trim(padded, -offset, axis)
     return trimmed
 
@@ -87,8 +96,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
 
     For dirichlet edge aligned boundary, the value that lies exactly on the
     boundary does not have to be specified by u.
-    For Neumann edge aligned boundary, neumann BC are defined by backwards
-    difference and thus the value at 0 is specified by the value at 1.
+    Neumann edge aligned boundary is not defined.
 
     Args:
       u: array that should contain interior data
@@ -104,8 +112,9 @@ class ConstantBoundaryConditions(BoundaryConditions):
     if self.types[axis][1] == BCType.DIRICHLET and np.isclose(
         u.offset[axis], 1):
       size_diff += 1
-    if self.types[axis][0] == BCType.NEUMANN and np.isclose(u.offset[axis], 0):
-      size_diff -= 1
+    if self.types[axis][0] == BCType.NEUMANN and np.isclose(
+        u.offset[axis] % 1, 0):
+      raise NotImplementedError('Edge-aligned neumann BC are not implemented.')
     if size_diff < 0:
       raise ValueError(
           'the GridArray does not contain all interior grid values.')
@@ -116,6 +125,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
       u: GridArray,
       width: int,
       axis: int,
+      mode: Optional[str] = None,
   ) -> GridArray:
     """Pad a GridArray.
 
@@ -125,13 +135,17 @@ class ConstantBoundaryConditions(BoundaryConditions):
     ghost cell is required. More ghost cells are used only in LES filtering/CNN
     application.
 
-    No padding past 1 ghost cell is implemented for Neumann BC.
-
     Args:
       u: a `GridArray` object.
       width: number of elements to pad along axis. Use negative value for lower
         boundary or positive value for upper boundary.
       axis: axis to pad along.
+      mode: type of padding to use in non-periodic case.
+        Mirror mirrors the array values across the boundary.
+        Extend extends the last well-defined array value past the boundary.
+        Mode is only needed if the padding extends past array values that are
+          defined by the physics. In these cases, no mode is necessary. This
+          also means periodic boundaries do not require a mode.
 
     Returns:
       Padded array, elongated along the indicated axis.
@@ -152,10 +166,6 @@ class ConstantBoundaryConditions(BoundaryConditions):
     full_padding, padding, bc_type = make_padding(width)
     offset = list(u.offset)
     offset[axis] -= padding[0]
-    if not (bc_type == BCType.PERIODIC or
-            bc_type == BCType.DIRICHLET) and abs(width) > 1:
-      raise ValueError(
-          f'Padding past 1 ghost cell is not defined in {bc_type} case.')
     if bc_type == BCType.PERIODIC:
       need_trimming = 'both'  # need to trim both sides
     elif width >= 0:
@@ -167,6 +177,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
     full_padding[axis] = tuple(
         pad + trimmed_pad
         for pad, trimmed_pad in zip(full_padding[axis], trimmed_padding))
+
     if bc_type == BCType.PERIODIC:
       # for periodic, all grid points must be there. Otherwise padding doesn't
       # make sense.
@@ -177,57 +188,103 @@ class ConstantBoundaryConditions(BoundaryConditions):
 
     elif bc_type == BCType.DIRICHLET:
       if np.isclose(u.offset[axis] % 1, 0.5):  # cell center
-        # make the linearly interpolated value equal to the boundary by setting
-        # the padded values to the negative symmetric values
-        data = (2 * jnp.pad(
-            data, full_padding, mode='constant', constant_values=self.bc_values)
-                - jnp.pad(data, full_padding, mode='symmetric'))
+        # If only one or 0 value is needed, no mode is necessary.
+        # All modes would return the same values.
+        if np.isclose(sum(full_padding[axis]), 1) or np.isclose(
+            sum(full_padding[axis]), 0):
+          mode = Padding.MIRROR
+
+        if mode == Padding.MIRROR:
+          # make the linearly interpolated value equal to the boundary by
+          # setting the padded values to the negative symmetric values
+          data = (2 * jnp.pad(
+              data,
+              full_padding,
+              mode='constant',
+              constant_values=self.bc_values) -
+                  jnp.pad(data, full_padding, mode='symmetric'))
+        elif mode == Padding.EXTEND:
+          # computes the well-defined ghost cell and sets the rest of padding
+          # values equal to the ghost cell.
+          data = (2 * jnp.pad(
+              data,
+              full_padding,
+              mode='constant',
+              constant_values=self.bc_values) -
+                  jnp.pad(data, full_padding, mode='edge'))
+        else:
+          raise NotImplementedError(f'Mode {mode} is not implemented yet.')
       elif np.isclose(u.offset[axis] % 1, 0):  # cell edge
         # u specifies the values on the interior CV. Thus, first the value on
         # the boundary needs to be added to the array, if not specified by the
         # interior CV values.
         # Then the mirrored ghost cells need to be appended.
-        if np.isclose(sum(full_padding[axis]), 1):
+
+        # if only one value is needed, no mode is necessary.
+        if np.isclose(sum(full_padding[axis]), 1) or np.isclose(
+            sum(full_padding[axis]), 0):
           data = jnp.pad(
               data,
               full_padding,
               mode='constant',
               constant_values=self.bc_values)
         elif sum(full_padding[axis]) > 1:
-          # make boundary-only padding
-          bc_padding = [(0, 0)] * u.grid.ndim
-          bc_padding[axis] = tuple(
-              1 if pad > 0 else 0 for pad in full_padding[axis])
-          # subtract the padded cell
-          full_padding_past_bc = [(0, 0)] * u.grid.ndim
-          full_padding_past_bc[axis] = tuple(
-              pad - 1 if pad > 0 else 0 for pad in full_padding[axis])
-          # here we are adding 0 boundary cell with 0 value
-          expanded_data = jnp.pad(
-              data, bc_padding, mode='constant', constant_values=(0, 0))
-          padding_values = list(self.bc_values)
-          padding_values[axis] = [pad / 2 for pad in padding_values[axis]]
-          data = 2 * jnp.pad(
-              data,
-              full_padding,
-              mode='constant',
-              constant_values=tuple(padding_values)) - jnp.pad(
-                  expanded_data, full_padding_past_bc, mode='reflect')
+          if mode == Padding.MIRROR:
+            # make boundary-only padding
+            bc_padding = [(0, 0)] * u.grid.ndim
+            bc_padding[axis] = tuple(
+                1 if pad > 0 else 0 for pad in full_padding[axis])
+            # subtract the padded cell
+            full_padding_past_bc = [(0, 0)] * u.grid.ndim
+            full_padding_past_bc[axis] = tuple(
+                pad - 1 if pad > 0 else 0 for pad in full_padding[axis])
+            # here we are adding 0 boundary cell with 0 value
+            expanded_data = jnp.pad(
+                data, bc_padding, mode='constant', constant_values=(0, 0))
+            padding_values = list(self.bc_values)
+            padding_values[axis] = [pad / 2 for pad in padding_values[axis]]
+            data = 2 * jnp.pad(
+                data,
+                full_padding,
+                mode='constant',
+                constant_values=tuple(padding_values)) - jnp.pad(
+                    expanded_data, full_padding_past_bc, mode='reflect')
+          elif mode == Padding.EXTEND:
+            data = jnp.pad(
+                data,
+                full_padding,
+                mode='constant',
+                constant_values=self.bc_values)
+          else:
+            raise NotImplementedError(f'Mode {mode} is not implemented yet.')
       else:
         raise ValueError('expected offset to be an edge or cell center, got '
                          f'offset[axis]={u.offset[axis]}')
     elif bc_type == BCType.NEUMANN:
-      if not (np.isclose(u.offset[axis] % 1, 0) or
-              np.isclose(u.offset[axis] % 1, 0.5)):
+      if not np.isclose(u.offset[axis] % 1, 0.5):
         raise ValueError(
-            'expected offset to be an edge offset or cell center, got '
+            'expected offset to be cell center for neumann bc, got '
             f'offset[axis]={u.offset[axis]}')
       else:
         # When the data is cell-centered, computes the backward difference.
-        # When the data is on cell edges, boundary is set such that
-        # (u_last_interior - u_boundary)/grid_step = neumann_bc_value.
+
+        # if only one value is needed, no mode is necessary. Default mode is
+        # provided, although all modes would return the same values.
+        if np.isclose(sum(full_padding[axis]), 1) or np.isclose(
+            sum(full_padding[axis]), 0):
+          np_mode = 'symmetric'
+        elif mode == Padding.MIRROR:
+          np_mode = 'symmetric'
+        elif mode == Padding.EXTEND:
+          np_mode = 'edge'
+        else:
+          raise NotImplementedError(f'Mode {mode} is not implemented yet.')
+        # ensures that finite_differences.backward_difference satisfies the
+        # boundary condition.
+        derivative_direction = float(width // max(1, abs(width)))
         data = (
-            jnp.pad(data, full_padding, mode='edge') + u.grid.step[axis] *
+            jnp.pad(data, full_padding, mode=np_mode) -
+            derivative_direction * u.grid.step[axis] *
             (jnp.pad(data, full_padding, mode='constant') - jnp.pad(
                 data,
                 full_padding,
@@ -319,12 +376,11 @@ class ConstantBoundaryConditions(BoundaryConditions):
       padding = (-negative_trim, positive_trim)
     return u, padding
 
-  def pad(
-      self,
-      u: GridArray,
-      width: Union[Tuple[int, int], int],
-      axis: int,
-  ) -> GridArray:
+  def pad(self,
+          u: GridArray,
+          width: Union[Tuple[int, int], int],
+          axis: int,
+          mode: Optional[str] = None,) -> GridArray:
     """Wrapper for _pad.
 
     Args:
@@ -333,34 +389,39 @@ class ConstantBoundaryConditions(BoundaryConditions):
         negative value for lower boundary or positive value for upper boundary.
         If a tuple, pads with width[0] on the left and width[1] on the right.
       axis: axis to pad along.
+      mode: type of padding to use in non-periodic case.
+        Mirror mirrors the array values across the boundary.
+        Extend extends the last well-defined array value past the boundary.
 
     Returns:
       Padded array, elongated along the indicated axis.
     """
     _ = self._is_aligned(u, axis)
     if isinstance(width, int):
-      u = self._pad(u, width, axis)
+      u = self._pad(u, width, axis, mode=mode)
     else:
-      u = self._pad(u, -width[0], axis)
-      u = self._pad(u, width[1], axis)
+      u = self._pad(u, -width[0], axis, mode=mode)
+      u = self._pad(u, width[1], axis, mode=mode)
     return u
 
-  def pad_all(
-      self,
-      u: GridArray,
-      width: Tuple[Tuple[int, int], ...],
-  ) -> GridArray:
+  def pad_all(self,
+              u: GridArray,
+              width: Tuple[Tuple[int, int], ...],
+              mode: Optional[str] = None,) -> GridArray:
     """Pads along all axes with pad width specified by width tuple.
 
     Args:
       u: a `GridArray` object.
       width: Tuple of padding width for each side for each axis.
+      mode: type of padding to use in non-periodic case.
+        Mirror mirrors the array values across the boundary.
+        Extend extends the last well-defined array value past the boundary.
 
     Returns:
       Padded array, elongated along all axes.
     """
     for axis in range(u.grid.ndim):
-      u = self.pad(u, width[axis], axis)
+      u = self.pad(u, width[axis], axis, mode=mode)
     return u
 
   def values(

@@ -18,6 +18,7 @@ from typing import Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import array_utils as arr_utils
+from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 from jax_cfd.base import interpolation
 import numpy as np
@@ -137,9 +138,15 @@ def top_hat_downsample(
     grid_shape = np.array(source_grid.shape)
     for axis in range(c.grid.ndim):
       c_centered = bc.pad(
-          c_centered, round(filter_size[axis]) // 2, axis=axis)
+          c_centered,
+          round(filter_size[axis]) // 2,
+          axis=axis,
+          mode=boundaries.Padding.MIRROR)
       c_centered = bc.pad(
-          c_centered, -(round(filter_size[axis]) // 2), axis=axis)
+          c_centered,
+          -(round(filter_size[axis]) // 2),
+          axis=axis,
+          mode=boundaries.Padding.MIRROR)
       convolution_filter = jnp.ones(round(
           filter_size[axis])) / filter_size[axis]
       convolve_1d = lambda arr, convolution_filter=convolution_filter: jnp.convolve(  # pylint: disable=g-long-lambda

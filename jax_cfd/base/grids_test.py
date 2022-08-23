@@ -282,25 +282,23 @@ class GridVariableTest(test_util.TestCase):
       dict(
           shape=(10,),
           bc=boundaries.neumann_boundary_conditions(ndim=1),
-          offset=(1.0,)),
+          offset=(0.5,)),
       dict(
           shape=(10, 10),
           bc=boundaries.neumann_boundary_conditions(ndim=2),
-          offset=(1.0, 1.0)),
+          offset=(0.5, 0.5)),
       dict(
           shape=(10, 10, 10),
           bc=boundaries.neumann_boundary_conditions(ndim=3),
-          offset=(1.0, 1.0, 1.0)),
+          offset=(0.5, 0.5, 0.5)),
   )
-  def test_interior_consistency_edge_offsets_neumann(self, shape, bc, offset):
+  def test_interior_consistency_neumann(self, shape, bc, offset):
     grid = grids.Grid(shape)
     data = np.random.randint(0, 10, shape)
     array = grids.GridArray(data, offset=offset, grid=grid)
     u = grids.GridVariable(array, bc)
     u_interior = u.trim_boundary()
-    self.assertEqual(u_interior.offset, u.array.offset)
-    self.assertEqual(u_interior.grid.ndim, u.array.grid.ndim)
-    self.assertEqual(u_interior.grid.step, u.array.grid.step)
+    self.assertArrayEqual(u_interior, u.array)
 
   @parameterized.parameters(
       dict(

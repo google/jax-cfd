@@ -60,6 +60,12 @@ def _cos_velocity(grid):
   return v
 
 
+def _velocity_implicit(grid, offset, u, t):
+  """Returns solution of a Burgers equation at time `t`."""
+  x = grid.mesh((offset,))[0]
+  return grids.GridArray(jnp.sin(x - u * t), (offset,), grid)
+
+
 def _total_variation(array, motion_axis):
   next_values = array.shift(1, motion_axis)
   variation = jnp.sum(jnp.abs(next_values.data - array.data))
@@ -160,6 +166,76 @@ class AdvectionTest(test_util.TestCase):
     expected_shift = int(round(-cfl_number * num_steps * v_sign))
     expected = c.shift(expected_shift, axis=0).data
     self.assertAllClose(expected, ct.data, atol=atol)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='dirichlet_1d_100', shape=(100,), atol=0.001,
+          offset=.5),
+      dict(
+          testcase_name='dirichlet_1d_200',
+          shape=(200,),
+          atol=0.00025,
+          offset=.5),
+      dict(
+          testcase_name='dirichlet_1d_400',
+          shape=(400,),
+          atol=0.00007,
+          offset=.5),
+      dict(
+          testcase_name='dirichlet_1d_100_cell_edge_0',
+          shape=(100,),
+          atol=0.002,
+          offset=0.),
+      dict(
+          testcase_name='dirichlet_1d_200_cell_edge_0',
+          shape=(200,),
+          atol=0.0005,
+          offset=0.),
+      dict(
+          testcase_name='dirichlet_1d_400_cell_edge_0',
+          shape=(400,),
+          atol=0.000125,
+          offset=0.),
+      dict(
+          testcase_name='dirichlet_1d_100_cell_edge_1',
+          shape=(100,),
+          atol=0.002,
+          offset=1.),
+      dict(
+          testcase_name='dirichlet_1d_200_cell_edge_1',
+          shape=(200,),
+          atol=0.0005,
+          offset=1.),
+      dict(
+          testcase_name='dirichlet_1d_400_cell_edge_1',
+          shape=(400,),
+          atol=0.000125,
+          offset=1.),
+  )
+  def test_burgers_analytical_dirichlet_convergence(
+      self,
+      shape,
+      atol,
+      offset,
+  ):
+    num_steps = 1000
+    cfl_number = 0.01
+    step = 2 * jnp.pi / 1000
+    grid = grids.Grid(shape, domain=([0., 2 * jnp.pi],))
+    bc = boundaries.dirichlet_boundary_conditions(grid.ndim)
+    v = (bc.impose_bc(_velocity_implicit(grid, offset, 0, 0)),)
+    dt = cfl_number * step
+
+    def _advect(v):
+      dv_dt = advection.advect_van_leer(c=v[0], v=v, dt=dt) / 2
+      return (bc.impose_bc(v[0].array + dt * dv_dt),)
+
+    evolve = jax.jit(funcutils.repeated(_advect, num_steps))
+    ct = evolve(v)
+
+    expected = bc.impose_bc(
+        _velocity_implicit(grid, offset, ct[0].data, dt * num_steps)).data
+    self.assertAllClose(expected, ct[0].data, atol=atol)
 
   @parameterized.named_parameters(
       dict(testcase_name='linear_1D',
@@ -292,10 +368,6 @@ class AdvectionTest(test_util.TestCase):
       self.assertLessEqual(current_total_variation, initial_total_variation)
 
   @parameterized.named_parameters(
-      dict(
-          testcase_name='upwind_1D',
-          shape=(101,),
-          method=_euler_step(advection.advect_upwind)),
       dict(
           testcase_name='van_leer_1D',
           shape=(101,),

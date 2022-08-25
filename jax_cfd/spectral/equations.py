@@ -190,6 +190,7 @@ class NavierStokes2D(time_stepping.ImplicitExplicitODE):
     return 1 / (1 - time_step * self.linear_term) * vorticity_hat
 
 
+
 # pylint: disable=g-doc-args,g-doc-return-or-yield,invalid-name
 def ForcedNavierStokes2D(viscosity, grid, smooth):
   """Sets up the flow that is used in Kochkov et al. [1].
@@ -218,3 +219,40 @@ def ForcedNavierStokes2D(viscosity, grid, smooth):
       drag=0.1,
       smooth=smooth,
       forcing_fn=forcing_fn)
+
+
+@dataclasses.dataclass
+class NonlinearSchrodinger(time_stepping.ImplicitExplicitODE):
+  """Nonlinear schrodinger equation split in implicit and explicit parts.
+
+  The NLS equation is
+    `psi_t = -i psi_xx/8 - i|psi|^2 psi/2`
+
+  Attributes:
+    grid: underlying grid of the process
+    smooth: smooth the non-linear by upsampling 2x in fourier and truncating
+  """
+  grid: grids.Grid
+  smooth: bool = True
+
+  def __post_init__(self):
+    self.kx, = self.grid.fft_axes()
+    assert len(self.kx) % 2 == 0, "Odd grid sizes not supported, try N even"
+    self.two_pi_i_k = 2j * jnp.pi * self.kx
+    self.fft = spectral_utils.fft_truncated_2x if self.smooth else jnp.fft.fft
+    self.ifft = spectral_utils.ifft_padded_2x if self.smooth else jnp.fft.ifft
+
+  def explicit_terms(self, psihat):
+    """Non-linear part of the equation `-i|psi|^2 psi/2`."""
+    psi = self.ifft(psihat)
+    ipsi_cubed = 1j * psi * jnp.abs(psi)**2
+    ipsi_cubed_hat = self.fft(ipsi_cubed)
+    return -ipsi_cubed_hat / 2
+
+  def implicit_terms(self, psihat):
+    """The diffusion term `-i psi_xx/8` to be handled implicitly."""
+    return -1j * psihat * self.two_pi_i_k**2 / 8
+
+  def implicit_solve(self, psihat, time_step):
+    """Solves for `implicit_terms`, implicitly."""
+    return psihat / (1 - time_step * (-1j * self.two_pi_i_k**2 / 8))

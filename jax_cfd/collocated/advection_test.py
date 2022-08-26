@@ -14,9 +14,10 @@
 
 """Tests for jax_cfd.advection."""
 
+import functools
+
 from absl.testing import absltest
 from absl.testing import parameterized
-
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import boundaries
@@ -33,6 +34,15 @@ def _cos_velocity(grid):
   v = tuple(grids.GridArray(jnp.cos(2. * np.pi * x / s), offset, grid)
             for x, s in zip(mesh, mesh_size))
   return v
+
+
+def _euler_step(advection_method):
+
+  def step(c, v, dt):
+    c_new = c.array + dt * advection_method(c, v, dt)
+    return c.bc.impose_bc(c_new)
+
+  return step
 
 
 class AdvectionTest(test_util.TestCase):
@@ -60,6 +70,71 @@ class AdvectionTest(test_util.TestCase):
       advected_component = advection_method(u, v)
 
       self.assertAllClose(advected_component, du)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='dichlet_advect',
+          shape=(101,),
+          method=_euler_step(advection.advect_linear)),)
+  def test_mass_conservation_dirichlet(self, shape, method):
+    cfl_number = 0.1
+    dt = cfl_number / shape[0]
+    num_steps = 1000
+
+    grid = grids.Grid(shape, domain=([-1., 1.],))
+    bc = boundaries.dirichlet_boundary_conditions(grid.ndim)
+    c_bc = boundaries.dirichlet_boundary_conditions(grid.ndim, ((-1., 1.),))
+
+    def u(grid):
+      x = grid.mesh((0.5,))[0]
+      return grids.GridArray(-jnp.sin(jnp.pi * x), (0.5,), grid)
+
+    def c0(grid):
+      x = grid.mesh((0.5,))[0]
+      return grids.GridArray(x, (0.5,), grid)
+
+    v = (bc.impose_bc(u(grid)),)
+    c = c_bc.impose_bc(c0(grid))
+
+    ct = c
+
+    advect = jax.jit(functools.partial(method, v=v, dt=dt))
+
+    initial_mass = np.sum(c.data)
+    for _ in range(num_steps):
+      ct = advect(ct)
+      current_total_mass = np.sum(ct.data)
+      self.assertAllClose(current_total_mass, initial_mass, atol=1e-6)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='linear_1d_neumann',
+          shape=(1000,),
+          method=advection.advect_linear),)
+  def test_neumann_bc_one_step(self, shape, method):
+    grid = grids.Grid(shape, domain=([-1., 1.],))
+    bc = boundaries.neumann_boundary_conditions(grid.ndim)
+    c_bc = boundaries.neumann_boundary_conditions(grid.ndim)
+
+    def u(grid):
+      x = grid.mesh((0.5,))[0]
+      return grids.GridArray(jnp.cos(jnp.pi * x), (0.5,), grid)
+
+    def c0(grid):
+      x = grid.mesh((0.5,))[0]
+      return grids.GridArray(jnp.cos(jnp.pi * x), (0.5,), grid)
+
+    def dcdt(grid):
+      x = grid.mesh((0.5,))[0]
+      return grids.GridArray(jnp.pi * jnp.sin(2 * jnp.pi * x), (0.5,), grid)
+
+    v = (bc.impose_bc(u(grid)),)
+    c = c_bc.impose_bc(c0(grid))
+
+    advect = jax.jit(functools.partial(method, v=v))
+
+    ct = advect(c)
+    self.assertAllClose(ct, dcdt(grid), atol=1e-4)
 
 
 if __name__ == '__main__':

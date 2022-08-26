@@ -75,7 +75,7 @@ def _total_variation(array, motion_axis):
 def _euler_step(advection_method):
   def step(c, v, dt):
     c_new = c.array + dt * advection_method(c, v, dt)
-    return grids.GridVariable(c_new, c.bc)
+    return c.bc.impose_bc(c_new)
   return step
 
 

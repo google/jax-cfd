@@ -147,7 +147,7 @@ def learned_scalar_viscosity_from_gradients(
     unique_offsets = list(set(s_ij_offsets))
     viscosity_net = tower_factory(1, grid.ndim)
     cell_center = grid.cell_center
-    interpolate_to_center = lambda x: interpolate(x, cell_center, v, dt)
+    interpolate_to_center = lambda x: interpolate(x, cell_center, v, dt)  # pytype: disable=wrong-arg-types
     centered_s_ij = np.vectorize(interpolate_to_center)(s_ij)
     inputs = jnp.stack([array.data for array in centered_s_ij.ravel()], axis=-1)
     predicted_viscosity = (viscosity_scale + 1e-6) * viscosity_net(inputs)

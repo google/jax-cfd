@@ -53,6 +53,42 @@ def padded_irfft(uhat: spectral_types.Array) -> spectral_types.Array:
   return 1.5 * jnp.fft.irfft(smoothed)
 
 
+def fft_truncated_2x(u: spectral_types.Array) -> spectral_types.Array:
+  """Applies the 1/2 rule to complex u by truncating higher Fourier modes.
+
+  Args:
+    u: the (complex) input signal
+
+  Returns:
+    Downsampled version of `u` in fft-space.
+  """
+  uhat = jnp.fft.fftshift(jnp.fft.fft(u))
+  k, = uhat.shape
+  final_size = (k + 1) // 2
+  return jnp.fft.ifftshift(uhat[final_size // 2:(-final_size + 1) // 2]) / 2
+
+
+def ifft_padded_2x(uhat: spectral_types.Array) -> spectral_types.Array:
+  """Applies the 2x rule to complex F[u] by padding higher frequencies.
+
+     Pads with zeros in the Fourier domain before performing the ifft
+      (effectively performing 2x interpolation in the spatial domain)
+
+  Args:
+    uhat: the fft representation of signal
+
+  Returns:
+    An upsampled signal in real space interpolated to 2x more points than
+    `jax.fft.ifft(uhat)`.
+  """
+  n, = uhat.shape
+  final_size = n + 2 * (n // 2)
+  added = n // 2
+  smoothed = jnp.pad(jnp.fft.fftshift(uhat), (added, added))
+  assert smoothed.shape == (final_size,), "incorrect padded shape"
+  return 2 * jnp.fft.ifft(jnp.fft.ifftshift(smoothed))
+
+
 def circular_filter_2d(grid: grids.Grid) -> spectral_types.Array:
   """Circular filter which roughly matches the 2/3 rule but is smoother.
 

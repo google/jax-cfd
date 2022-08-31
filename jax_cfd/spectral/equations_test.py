@@ -165,6 +165,47 @@ class EquationsTest1D(test_util.TestCase):
     uhat1, _ = step_fn((uhat0, t0))
     self.assertFalse(jnp.isnan(uhat1).any())
 
+  def test_nls_equation(self):
+    """Check that trajectory matches Peregrine soliton analytic solution.
+
+    Soln from https://en.wikipedia.org/wiki/Peregrine_soliton,
+    however as we implement `psi_t = -i psi_xx/8 - i|psi|^2 psi/2`
+    rather than `psi_t = +i psi_xx/2 -+i|psi|^2 psi` from the wiki,
+    the solution needs to be rescaled and conjugated.
+    """
+
+    def solve_nls(u0, t_final=1., max_samples=1024, dt=1e-2, extent=500):
+      N = len(u0)  # pylint: disable=invalid-name
+      grid = grids.Grid((N,), domain=((-extent / 2, extent / 2),))
+      xs, = grid.axes(offset=(0,))
+      eq = spectral_equations.NonlinearSchrodinger(grid=grid)
+      stepfn = time_stepping.crank_nicolson_rk4(eq, dt)
+      uhat0 = jnp.fft.fft(u0)
+      numsteps = int(t_final / dt)
+      ds_period = max(numsteps // max_samples, 1)
+      multistepfn = jax.jit(cfd.funcutils.repeated(stepfn, ds_period))
+      _, uhat_traj = cfd.funcutils.trajectory(multistepfn, max_samples)(uhat0)
+      u_traj = jax.vmap(jnp.fft.ifft)(uhat_traj)
+      timesteps = (1 + jnp.arange(min(max_samples, numsteps))) * dt * ds_period
+      return u_traj, xs, timesteps
+
+    L = 40 * jnp.pi  # pylint: disable=invalid-name
+    grid = grids.Grid((2**10,), domain=((-L / 2, L / 2),))
+    dt = 3e-4
+    tau = 8
+    T = tau * 2  # pylint: disable=invalid-name
+    xs, = grid.axes(offset=(0,))
+    zs = xs * jnp.sqrt(2)
+    u0 = (4 * zs**2 - 3) / (1 + 4 * zs**2)
+    soln, x_ds, t_ds = solve_nls(u0, T, dt=dt, extent=L)
+    z_ds = x_ds * jnp.sqrt(2)
+    tau_ds = t_ds / 2
+    gt_soln = 1 - 4 * (1 +
+                       2j * tau_ds[:, None]) / (1 + 4 *
+                                                (z_ds**2 + tau_ds[:, None]**2))
+    gt_soln = jnp.conj(gt_soln * jnp.exp(1j * tau_ds[:, None]))
+    self.assertLess(jnp.abs(soln - gt_soln).mean(), 1e-3)
+
 
 class EquationsTest2D(test_util.TestCase):
 

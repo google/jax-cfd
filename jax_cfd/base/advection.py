@@ -313,9 +313,15 @@ def advect_van_leer(
     numerator = grids.applied(jnp.where)(u > 0, numerator_positive,
                                          numerator_negative)
     denominator = grids.GridArray(c_center - c_left, u.offset, u.grid)
-    phi_van_leer_denominator_inv = grids.applied(jnp.where)(
-        abs(denominator) > 0, denominator /
-        (abs(denominator) + abs(numerator)), 0)
+    # We want to calculate denominator / (abs(denominator) + abs(numerator))
+    # To make it differentiable, it needs to be done in stages.
+
+    # ensures that there is no division by 0
+    phi_van_leer_denominator_avoid_nans = grids.applied(jnp.where)(
+        abs(denominator) > 0, (abs(denominator) + abs(numerator)), 1.)
+
+    phi_van_leer_denominator_inv = denominator / phi_van_leer_denominator_avoid_nans
+
     phi_van_leer = numerator * (grids.applied(jnp.sign)(denominator) +
                                 grids.applied(jnp.sign)
                                 (numerator)) * phi_van_leer_denominator_inv

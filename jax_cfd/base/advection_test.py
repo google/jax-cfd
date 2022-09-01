@@ -313,6 +313,43 @@ class AdvectionTest(test_util.TestCase):
     gradient = jax.jit(jax.grad(objective))(c)
     self.assertAllClose(c, gradient, atol=atol, rtol=rtol)
 
+
+  @parameterized.named_parameters(
+      dict(testcase_name='van_leer_1D',
+           shape=(101,),
+           method=_euler_step(advection.advect_van_leer),
+           atol=1e-2,
+           rtol=1e-2),
+      dict(testcase_name='van_leer_1D_negative_v',
+           shape=(101,),
+           method=_euler_step(advection.advect_van_leer),
+           atol=1e-2,
+           rtol=1e-2,
+           v_sign=-1.),
+      dict(testcase_name='van_leer_3D',
+           shape=(101, 101, 101),
+           method=_euler_step(advection.advect_van_leer),
+           atol=1e-2,
+           rtol=1e-2),
+  )
+  def test_advection_gradients_division_by_zero(
+      self, shape, method, atol, rtol, cfl_number=0.5, v_sign=1,
+  ):
+    step = tuple(1. / s for s in shape)
+    grid = grids.Grid(shape, step)
+    bc = boundaries.periodic_boundary_conditions(grid.ndim)
+    v = tuple(grids.GridVariable(u, bc) for u in _unit_velocity(grid, v_sign))
+    c = grids.GridVariable(_unit_velocity(grid)[0], bc)
+    dt = cfl_number * min(step)
+    advect = jax.remat(functools.partial(method, v=v, dt=dt))
+    evolve = jax.jit(funcutils.repeated(advect, steps=10))
+
+    def objective(c):
+      return 0.5 * jnp.sum(evolve(c).data ** 2)
+
+    gradient = jax.jit(jax.grad(objective))(c)
+    self.assertAllClose(c, gradient, atol=atol, rtol=rtol)
+
   @parameterized.named_parameters(
       dict(testcase_name='_linear_1D',
            shape=(101,),

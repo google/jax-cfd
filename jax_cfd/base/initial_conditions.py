@@ -37,14 +37,24 @@ GridVariableVector = grids.GridVariableVector
 BoundaryConditions = grids.BoundaryConditions
 
 
-def wrap_velocities(
-    v: Sequence[Array],
+def wrap_variables(
+    var: Sequence[Array],
     grid: grids.Grid,
     bcs: Sequence[BoundaryConditions],
+    offsets: Optional[Sequence[Tuple[float, ...]]] = None,
+    batch_dim: bool = False,
 ) -> GridVariableVector:
-  """Wrap velocity arrays for input into simulations."""
-  return tuple(grids.GridVariable(grids.GridArray(u, offset, grid), bc)
-               for u, offset, bc in zip(v, grid.cell_faces, bcs))
+  """Associates offsets, grid, and boundary conditions with a sequence of arrays."""
+  if offsets is None:
+    offsets = grid.cell_faces
+  def impose_bc(arrays):
+    return tuple(
+        bc.impose_bc(grids.GridArray(u, offset, grid))
+        for u, offset, bc in zip(arrays, offsets, bcs))
+  if batch_dim:
+    return jax.vmap(impose_bc)(var)
+  else:
+    return impose_bc(var)
 
 
 def _log_normal_pdf(x, mode, variance=.25):
@@ -97,7 +107,7 @@ def filtered_velocity_field(
         filter_utils.filter(spectral_density, noise, grid))
     boundary_conditions.append(
         boundaries.periodic_boundary_conditions(grid.ndim))
-  velocity = wrap_velocities(velocity_components, grid, boundary_conditions)
+  velocity = wrap_variables(velocity_components, grid, boundary_conditions)
 
   def project_and_normalize(v: GridVariableVector):
     v = pressure.projection(v)

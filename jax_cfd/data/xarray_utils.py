@@ -53,6 +53,8 @@ XR_TIME_NAME = 'time'
 XR_OFFSET_NAME = 'offset'
 
 XR_SAVE_GRID_SIZE_ATTR_NAME = 'save_grid_size'
+XR_SAVE_GRID_SIZE_ATTR_NAME_RECTANGLE = ('save_grid_size_x', 'save_grid_size_y')
+
 XR_DOMAIN_SIZE_NAME = 'domain_size'
 XR_NDIM_ATTR_NAME = 'ndim'
 XR_STABLE_TIME_STEP_ATTR_NAME = 'stable_time_step'
@@ -125,19 +127,27 @@ def construct_coords(
 
 def grid_from_attrs(dataset_attrs) -> grids.Grid:
   """Constructs a `Grid` object from dataset attributes."""
-  grid_size = dataset_attrs[XR_SAVE_GRID_SIZE_ATTR_NAME]
   ndim = dataset_attrs[XR_NDIM_ATTR_NAME]
-  grid_shape = (grid_size,) * ndim
-  if XR_DOMAIN_SIZE_NAME in dataset_attrs:
-    domain_size = dataset_attrs[XR_DOMAIN_SIZE_NAME]
-  elif 'domain_size_multiple' in dataset_attrs:
-    # TODO(shoyer): remove this legacy case, once we no longer use datasets
-    # generated prior to 2020-09-18
-    domain_size = 2 * np.pi * dataset_attrs['domain_size_multiple']
+  if XR_SAVE_GRID_SIZE_ATTR_NAME in dataset_attrs:
+    grid_size = dataset_attrs[XR_SAVE_GRID_SIZE_ATTR_NAME]
+    grid_shape = (grid_size,) * ndim
+    if XR_DOMAIN_SIZE_NAME in dataset_attrs:
+      domain_size = dataset_attrs[XR_DOMAIN_SIZE_NAME]
+    elif 'domain_size_multiple' in dataset_attrs:
+      # TODO(shoyer): remove this legacy case, once we no longer use datasets
+      # generated prior to 2020-09-18
+      domain_size = 2 * np.pi * dataset_attrs['domain_size_multiple']
+    else:
+      raise ValueError(
+          f'could not figure out domain size from attrs:\n{dataset_attrs}')
+    grid_domain = [(0, domain_size)] * ndim
   else:
-    raise ValueError(
-        f'could not figure out domain size from attrs:\n{dataset_attrs}')
-  grid_domain = [(0, domain_size)] * ndim
+    grid_shape = tuple(dataset_attrs[attr]
+                       for attr in XR_SAVE_GRID_SIZE_ATTR_NAME_RECTANGLE[:ndim])
+    aspect_ratio = dataset_attrs['aspect_ratio']
+    domain_z = (0, 1)
+    domain_x = (0, aspect_ratio)
+    grid_domain = (domain_x, domain_z)
   grid = grids.Grid(grid_shape, domain=grid_domain)
   return grid
 

@@ -75,23 +75,25 @@ def velocity_trajectory_to_xarray(
           + XR_SPATIAL_DIMS[:dimension])
 
   data_vars = {}
-  for component in range(dimension):
-    name = XR_VELOCITY_NAMES[component]
-    data = trajectory[component]
-    if isinstance(data, GridArray) or isinstance(data, GridVariable):
-      data = data.data
-    var_attrs = {}
-    if grid is not None:
-      var_attrs[XR_OFFSET_NAME] = grid.cell_faces[component]
-    data_vars[prefix_name + name] = xarray.Variable(dims, data, var_attrs)
+  num_scalars = len(trajectory) - dimension
 
-  for component in range(dimension, len(trajectory)):
-    name = XR_SCALAR_NAMES[component - dimension]
+  for component in range(num_scalars):
+    name = XR_SCALAR_NAMES[component]
     data = trajectory[component]
     var_attrs = {}
     if isinstance(data, GridArray) or isinstance(data, GridVariable):
       var_attrs[XR_OFFSET_NAME] = data.offset
       data = data.data
+    data_vars[prefix_name + name] = xarray.Variable(dims, data, var_attrs)
+
+  for component in range(dimension):
+    name = XR_VELOCITY_NAMES[component]
+    data = trajectory[component + num_scalars]
+    if isinstance(data, GridArray) or isinstance(data, GridVariable):
+      data = data.data
+    var_attrs = {}
+    if grid is not None:
+      var_attrs[XR_OFFSET_NAME] = grid.cell_faces[component]
     data_vars[prefix_name + name] = xarray.Variable(dims, data, var_attrs)
 
   if samples:

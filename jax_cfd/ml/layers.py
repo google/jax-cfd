@@ -9,6 +9,9 @@ import haiku as hk
 import jax
 from jax import lax
 import jax.numpy as jnp
+from jax_cfd.base import array_utils
+from jax_cfd.base import boundaries
+from jax_cfd.base import grids
 from jax_cfd.ml import layers_util
 from jax_cfd.ml import tiling
 import numpy as np
@@ -133,6 +136,83 @@ class PeriodicConv3D(PeriodicConvGeneral):
         name=name,
         **conv_kwargs
     )
+
+
+class MirrorConvGeneral(hk.Module):
+  """General periodic convolution module."""
+
+  def __init__(self,
+               base_convolution: Callable[..., Any],
+               output_channels: int,
+               kernel_shape: Tuple[int, ...],
+               rate: int = 1,
+               tile_layout: Optional[Tuple[int, ...]] = None,
+               name: str = 'mirror_conv_general',
+               **conv_kwargs: Any):
+    """Constructs MirrorConvGeneral module.
+
+    We use `VALID` padding on `base_convolution` and explicit padding beyond
+    the boudaries. This function computes paddings` and combines `jnp.pad` 
+    function calls with `base_convolution` module.
+
+    Args:
+      base_convolution: standard convolution module e.g. hk.Conv1D.
+      output_channels: number of output channels.
+      kernel_shape: shape of the kernel, compatible with `base_convolution`.
+      rate: dilation rate of the convolution.
+      tile_layout: optional layout for tiling spatial dimensions in a batch.
+      name: name of the module.
+      **conv_kwargs: additional arguments passed to `base_convolution`.
+    """
+    super().__init__(name=name)
+    self._padding = np.zeros(2).astype('int')
+    for kernel_size in kernel_shape:
+      effective_kernel = kernel_size + (rate - 1) * (kernel_size - 1)
+      pad_left = effective_kernel // 2
+      self._padding += np.array([pad_left,
+                                 effective_kernel - pad_left - 1]).astype('int')
+    self._tile_layout = tile_layout
+    self._conv_module = base_convolution(
+        output_channels=output_channels, kernel_shape=kernel_shape,
+        padding='VALID', rate=rate, **conv_kwargs)
+
+  def _expand_var(self, var):
+    var = var.bc.pad_all(
+        var, (self._padding,) * var.grid.ndim, mode=boundaries.Padding.MIRROR)
+    return jnp.expand_dims(var.data, axis=-1)
+
+  def __call__(self, inputs):
+    input_data = tuple(self._expand_var(var) for var in inputs)
+    input_data = array_utils.concat_along_axis(
+        jax.tree_leaves(input_data), axis=-1)
+    outputs = self._conv_module(input_data)
+    outputs = array_utils.split_axis(outputs, -1)
+    outputs = tuple(
+        var_input.bc.impose_bc(
+            grids.GridArray(var, var_input.offset, var_input.grid))
+        for var, var_input in zip(outputs, inputs))
+    return outputs
+
+
+class MirrorConv2D(MirrorConvGeneral):
+  """Mirror convolution module in 2D."""
+
+  def __init__(self,
+               output_channels: int,
+               kernel_shape: Tuple[int, int],
+               rate: int = 1,
+               tile_layout: Optional[Tuple[int, int]] = None,
+               name='mirror_conv_2d',
+               **conv_kwargs):
+    """Constructs MirrorConv2D module."""
+    super().__init__(
+        base_convolution=hk.Conv2D,
+        output_channels=output_channels,
+        kernel_shape=kernel_shape,
+        rate=rate,
+        tile_layout=tile_layout,
+        name=name,
+        **conv_kwargs)
 
 
 class PeriodicConvTransposeGeneral(hk.Module):

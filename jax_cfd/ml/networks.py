@@ -1,5 +1,6 @@
 """Network modules that interface with numerical methods."""
 
+import functools
 import itertools
 from typing import Callable, Optional, Tuple
 
@@ -11,6 +12,7 @@ from jax_cfd.base import array_utils
 from jax_cfd.base import boundaries
 from jax_cfd.base import finite_differences
 from jax_cfd.base import grids
+from jax_cfd.base import interpolation
 from jax_cfd.ml import physics_specifications
 from jax_cfd.ml import towers
 import numpy as np
@@ -26,18 +28,56 @@ def split_to_aligned_field(
     grid: grids.Grid,
     dt: float,
     physics_specs: physics_specifications.BasePhysicsSpecs,
-    data_offsets: Optional[Tuple[Tuple[float, ...], ...]] = None,
+    network_offsets: Optional[Tuple[Tuple[float, float], ...]] = None,
 ):
   """Returns module that splits inputs along last axis into GridArrayVector."""
-  del dt, physics_specs  # unused.
-  data_offsets = data_offsets or grid.cell_faces
+  del dt  # unused.
+  if hasattr(physics_specs, "combo_offsets"):
+    data_offsets = physics_specs.combo_offsets()
+  else:
+    data_offsets = grid.cell_faces
 
+  if hasattr(physics_specs, "combo_boundaries"):
+    boundary_conditions = physics_specs.combo_boundaries()
+  else:
+    boundary_conditions = tuple(
+        boundaries.periodic_boundary_conditions(grid.ndim)
+        for _ in range(grid.ndim))
+  network_offsets = network_offsets or data_offsets
   def process(inputs):
     split_inputs = array_utils.split_axis(inputs, -1)
-    # TODO(pnorgaard) Make the encoder/decoder/network configurable for BC
-    bc = boundaries.periodic_boundary_conditions(grid.ndim)
-    return tuple(grids.GridVariable(grids.GridArray(x, offset, grid), bc)
-                 for x, offset in zip(split_inputs, data_offsets))
+    output = tuple(
+        grids.GridVariable(grids.GridArray(x, offset, grid), bc) for x, offset,
+        bc in zip(split_inputs, network_offsets, boundary_conditions))
+    output = tuple(
+        interpolation.linear(x, offset)
+        for x, offset in zip(output, data_offsets))
+    return output
+  return hk.to_module(process)()
+
+
+@gin.configurable()
+def interpolate_gridvar(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    final_offsets: Optional[Tuple[Tuple[float, float], ...]] = None,
+    process_fn: Optional[Callable] = lambda x: x,  # pylint: disable=g-bare-generic
+):
+  """Returns module that splits inputs along last axis into GridArrayVector."""
+  del dt  # unused.
+  if hasattr(physics_specs, "combo_offsets"):
+    data_offsets = physics_specs.combo_offsets()
+  else:
+    data_offsets = grid.cell_faces
+  final_offsets = final_offsets or data_offsets
+
+  def process(inputs):
+    inputs = process_fn(inputs)
+    inputs = tuple(
+        interpolation.linear(x, offset)
+        for x, offset in zip(inputs, final_offsets))
+    return inputs
 
   return hk.to_module(process)()
 
@@ -124,7 +164,7 @@ def stack_aligned_field(
   return hk.to_module(process)()
 
 
-@gin.register
+@gin.configurable
 def tower_module(
     grid: grids.Grid,
     dt: float,
@@ -148,6 +188,28 @@ def tower_module(
     return post_process(network(x))
 
   return hk.to_module(forward_pass)(name=name)
+
+
+@gin.configurable
+def velocity_corrector_network_w_boundaries(
+    grid: grids.Grid,
+    dt: float,
+    physics_specs: physics_specifications.BasePhysicsSpecs,
+    tower_factory: towers.TowerFactory,
+    network_offsets: Tuple[Tuple[float, ...], ...],
+    num_output_channels: int,
+    name: Optional[str] = None,
+    process_fn: Optional[Callable] = _identity,  # pylint: disable=g-bare-generic
+):
+  """Returns a module that computes corrections to the velocity field."""
+  pre_process = functools.partial(
+      interpolate_gridvar, final_offsets=network_offsets, process_fn=process_fn)
+  post_process = interpolate_gridvar
+  return tower_module(
+      grid=grid, dt=dt, physics_specs=physics_specs,
+      tower_factory=tower_factory, pre_process_module=pre_process,
+      post_process_module=post_process, num_output_channels=num_output_channels,
+      name=name)
 
 
 @gin.register

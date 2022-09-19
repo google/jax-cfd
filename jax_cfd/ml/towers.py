@@ -52,14 +52,36 @@ def periodic_transpose_convolution(
 
 
 @gin.register
-def fixed_scale(
+def mirror_convolution(
+    output_channels: int,
+    kernel_shape: Tuple[int, ...],
+    ndim: int,
+    **kwargs
+):
+  """Returns MirrorConv2D module with specified parameters."""
+  del ndim
+  return layers.MirrorConv2D(
+      output_channels, kernel_shape, **kwargs)
+
+
+@gin.register
+def fixed_scale(inputs: Array,
+                axes: Tuple[int, ...],
+                rescaled_one: float = gin.REQUIRED) -> Array:
+  """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
+  del axes  # unused.
+  return inputs * rescaled_one
+
+
+@gin.register
+def fixed_scale_gridvar(
     inputs: Array,
     axes: Tuple[int, ...],
     rescaled_one: float = gin.REQUIRED
 ) ->Array:
   """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
   del axes  # unused.
-  return inputs * rescaled_one
+  return tuple(x.bc.impose_bc(x.array * rescaled_one) for x in inputs)
 
 
 @gin.register

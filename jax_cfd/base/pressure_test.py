@@ -18,9 +18,10 @@ import functools
 
 from absl.testing import absltest
 from absl.testing import parameterized
-
 import jax
+from jax_cfd.base import array_utils
 from jax_cfd.base import boundaries
+from jax_cfd.base import fast_diagonalization
 from jax_cfd.base import finite_differences as fd
 from jax_cfd.base import grids
 from jax_cfd.base import pressure
@@ -37,6 +38,23 @@ class PressureTest(test_util.TestCase):
   def setUp(self):
     jax.config.update('jax_enable_x64', USE_FLOAT64)
     super(PressureTest, self).setUp()
+
+  def poisson_setup(self, bc, offset):
+    rs = np.random.RandomState(0)
+    b = rs.randn(4, 4).astype(np.float32)
+    grid = grids.Grid((4, 4), domain=((0, 4), (0, 4)))  # has step = 1.0
+    b = grids.GridArray(b, offset, grid)
+    a = array_utils.laplacian_matrix_w_boundaries(grid, offset, bc)
+    b_transformed = pressure._rhs_transform(
+        bc.trim_boundary(b), bc)
+    a_inv = fast_diagonalization.psuedoinverse(
+        a, b.dtype, hermitian=True, circulant=False, implementation='matmul')
+    x = a_inv(b_transformed)
+    x = grids.GridArray(x, b.offset, grid)
+    # laplacian is defined only on the interior
+    x = grids.GridVariable(x, bc)
+    x = fd.laplacian(x).data
+    return x, b
 
   @parameterized.named_parameters(
       dict(testcase_name='_1D_cg',
@@ -175,6 +193,24 @@ class PressureTest(test_util.TestCase):
     for u, u_corrected in zip(v, v_corrected):
       np.testing.assert_allclose(u.offset, u_corrected.offset)
     np.testing.assert_allclose(div.data, 0., atol=1e-4)
+
+  @parameterized.parameters(((1.0, 0.5),), ((1.0, 1.0),), ((1.0, 0.0),))
+  def test_poisson_periodic_and_dirichlet(self, offset):
+    bc = boundaries.periodic_and_dirichlet_boundary_conditions()
+    x, b = self.poisson_setup(bc, offset)
+    self.assertAllClose(x, bc.trim_boundary(b).data, atol=1e-5)
+
+  @parameterized.parameters(((1.0, 0.5),), ((0.5, 0.5),))
+  def test_poisson_periodic_and_neumann(self, offset):
+    bc = boundaries.periodic_and_neumann_boundary_conditions()
+    x, b = self.poisson_setup(bc, offset)
+    self.assertAllClose(x, b.data - b.data.mean(), atol=1e-5)
+
+  @parameterized.parameters(((1.0, 0.5),), ((1.0, 1.0),), ((1.0, 0.0),))
+  def test_poisson_2d_periodic(self, offset):
+    bc = boundaries.periodic_boundary_conditions(2)
+    x, b = self.poisson_setup(bc, offset)
+    self.assertAllClose(x, b.data - b.data.mean(), atol=1e-5)
 
 if __name__ == '__main__':
   absltest.main()

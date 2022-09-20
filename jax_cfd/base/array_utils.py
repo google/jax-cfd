@@ -14,13 +14,14 @@
 
 """Utility methods for manipulating array-like objects."""
 
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, List, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from jax_cfd.base import boundaries
+from jax_cfd.base import grids
 import numpy as np
 import scipy.linalg
-
 
 # There is currently no good way to indicate a jax "pytree" with arrays at its
 # leaves. See https://jax.readthedocs.io/en/latest/jax.tree_util.html for more
@@ -172,14 +173,121 @@ def laplacian_matrix(size: int, step: float) -> np.ndarray:
   return scipy.linalg.circulant(column)
 
 
-def laplacian_matrix_neumann(size: int, step: float) -> np.ndarray:
-  """Create 1D Laplacian operator matrix, with homogeneous Neumann BC."""
-  column = np.zeros(size)
-  column[0] = -2 / step ** 2
-  column[1] = 1 / step ** 2
-  matrix = scipy.linalg.toeplitz(column)
-  matrix[0, 0] = matrix[-1, -1] = -1 / step**2
-  return matrix
+def _laplacian_boundary_dirichlet_cell_centered(laplacians: List[Array],
+                                                grid: grids.Grid, axis: int,
+                                                side: str) -> None:
+  """Converts 1d laplacian matrix to satisfy dirichlet homogeneous bc.
+
+  laplacians[i] contains a 3 point stencil matrix L that approximates
+  d^2/dx_i^2.
+  For detailed documentation on laplacians input type see
+  array_utils.laplacian_matrix.
+  The default return of array_utils.laplacian_matrix makes a matrix for
+  periodic boundary. For dirichlet boundary, the correct equation is
+  L(u_interior) = rhs_interior and BL_boundary = u_fixed_boundary. So
+  laplacian_boundary_dirichlet restricts the matrix L to
+  interior points only.
+
+  This function assumes RHS has cell-centered offset.
+  Args:
+    laplacians: list of 1d laplacians
+    grid: grid object
+    axis: axis along which to impose dirichlet bc.
+    side: lower or upper side to assign boundary to.
+
+  Returns:
+    updated list of 1d laplacians.
+  """
+  # This function assumes homogeneous boundary, in which case if the offset
+  # is 0.5 away from the wall, the ghost cell value u[0] = -u[1]. So the
+  # 3 point stencil [1 -2 1] * [u[0] u[1] u[2]] = -3 u[1] + u[2].
+  if side == 'lower':
+    laplacians[axis][0, 0] = laplacians[axis][0, 0] - 1 / grid.step[axis]**2
+  else:
+    laplacians[axis][-1, -1] = laplacians[axis][-1, -1] - 1 / grid.step[axis]**2
+  # deletes corner dependencies on the "looped-around" part.
+  # this should be done irrespective of which side, since one boundary cannot
+  # be periodic while the other is.
+  laplacians[axis][0, -1] = 0.0
+  laplacians[axis][-1, 0] = 0.0
+  return
+
+
+def _laplacian_boundary_neumann_cell_centered(laplacians: List[Array],
+                                              grid: grids.Grid, axis: int,
+                                              side: str) -> None:
+  """Converts 1d laplacian matrix to satisfy neumann homogeneous bc.
+
+  This function assumes the RHS will have a cell-centered offset.
+  Neumann boundaries are not defined for edge-aligned offsets elsewhere in the
+  code.
+
+  Args:
+    laplacians: list of 1d laplacians
+    grid: grid object
+    axis: axis along which to impose dirichlet bc.
+    side: which boundary side to convert to neumann homogeneous bc.
+
+  Returns:
+    updated list of 1d laplacians.
+  """
+  if side == 'lower':
+    laplacians[axis][0, 0] = laplacians[axis][0, 0] + 1 / grid.step[axis]**2
+  else:
+    laplacians[axis][-1, -1] = laplacians[axis][-1, -1] + 1 / grid.step[axis]**2
+  # deletes corner dependencies on the "looped-around" part.
+  # this should be done irrespective of which side, since one boundary cannot
+  # be periodic while the other is.
+  laplacians[axis][0, -1] = 0.0
+  laplacians[axis][-1, 0] = 0.0
+  return
+
+
+def laplacian_matrix_w_boundaries(
+    grid: grids.Grid,
+    offset: Tuple[float, ...],
+    bc: boundaries.BoundaryConditions,
+) -> List[Array]:
+  """Returns 1d laplacians that satisfy boundary conditions bc on grid.
+
+  Given grid, offset and boundary conditions, returns a list of 1 laplacians
+  (one along each axis).
+
+  Currently, only homogeneous or periodic boundary conditions are supported.
+
+  Args:
+    grid: The grid used to construct the laplacian.
+    offset: The offset of the variable on which laplacian acts.
+    bc: the boundary condition of the variable on which the laplacian acts.
+
+  Returns:
+    A list of 1d laplacians.
+  """
+  if not isinstance(bc, boundaries.ConstantBoundaryConditions):
+    raise NotImplementedError(
+        f'Explicit laplacians are not implemented for {bc}.')
+  laplacians = list(map(laplacian_matrix, grid.shape, grid.step))
+  for axis in range(grid.ndim):
+    if np.isclose(offset[axis], 0.5):
+      for i, side in enumerate(['lower', 'upper']):  # lower and upper boundary
+        if bc.types[axis][i] == boundaries.BCType.NEUMANN:
+          _laplacian_boundary_neumann_cell_centered(
+              laplacians, grid, axis, side)
+        elif bc.types[axis][i] == boundaries.BCType.DIRICHLET:
+          _laplacian_boundary_dirichlet_cell_centered(
+              laplacians, grid, axis, side)
+    if np.isclose(offset[axis] % 1, 0.):
+      if bc.types[axis][0] == boundaries.BCType.DIRICHLET and bc.types[
+          axis][1] == boundaries.BCType.DIRICHLET:
+        # This function assumes homogeneous boundary and acts on the interior.
+        # Thus, the laplacian can be cut off past the edge.
+        # The interior grid has one fewer grid cell than the actual grid, so
+        # the size of the laplacian should be reduced.
+        laplacians[axis] = laplacians[axis][:-1, :-1]
+      elif boundaries.BCType.NEUMANN in bc.types[axis]:
+        raise NotImplementedError(
+            'edge-aligned Neumann boundaries are not implemented.')
+  return laplacians
 
 
 def unstack(array, axis):

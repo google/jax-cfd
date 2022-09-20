@@ -16,14 +16,17 @@
 
 from absl.testing import absltest
 from absl.testing import parameterized
-
 import jax
 import jax.numpy as jnp
 from jax_cfd.base import array_utils
+from jax_cfd.base import boundaries
+from jax_cfd.base import grids
 from jax_cfd.base import test_util
 import numpy as np
 import scipy.interpolate as spi
 import skimage.measure as skm
+
+BCType = boundaries.BCType
 
 
 class ArrayUtilsTest(test_util.TestCase):
@@ -51,10 +54,57 @@ class ArrayUtilsTest(test_util.TestCase):
         [[-2, 1, 0, 1], [1, -2, 1, 0], [0, 1, -2, 1], [1, 0, 1, -2]])
     self.assertAllClose(expected, actual)
 
-  def test_laplacian_matrix_neumann(self):
-    actual = array_utils.laplacian_matrix_neumann(4, step=0.5)
-    expected = 4.0 * np.array(
-        [[-1, 1, 0, 0], [1, -2, 1, 0], [0, 1, -2, 1], [0, 0, 1, -1]])
+  @parameterized.parameters(
+      # Periodic BC
+      dict(
+          offset=(0,),
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          expected=[[-2, 1, 0, 1], [1, -2, 1, 0], [0, 1, -2, 1], [1, 0, 1,
+                                                                  -2]]),
+      dict(
+          offset=(0.5,),
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          expected=[[-2, 1, 0, 1], [1, -2, 1, 0], [0, 1, -2, 1], [1, 0, 1,
+                                                                  -2]]),
+      dict(
+          offset=(1.,),
+          bc_types=((BCType.PERIODIC, BCType.PERIODIC),),
+          expected=[[-2, 1, 0, 1], [1, -2, 1, 0], [0, 1, -2, 1], [1, 0, 1,
+                                                                  -2]]),
+      # Dirichlet BC
+      dict(
+          offset=(0,),
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          expected=[[-2, 1, 0], [1, -2, 1], [0, 1, -2]]),
+      dict(
+          offset=(0.5,),
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          expected=[[-3, 1, 0, 0], [1, -2, 1, 0], [0, 1, -2, 1], [0, 0, 1,
+                                                                  -3]]),
+      dict(
+          offset=(1.,),
+          bc_types=((BCType.DIRICHLET, BCType.DIRICHLET),),
+          expected=[[-2, 1, 0], [1, -2, 1], [0, 1, -2]]),
+      # Neumann BC
+      dict(
+          offset=(0.5,),
+          bc_types=((BCType.NEUMANN, BCType.NEUMANN),),
+          expected=[[-1, 1, 0, 0], [1, -2, 1, 0], [0, 1, -2, 1], [0, 0, 1,
+                                                                  -1]]),
+      # Neumann-Dirichlet BC
+      dict(
+          offset=(0.5,),
+          bc_types=((BCType.NEUMANN, BCType.DIRICHLET),),
+          expected=[[-1, 1, 0, 0], [1, -2, 1, 0], [0, 1, -2, 1], [0, 0, 1,
+                                                                  -3]]),
+
+  )
+  def test_laplacian_matrix_w_boundaries(self, offset, bc_types, expected):
+    grid = grids.Grid((4,), step=(.5,))
+    bc = boundaries.HomogeneousBoundaryConditions(bc_types)
+    actual = array_utils.laplacian_matrix_w_boundaries(grid, offset, bc)
+    actual = np.squeeze(actual)
+    expected = 4.0 * np.array(expected)
     self.assertAllClose(expected, actual)
 
   @parameterized.parameters(

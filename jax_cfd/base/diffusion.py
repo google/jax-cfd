@@ -15,10 +15,10 @@
 # TODO(pnorgaard) Implement bicgstab for non-symmetric operators
 
 """Module for functionality related to diffusion."""
-from typing import Optional
+from typing import Optional, Tuple
 
+import jax.numpy as jnp
 import jax.scipy.sparse.linalg
-
 from jax_cfd.base import array_utils
 from jax_cfd.base import boundaries
 from jax_cfd.base import fast_diagonalization
@@ -57,6 +57,83 @@ def stable_time_step(viscosity: float, grid: grids.Grid) -> float:
   return dx ** 2 / (viscosity * 2 ** ndim)
 
 
+def _subtract_linear_part_dirichlet(
+    c_data: Array,
+    grid: grids.Grid,
+    axis: int,
+    offset: Tuple[float, float],
+    bc_values: Tuple[float, float],
+) -> Array:
+  """Transforms c_data such that c_data satisfies dirichlet boundary.
+
+  The function subtracts a linear function from c_data s.t. the returned
+  array has homogeneous dirichlet boundaries. Note that this assumes c_data has
+  constant dirichlet boundary values.
+
+  Args:
+    c_data: right-hand-side of diffusion equation.
+    grid: grid object
+    axis: axis along which to impose boundary transformation
+    offset: offset of the right-hand-side
+    bc_values: boundary values along axis
+
+  Returns:
+    transformed right-hand-side
+  """
+
+  def _update_rhs_along_axis(arr_1d, linear_part):
+    arr_1d = arr_1d - linear_part
+    return arr_1d
+
+  lower_value, upper_value = bc_values
+  y = grid.mesh(offset)[axis][0]
+  one_d_grid = grids.Grid((grid.shape[axis],), domain=(grid.domain[axis],))
+  y_boundary = boundaries.dirichlet_boundary_conditions(ndim=1)
+  y = y_boundary.trim_boundary(grids.GridArray(y, (offset[axis],),
+                                               one_d_grid)).data
+  domain_length = (grid.domain[axis][1] - grid.domain[axis][0])
+  domain_start = grid.domain[axis][0]
+  linear_part = lower_value + (upper_value - lower_value) * (
+      y - domain_start) / domain_length
+  c_data = jnp.apply_along_axis(
+      _update_rhs_along_axis, axis, c_data, linear_part)
+  return c_data
+
+
+def _rhs_transform(
+    u: grids.GridArray,
+    bc: boundaries.BoundaryConditions,
+) -> Array:
+  """Transforms the RHS of diffusion equation.
+
+  In case of constant dirichlet boundary conditions for heat equation
+  the linear term is subtracted. See diffusion.solve_fast_diag.
+
+  Args:
+    u: a GridArray that solves ∇²x = ∇²u for x.
+    bc: specifies boundary of u.
+
+  Returns:
+    u' s.t. u = u' + w where u' has 0 dirichlet bc and w is linear.
+  """
+  if not isinstance(bc, boundaries.ConstantBoundaryConditions):
+    raise NotImplementedError(
+        f'transformation cannot be done for this {bc}.')
+  u_data = u.data
+  for axis in range(u.grid.ndim):
+    for i, _ in enumerate(['lower', 'upper']):  # lower and upper boundary
+      if bc.types[axis][i] == boundaries.BCType.DIRICHLET:
+        bc_values = [0., 0.]
+        bc_values[i] = bc.bc_values[axis][i]
+        u_data = _subtract_linear_part_dirichlet(u_data, u.grid, axis, u.offset,
+                                                 bc_values)
+      elif bc.types[axis][i] == boundaries.BCType.NEUMANN:
+        if any(bc.bc_values[axis]):
+          raise NotImplementedError(
+              'transformation is not implemented for inhomogeneous Neumann bc.')
+  return u_data
+
+
 def solve_cg(v: GridVariableVector,
              nu: float,
              dt: float,
@@ -86,30 +163,50 @@ def solve_cg(v: GridVariableVector,
   return tuple(grids.GridVariable(solve_component(u), u.bc) for u in v)
 
 
-def solve_fast_diag(v: GridVariableVector,
-                    nu: float,
-                    dt: float,
-                    implementation: Optional[str] = None) -> GridVariableVector:
+def solve_fast_diag(
+    v: GridVariableVector,
+    nu: float,
+    dt: float,
+    implementation: Optional[str] = None,
+) -> GridVariableVector:
   """Solve for diffusion using the fast diagonalization approach."""
   # We reuse eigenvectors from the Laplacian and transform the eigenvalues
   # because this is better conditioned than directly diagonalizing 1 - ν Δt ∇²
   # when ν Δt is small.
-  if not boundaries.has_all_periodic_boundary_conditions(*v):
-    raise ValueError('solve_fast_diag() expects periodic BC')
-  grid = grids.consistent_grid(*v)
-  laplacians = list(map(array_utils.laplacian_matrix, grid.shape, grid.step))
-
-  # Transform the eigenvalues to implement (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²)
   def func(x):
     dt_nu_x = (dt * nu) * x
     return dt_nu_x / (1 - dt_nu_x)
 
-  # Note: this assumes that each velocity field has the same shape and dtype.
-  op = fast_diagonalization.transform(
-      func, laplacians, v[0].dtype,
-      hermitian=True, circulant=True, implementation=implementation)
-
-  # Compute (1 - ν Δt ∇²)⁻¹ u as u + (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²) u, for less error
-  # when ν Δt is small.
-  return tuple(grids.GridVariable(u.array + grids.applied(op)(u.array), u.bc)
-               for u in v)
+  # Compute (1 - ν Δt ∇²)⁻¹ u as u + (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²) u, for less
+  # error when ν Δt is small.
+  # If dirichlet bc are supplied: only works for dirichlet bc that are linear
+  # functions on the boundary. Then u = u' + w where u' has 0 dirichlet bc and
+  # w is linear. Then u + (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²) u = u +
+  # (1 - ν Δt ∇²)⁻¹(ν Δt ∇²)u'. The function _rhs_transform subtracts
+  # the linear part s.t. fast_diagonalization solves
+  # u + (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²) u'.
+  v_diffused = list()
+  if boundaries.has_all_periodic_boundary_conditions(*v):
+    circulant = True
+  else:
+    circulant = False
+    # only matmul implementation supports non-circulant matrices
+    implementation = 'matmul'
+  for u in v:
+    laplacians = array_utils.laplacian_matrix_w_boundaries(
+        u.grid, u.offset, u.bc)
+    op = fast_diagonalization.transform(
+        func,
+        laplacians,
+        v[0].dtype,
+        hermitian=True,
+        circulant=circulant,
+        implementation=implementation)
+    u_interior = u.bc.trim_boundary(u.array)
+    u_interior_transformed = _rhs_transform(u_interior, u.bc)
+    u_dt_diffused = grids.GridArray(
+        op(u_interior_transformed), u_interior.offset, u_interior.grid)
+    u_diffused = u_interior + u_dt_diffused
+    u_diffused = u.bc.pad_and_impose_bc(u_diffused, offset_to_pad_to=u.offset)
+    v_diffused.append(u_diffused)
+  return tuple(v_diffused)

@@ -10,7 +10,7 @@ from jax import lax
 import jax.numpy as jnp
 from jax_cfd.ml import tiling
 import numpy as np
-import scipy
+import scipy.special
 
 Array = Union[np.ndarray, jnp.DeviceArray]
 

@@ -83,8 +83,7 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
   def shape(self) -> Tuple[int, ...]:
     return self.data.shape
 
-  _HANDLED_TYPES = (numbers.Number, np.ndarray, jnp.DeviceArray,
-                    jax.ShapedArray, jax.core.Tracer)
+  _HANDLED_TYPES = (numbers.Number, np.ndarray, jax.Array, jax.ShapedArray)
 
   def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     """Define arithmetic on GridArrays using NumPy's mixin."""

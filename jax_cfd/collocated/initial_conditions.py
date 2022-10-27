@@ -44,7 +44,7 @@ def _log_normal_pdf(x, mode, variance=.25):
 
 
 def _max_speed(v):
-  return jnp.linalg.norm([u.data for u in v], axis=0).max()
+  return jnp.linalg.norm(jnp.array([u.data for u in v]), axis=0).max()
 
 
 def filtered_velocity_field(

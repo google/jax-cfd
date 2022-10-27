@@ -43,7 +43,7 @@ class InitialConditionsTest(test_util.TestCase):
       self, seed, grid, maximum_velocity, peak_wavenumber):
     v = initial_conditions.filtered_velocity_field(
         jax.random.PRNGKey(seed), grid, maximum_velocity, peak_wavenumber)
-    actual_maximum_velocity = jnp.linalg.norm([u.data for u in v], axis=0).max()
+    actual_maximum_velocity = jnp.linalg.norm(jnp.array([u.data for u in v]), axis=0).max()
     max_divergence = fd.centered_divergence(v).data.max()
 
     # Assert that initial velocity is divergence free

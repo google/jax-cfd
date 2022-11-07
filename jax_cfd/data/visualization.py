@@ -61,7 +61,7 @@ def resize_image(
 def trajectory_to_images(
     trajectory: grids.Array,
     compute_norm_fn: NormFn = quantile_normalize_fn,
-    cmap: mpl.colors.ListedColormap = sns.cm.icefire,
+    cmap: mpl.colors.ListedColormap = sns.cm.icefire,  # pytype: disable=module-attr
     longest_side: Optional[int] = None,
 ) -> List[Image.Image]:
   """Converts scalar trajectory with leading time axis into a list of images."""

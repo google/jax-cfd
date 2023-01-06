@@ -35,6 +35,11 @@ def periodic_grid_variable(data, offset, grid):
       bc=boundaries.periodic_boundary_conditions(grid.ndim))
 
 
+def nonperiodic_grid_variable(data, offset, grid):
+  return boundaries.periodic_and_dirichlet_boundary_conditions(
+      (1., 0.), grid.ndim).impose_bc(grids.GridArray(data, offset, grid))
+
+
 def zero_velocity_field(grid: grids.Grid) -> grids.GridVariableVector:
   """Returns an all-zero periodic velocity fields."""
   return tuple(periodic_grid_variable(jnp.zeros(grid.shape), o, grid)
@@ -113,6 +118,19 @@ class SubgridModelsTest(test_util.TestCase):
     self.assertLen(acceleration, 2)
     self.assertAllClose(acceleration[0], v[0].array)
     self.assertAllClose(acceleration[1], v[1].array)
+
+  def implicit_evm_solve_with_diffusion_nonperiodic(self):
+    grid = grids.Grid((3, 3))
+    v = (
+        nonperiodic_grid_variable(jnp.zeros(grid.shape), (0.5, 0.5), grid),
+        nonperiodic_grid_variable(jnp.zeros(grid.shape), (0.5, 0.5), grid))
+    viscosity_fn = functools.partial(
+        subgrid_models.smagorinsky_viscosity, dt=1.0, cs=0.0)
+    acceleration = subgrid_models.evm_model(v, viscosity_fn)
+    v_diffused = subgrid_models.implicit_evm_solve_with_diffusion(
+        v, 1., 1., acceleration)
+    self.assertAllClose(v_diffused[0] - fd.laplacian(v_diffused[0]), v[0].array)
+    self.assertAllClose(v_diffused[1] - fd.laplacian(v_diffused[1]), v[1].array)
 
   @parameterized.named_parameters(
       dict(

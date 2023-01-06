@@ -57,10 +57,11 @@ def stable_time_step(viscosity: float, grid: grids.Grid) -> float:
   return dx ** 2 / (viscosity * 2 ** ndim)
 
 
-def _subtract_linear_part_dirichlet(
+def _add_or_subtract_linear_part_dirichlet(
     c_data: Array,
     grid: grids.Grid,
     axis: int,
+    subtract: bool,
     offset: Tuple[float, float],
     bc_values: Tuple[float, float],
 ) -> Array:
@@ -74,6 +75,7 @@ def _subtract_linear_part_dirichlet(
     c_data: right-hand-side of diffusion equation.
     grid: grid object
     axis: axis along which to impose boundary transformation
+    subtract: if the linear part needs to be added or subtracted.
     offset: offset of the right-hand-side
     bc_values: boundary values along axis
 
@@ -82,15 +84,16 @@ def _subtract_linear_part_dirichlet(
   """
 
   def _update_rhs_along_axis(arr_1d, linear_part):
-    arr_1d = arr_1d - linear_part
+    if subtract:
+      linear_part = - linear_part
+    arr_1d = arr_1d + linear_part
     return arr_1d
 
   lower_value, upper_value = bc_values
   y = grid.mesh(offset)[axis][0]
-  one_d_grid = grids.Grid((grid.shape[axis],), domain=(grid.domain[axis],))
-  y_boundary = boundaries.dirichlet_boundary_conditions(ndim=1)
-  y = y_boundary.trim_boundary(grids.GridArray(y, (offset[axis],),
-                                               one_d_grid)).data
+  if grid.ndim == 3:
+    y = y[0]
+  # TODO(ayyaalieva): coincide the two
   domain_length = (grid.domain[axis][1] - grid.domain[axis][0])
   domain_start = grid.domain[axis][0]
   linear_part = lower_value + (upper_value - lower_value) * (
@@ -100,10 +103,67 @@ def _subtract_linear_part_dirichlet(
   return c_data
 
 
-def _rhs_transform(
+def _subtract_linear_part_dirichlet(
+    c_data: Array,
+    grid: grids.Grid,
+    axis: int,
+    offset: Tuple[float, float],
+    bc_values: Tuple[float, float],
+) -> Array:
+  """Wrapper for _add_or_subtract_linear_part_dirichlet.
+
+  Args:
+    c_data: right-hand-side of diffusion equation.
+    grid: grid object
+    axis: axis along which to impose boundary transformation
+    offset: offset of the right-hand-side
+    bc_values: boundary values along axis
+
+  Returns:
+    transformed right-hand-side
+  """
+  return _add_or_subtract_linear_part_dirichlet(
+      c_data,
+      grid,
+      axis,
+      True,
+      offset,
+      bc_values)
+
+
+def _add_linear_part_dirichlet(
+    c_data: Array,
+    grid: grids.Grid,
+    axis: int,
+    offset: Tuple[float, float],
+    bc_values: Tuple[float, float],
+) -> Array:
+  """Wrapper for _add_or_subtract_linear_part_dirichlet.
+
+  Args:
+    c_data: right-hand-side of diffusion equation.
+    grid: grid object
+    axis: axis along which to impose boundary transformation
+    offset: offset of the right-hand-side
+    bc_values: boundary values along axis
+
+  Returns:
+    transformed right-hand-side
+  """
+  return _add_or_subtract_linear_part_dirichlet(
+      c_data,
+      grid,
+      axis,
+      False,
+      offset,
+      bc_values)
+
+
+def rhs_transform(
     u: grids.GridArray,
     bc: boundaries.BoundaryConditions,
-) -> Array:
+    subtract_linear_part: bool = True,
+) -> grids.GridArray:
   """Transforms the RHS of diffusion equation.
 
   In case of constant dirichlet boundary conditions for heat equation
@@ -112,6 +172,7 @@ def _rhs_transform(
   Args:
     u: a GridArray that solves ∇²x = ∇²u for x.
     bc: specifies boundary of u.
+    subtract_linear_part: if True, linear part is subtracted from rhs.
 
   Returns:
     u' s.t. u = u' + w where u' has 0 dirichlet bc and w is linear.
@@ -125,13 +186,14 @@ def _rhs_transform(
       if bc.types[axis][i] == boundaries.BCType.DIRICHLET:
         bc_values = [0., 0.]
         bc_values[i] = bc.bc_values[axis][i]
-        u_data = _subtract_linear_part_dirichlet(u_data, u.grid, axis, u.offset,
-                                                 bc_values)
+        u_data = _add_or_subtract_linear_part_dirichlet(u_data, u.grid, axis,
+                                                        subtract_linear_part,
+                                                        u.offset, bc_values)
       elif bc.types[axis][i] == boundaries.BCType.NEUMANN:
         if any(bc.bc_values[axis]):
           raise NotImplementedError(
               'transformation is not implemented for inhomogeneous Neumann bc.')
-  return u_data
+  return grids.GridArray(u_data, u.offset, u.grid)
 
 
 def solve_cg(v: GridVariableVector,
@@ -182,7 +244,7 @@ def solve_fast_diag(
   # If dirichlet bc are supplied: only works for dirichlet bc that are linear
   # functions on the boundary. Then u = u' + w where u' has 0 dirichlet bc and
   # w is linear. Then u + (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²) u = u +
-  # (1 - ν Δt ∇²)⁻¹(ν Δt ∇²)u'. The function _rhs_transform subtracts
+  # (1 - ν Δt ∇²)⁻¹(ν Δt ∇²)u'. The function rhs_transform subtracts
   # the linear part s.t. fast_diagonalization solves
   # u + (1 - ν Δt ∇²)⁻¹ (ν Δt ∇²) u'.
   v_diffused = list()
@@ -203,7 +265,7 @@ def solve_fast_diag(
         circulant=circulant,
         implementation=implementation)
     u_interior = u.bc.trim_boundary(u.array)
-    u_interior_transformed = _rhs_transform(u_interior, u.bc)
+    u_interior_transformed = rhs_transform(u_interior, u.bc)
     u_dt_diffused = grids.GridArray(
         op(u_interior_transformed), u_interior.offset, u_interior.grid)
     u_diffused = u_interior + u_dt_diffused

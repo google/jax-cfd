@@ -127,9 +127,12 @@ def forward_difference(u, axis=None):
 def laplacian(u: GridVariable) -> GridArray:
   """Approximates the Laplacian of `u`."""
   scales = np.square(1 / np.array(u.grid.step, dtype=u.dtype))
-  result = -2 * u.array * np.sum(scales)
+  bc = u.bc
+  u = u.trim_boundary()
+  result = u * 0
   for axis in range(u.grid.ndim):
-    result += stencil_sum(u.shift(-1, axis), u.shift(+1, axis)) * scales[axis]
+    result += stencil_sum(bc.shift(u, -1, axis), -2 * u, bc.shift(
+        u, + 1, axis)) * scales[axis]
   return result
 
 

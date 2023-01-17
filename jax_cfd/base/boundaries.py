@@ -71,7 +71,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
       u: GridArray,
       offset: int,
       axis: int,
-      mode: Optional[str] = None,
+      mode: Optional[str] = Padding.EXTEND,
   ) -> GridArray:
     """Shift an GridArray by `offset`.
 
@@ -125,7 +125,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
       u: GridArray,
       width: int,
       axis: int,
-      mode: Optional[str] = None,
+      mode: Optional[str] = Padding.EXTEND,
   ) -> GridArray:
     """Pad a GridArray.
 
@@ -145,12 +145,12 @@ class ConstantBoundaryConditions(BoundaryConditions):
         Extend extends the last well-defined array value past the boundary.
         Mode is only needed if the padding extends past array values that are
           defined by the physics. In these cases, no mode is necessary. This
-          also means periodic boundaries do not require a mode.
+          also means periodic boundaries do not require a mode and can use
+          mode=None.
 
     Returns:
       Padded array, elongated along the indicated axis.
     """
-
     def make_padding(width):
       if width < 0:  # pad lower boundary
         bc_type = self.types[axis][0]
@@ -380,7 +380,8 @@ class ConstantBoundaryConditions(BoundaryConditions):
           u: GridArray,
           width: Union[Tuple[int, int], int],
           axis: int,
-          mode: Optional[str] = None,) -> GridArray:
+          mode: Optional[str] = Padding.EXTEND,
+          ) -> GridArray:
     """Wrapper for _pad.
 
     Args:
@@ -407,7 +408,8 @@ class ConstantBoundaryConditions(BoundaryConditions):
   def pad_all(self,
               u: GridArray,
               width: Tuple[Tuple[int, int], ...],
-              mode: Optional[str] = None,) -> GridArray:
+              mode: Optional[str] = Padding.EXTEND
+              ) -> GridArray:
     """Pads along all axes with pad width specified by width tuple.
 
     Args:
@@ -465,8 +467,9 @@ class ConstantBoundaryConditions(BoundaryConditions):
   def pad_and_impose_bc(
       self,
       u: grids.GridArray,
-      offset_to_pad_to: Optional[Tuple[float,
-                                       ...]] = None) -> grids.GridVariable:
+      offset_to_pad_to: Optional[Tuple[float,...]] = None,
+      mode: Optional[str] = Padding.EXTEND,
+      ) -> grids.GridVariable:
     """Returns GridVariable with correct boundary values.
 
     Some grid points of GridArray might coincide with boundary. This ensures
@@ -477,6 +480,9 @@ class ConstantBoundaryConditions(BoundaryConditions):
       offset_to_pad_to: a Tuple of desired offset to pad to. Note that if the
         function is given just an interior array in dirichlet case, it can pad
         to both 0 offset and 1 offset.
+      mode: type of padding to use in non-periodic case.
+        Mirror mirrors the flow across the boundary.
+        Extend extends the last well-defined value past the boundary.
 
     Returns:
       A GridVariable that has correct boundary values.
@@ -488,9 +494,9 @@ class ConstantBoundaryConditions(BoundaryConditions):
       if self.types[axis][0] == BCType.DIRICHLET and np.isclose(
           u.offset[axis], 1.0):
         if np.isclose(offset_to_pad_to[axis], 1.0):
-          u = self._pad(u, 1, axis)
+          u = self._pad(u, 1, axis, mode=mode)
         elif np.isclose(offset_to_pad_to[axis], 0.0):
-          u = self._pad(u, -1, axis)
+          u = self._pad(u, -1, axis, mode=mode)
     return grids.GridVariable(u, self)
 
   def impose_bc(self, u: grids.GridArray) -> grids.GridVariable:

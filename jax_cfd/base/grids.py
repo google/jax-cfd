@@ -151,7 +151,7 @@ class BoundaryConditions:
       u: GridArray,
       offset: int,
       axis: int,
-      mode: Optional[str] = None,
+      mode: Optional[str] = 'extend',
   ) -> GridArray:
     """Shift an GridArray by `offset`.
 
@@ -192,7 +192,7 @@ class BoundaryConditions:
       u: GridArray,
       width: int,
       axis: int,
-      mode: Optional[str] = None,
+      mode: Optional[str] = 'extend',
   ) -> GridArray:
     """Returns Arrays padded according to boundary condition.
 
@@ -331,7 +331,7 @@ class GridVariable:
       self,
       offset: int,
       axis: int,
-      mode: Optional[str] = None,
+      mode: Optional[str] = 'extend',
   ) -> GridArray:
     """Shift this GridVariable by `offset`.
 

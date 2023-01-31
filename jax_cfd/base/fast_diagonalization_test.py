@@ -49,7 +49,7 @@ class FastDiagonalizationTest(test_util.TestCase):
     a = rs.randn(3, 3)
     a = jnp.array(a + a.T, np.float32)
     b = rs.randn(3).astype(np.float32)
-    a_inv = fast_diagonalization.psuedoinverse(
+    a_inv = fast_diagonalization.pseudoinverse(
         [a], b.dtype, hermitian=True, implementation='matmul')
     actual = a_inv(b)
     expected = jnp.linalg.solve(a, b)
@@ -60,7 +60,7 @@ class FastDiagonalizationTest(test_util.TestCase):
     rs = np.random.RandomState(0)
     a = jnp.array(scipy.linalg.circulant(rs.randn(4)), np.float32)
     b = rs.randn(4).astype(np.float32)
-    a_inv = fast_diagonalization.psuedoinverse(
+    a_inv = fast_diagonalization.pseudoinverse(
         [a], b.dtype, circulant=True, implementation=implementation)
     actual = a_inv(b)
     expected = jnp.linalg.solve(a, b)
@@ -75,7 +75,7 @@ class FastDiagonalizationTest(test_util.TestCase):
     rs = np.random.RandomState(0)
     b = rs.randn(*(2, 4, 6)[:ndim]).astype(np.float32)
     ops = [np.eye(2), 2 * np.eye(4), 3 * np.eye(6)]
-    a_inv = fast_diagonalization.psuedoinverse(
+    a_inv = fast_diagonalization.pseudoinverse(
         ops[:ndim], b.dtype, hermitian=True, circulant=True,
         implementation=implementation)
     actual = a_inv(b)
@@ -88,7 +88,7 @@ class FastDiagonalizationTest(test_util.TestCase):
     a = jnp.array([[-2, 1, 0, 1], [1, -2, 1, 0], [0, 1, -2, 1], [1, 0, 1, -2]],
                   np.float32)
     b = rs.randn(4).astype(np.float32)
-    a_inv = fast_diagonalization.psuedoinverse(
+    a_inv = fast_diagonalization.pseudoinverse(
         [a], a.dtype, hermitian=True, circulant=True,
         implementation=implementation)
     x = a_inv(b)
@@ -107,7 +107,7 @@ class FastDiagonalizationTest(test_util.TestCase):
 
     b = np.random.RandomState(0).randn(4, 3).astype(np.float32)
     operators = [a1, a2]
-    a_inv = fast_diagonalization.psuedoinverse(
+    a_inv = fast_diagonalization.pseudoinverse(
         operators, b.dtype, hermitian=True)
     x = a_inv(b)
     actual = apply_operators(operators, x)
@@ -122,7 +122,7 @@ class FastDiagonalizationTest(test_util.TestCase):
     a2 = array_utils.laplacian_matrix(size=6, step=1.0)
     b = np.random.RandomState(0).randn(4, 6).astype(np.float32)
     operators = [a1, a2]
-    a_inv = fast_diagonalization.psuedoinverse(
+    a_inv = fast_diagonalization.pseudoinverse(
         operators, b.dtype, circulant=True, implementation=implementation)
     x = a_inv(b)
     actual = apply_operators(operators, x)

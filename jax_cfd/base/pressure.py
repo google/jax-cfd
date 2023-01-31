@@ -148,7 +148,7 @@ def solve_fast_diag(
   laplacians = array_utils.laplacian_matrix_w_boundaries(
       rhs.grid, rhs.offset, pressure_bc)
   rhs_transformed = _rhs_transform(rhs, pressure_bc)
-  pinv = fast_diagonalization.psuedoinverse(
+  pinv = fast_diagonalization.pseudoinverse(
       laplacians,
       rhs_transformed.dtype,
       hermitian=True,

@@ -47,7 +47,7 @@ class PressureTest(test_util.TestCase):
     a = array_utils.laplacian_matrix_w_boundaries(grid, offset, bc)
     b_transformed = pressure._rhs_transform(
         bc.trim_boundary(b), bc)
-    a_inv = fast_diagonalization.psuedoinverse(
+    a_inv = fast_diagonalization.pseudoinverse(
         a, b.dtype, hermitian=True, circulant=False, implementation='matmul')
     x = a_inv(b_transformed)
     x = grids.GridArray(x, b.offset, grid)

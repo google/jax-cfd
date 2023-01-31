@@ -218,7 +218,7 @@ def _circulant_rfft_transform(
   return apply
 
 
-def psuedoinverse(
+def pseudoinverse(
     operators: Sequence[np.ndarray],
     dtype: np.dtype,
     *,

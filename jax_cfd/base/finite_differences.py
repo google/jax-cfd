@@ -76,7 +76,7 @@ def central_difference(u, axis=None):
   if axis is None:
     axis = range(u.grid.ndim)
   if not isinstance(axis, int):
-    return tuple(central_difference(u, a) for a in axis)
+    return tuple(central_difference(u, a) for a in axis)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
   diff = stencil_sum(u.shift(+1, axis), -u.shift(-1, axis))
   return diff / (2 * u.grid.step[axis])
 
@@ -97,7 +97,7 @@ def backward_difference(u, axis=None):
   if axis is None:
     axis = range(u.grid.ndim)
   if not isinstance(axis, int):
-    return tuple(backward_difference(u, a) for a in axis)
+    return tuple(backward_difference(u, a) for a in axis)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
   diff = stencil_sum(u.array, -u.shift(-1, axis))
   return diff / u.grid.step[axis]
 
@@ -119,7 +119,7 @@ def forward_difference(u, axis=None):
   if axis is None:
     axis = range(u.grid.ndim)
   if not isinstance(axis, int):
-    return tuple(forward_difference(u, a) for a in axis)
+    return tuple(forward_difference(u, a) for a in axis)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
   diff = stencil_sum(u.shift(+1, axis), -u.array)
   return diff / u.grid.step[axis]
 
@@ -166,7 +166,7 @@ def gradient_tensor(v: Sequence[GridVariable]) -> GridArrayTensor:
 def gradient_tensor(v):
   """Approximates the cell-centered gradient of `v`."""
   if not isinstance(v, GridVariable):
-    return GridArrayTensor(np.stack([gradient_tensor(u) for u in v], axis=-1))
+    return GridArrayTensor(np.stack([gradient_tensor(u) for u in v], axis=-1))  # pytype: disable=wrong-arg-types  # always-use-return-annotations
   grad = []
   for axis in range(v.grid.ndim):
     offset = v.offset[axis]

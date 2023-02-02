@@ -93,7 +93,7 @@ def learned_scalar_viscosity(
         data=jnp.squeeze(predicted_viscosity, -1),
         offset=grid.cell_center, grid=grid)
     interpolated_viscosities = {
-        offset: interpolate(predicted_viscosity, offset, v, dt)
+        offset: interpolate(predicted_viscosity, offset, v, dt)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
         for offset in unique_offsets}
     viscosities = [interpolated_viscosities[offset] for offset in s_ij_offsets]
     tree_def = jax.tree_util.tree_structure(s_ij)
@@ -155,7 +155,7 @@ def learned_scalar_viscosity_from_gradients(
         data=jnp.squeeze(predicted_viscosity, -1),
         offset=grid.cell_center, grid=grid)
     interpolated_viscosities = {
-        offset: interpolate(predicted_viscosity, offset, v, dt)
+        offset: interpolate(predicted_viscosity, offset, v, dt)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
         for offset in unique_offsets}
     viscosities = [interpolated_viscosities[offset] for offset in s_ij_offsets]
     tree_def = jax.tree_util.tree_structure(s_ij)

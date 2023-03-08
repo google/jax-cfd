@@ -81,7 +81,7 @@ def fixed_scale_gridvar(
 ) ->Array:
   """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
   del axes  # unused.
-  return tuple(x.bc.impose_bc(x.array * rescaled_one) for x in inputs)
+  return tuple(x.bc.impose_bc(x.array * rescaled_one) for x in inputs)  # pytype: disable=bad-return-type  # jax-devicearray
 
 
 @gin.register

@@ -16,8 +16,8 @@
 
 from typing import Callable, Union
 
-import jax.numpy as jnp
+import jax
 import numpy as np
 
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 StepFn = Callable[[Array], Array]

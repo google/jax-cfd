@@ -29,7 +29,7 @@ import numpy as np
 # Specifying the full signatures of Callable would get somewhat onerous
 # pylint: disable=g-bare-generic
 
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
 GridVariable = grids.GridVariable

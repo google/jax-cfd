@@ -15,7 +15,7 @@ from jax_cfd.ml import physics_specifications
 from jax_cfd.ml import towers
 import numpy as np
 
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
 GridVariableVector = grids.GridVariableVector

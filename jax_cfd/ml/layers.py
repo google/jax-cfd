@@ -17,7 +17,7 @@ from jax_cfd.ml import tiling
 import numpy as np
 import scipy.linalg
 
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 IntOrSequence = Union[int, Sequence[int]]
 
 

@@ -22,7 +22,7 @@ import jax.numpy as jnp
 import numpy as np
 
 
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 
 
 def transform(

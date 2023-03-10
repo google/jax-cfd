@@ -12,7 +12,7 @@ from jax_cfd.ml import tiling
 import numpy as np
 import scipy.special
 
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 
 
 class Method(enum.Enum):

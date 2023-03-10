@@ -26,7 +26,7 @@ import numpy as np
 
 # TODO(jamieas): consider moving common types to a separate module.
 # TODO(shoyer): consider adding jnp.ndarray?
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 IntOrSequence = Union[int, Sequence[int]]
 
 # There is currently no good way to indicate a jax "pytree" with arrays at its

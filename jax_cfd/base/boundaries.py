@@ -17,6 +17,7 @@ import dataclasses
 import math
 from typing import Optional, Sequence, Tuple, Union
 
+import jax
 from jax import lax
 import jax.numpy as jnp
 from jax_cfd.base import grids
@@ -26,7 +27,7 @@ BoundaryConditions = grids.BoundaryConditions
 GridArray = grids.GridArray
 GridVariable = grids.GridVariable
 GridVariableVector = grids.GridVariableVector
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 
 
 class BCType:

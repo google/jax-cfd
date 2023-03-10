@@ -22,7 +22,7 @@ from jax_cfd.base import boundaries
 from jax_cfd.base import grids
 import numpy as np
 
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 GridArray = grids.GridArray
 GridArrayVector = grids.GridArrayVector
 GridVariable = grids.GridVariable
@@ -311,7 +311,7 @@ def point_interpolation(
     order: int = 1,
     mode: str = 'nearest',
     cval: float = 0.0,
-) -> jnp.DeviceArray:
+) -> jax.Array:
   """Interpolate `c` at `point`.
 
   Args:

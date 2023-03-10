@@ -28,7 +28,7 @@ import scipy.linalg
 # information about PyTrees and https://github.com/google/jax/issues/3340 for
 # discussion of this issue.
 PyTree = Any
-Array = Union[np.ndarray, jnp.DeviceArray]
+Array = Union[np.ndarray, jax.Array]
 
 
 def _normalize_axis(axis: int, ndim: int) -> int:
@@ -350,7 +350,7 @@ def interp1d(
     axis: int = -1,
     fill_value: Union[str, Array] = jnp.nan,
     assume_sorted: bool = True,
-) -> Callable[[Array], jnp.DeviceArray]:
+) -> Callable[[Array], jax.Array]:
   """Build an interpolation function to approximate `y = f(x)`.
 
   x and y are arrays of values used to approximate some function f: y = f(x).
@@ -422,7 +422,7 @@ def interp1d(
 
   axis = _normalize_axis(axis, ndim=y.ndim)
 
-  def interp_func(x_new: jnp.DeviceArray) -> jnp.DeviceArray:
+  def interp_func(x_new: jax.Array) -> jax.Array:
     """Implementation of the interpolation function."""
     x_new = jnp.asarray(x_new)
 

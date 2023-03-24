@@ -333,7 +333,7 @@ def periodic_convolution(
 # Subexpression Elimination (CSE) pass can consolidate calls to extract patches
 # on the same array.
 @functools.lru_cache()
-def _patch_kernel(
+def _patch_kernel(  # pytype: disable=annotation-type-mismatch  # numpy-scalars
     patch_shape: Tuple[int, ...],
     dtype: np.dtype = np.float32
 ) -> np.ndarray:

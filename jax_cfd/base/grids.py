@@ -20,6 +20,7 @@ import operator
 from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import jax
+from jax import core
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 import numpy as np
@@ -83,7 +84,7 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
   def shape(self) -> Tuple[int, ...]:
     return self.data.shape
 
-  _HANDLED_TYPES = (numbers.Number, np.ndarray, jax.Array, jax.ShapedArray)
+  _HANDLED_TYPES = (numbers.Number, np.ndarray, jax.Array, core.ShapedArray)
 
   def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     """Define arithmetic on GridArrays using NumPy's mixin."""

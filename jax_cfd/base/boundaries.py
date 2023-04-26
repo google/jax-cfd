@@ -427,7 +427,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
       u = self.pad(u, width[axis], axis, mode=mode)
     return u
 
-  def values(
+  def values(  # pytype: disable=signature-mismatch  # overriding-parameter-count-checks
       self, axis: int,
       grid: grids.Grid) -> Tuple[Optional[jnp.ndarray], Optional[jnp.ndarray]]:
     """Returns boundary values on the grid along axis.

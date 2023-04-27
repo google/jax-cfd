@@ -3,6 +3,7 @@
 import functools
 from typing import Any, Callable, List, Optional, Tuple, Union
 import gin
+import jax
 import haiku as hk
 
 from jax_cfd.ml import layers
@@ -263,7 +264,7 @@ def forward_flex_tower_factory(
     return hk.Sequential(components)(inputs)
 
   module = hk.to_module(forward_pass)(name=name)
-  return hk.experimental.named_call(module, name=name)
+  return jax.named_call(module, name=name)
 
 
 @gin.register
@@ -288,7 +289,7 @@ def residual_block_tower_factory(
     return output_scale_fn(last_block(inputs), list(range(ndim)))
 
   module = hk.to_module(forward_pass)(name=name)
-  return hk.experimental.named_call(module, name=name)
+  return jax.named_call(module, name=name)
 
 
 @gin.register

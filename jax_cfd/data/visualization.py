@@ -50,7 +50,7 @@ def quantile_normalize_fn(
 def resize_image(
     image: Image.Image,
     longest_side: int,
-    resample: int = Image.NEAREST,
+    resample: int = Image.Resampling.NEAREST,
 ) -> Image.Image:
   """Resize an image, preserving its aspect ratio."""
   resize_factor = longest_side / max(image.size)

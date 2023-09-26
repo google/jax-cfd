@@ -178,7 +178,7 @@ def vorticity_to_velocity(
   kx, ky = grid.rfft_mesh()
   two_pi_i = 2 * jnp.pi * 1j
   laplace = two_pi_i ** 2 * (abs(kx)**2 + abs(ky)**2)
-  laplace = laplace.at[0, 0].set(1)
+  laplace = laplace.at[0, 0].set(1)  # pytype: disable=attribute-error  # jnp-type
 
   def ret(vorticity_hat):
     psi_hat = -1 / laplace * vorticity_hat

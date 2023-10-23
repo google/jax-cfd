@@ -16,7 +16,7 @@
 
 from absl.testing import parameterized
 
-from jax.config import config
+from jax import config
 from jax_cfd.base import grids
 import numpy as np
 

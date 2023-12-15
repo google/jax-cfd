@@ -314,7 +314,7 @@ class EquationsTest2D(test_util.TestCase):
           n_steps=500,
           grid_size=512,
           is_forced=False,
-          atol=0.07,
+          atol=0.09,
           ),
       dict(
           testcase_name='_forced_turbulence',

@@ -81,6 +81,7 @@ GitHub or by email) to coordinate before starting significant work.
 ## Projects using JAX-CFD
 
 - [Variational Data Assimilation with a Learned Inverse Observation Operator](https://github.com/googleinterns/invobs-data-assimilation)
+- [A Neural PDE Solver with Temporal Stencil Modeling](https://github.com/Edward-Sun/TSM-PDE)
 
 ## Other awesome projects
 

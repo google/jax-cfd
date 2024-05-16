@@ -196,14 +196,14 @@ def add_noise_to_input_frame(
   """
   del kwargs  # unused.
   time_zero_slice = array_utils.slice_along_axis(batch, 1, 0)
-  shapes = jax.tree_map(lambda x: x.shape, time_zero_slice)
-  rngs = jax.random.split(rng, len(jax.tree_leaves(time_zero_slice)))
+  shapes = jax.tree.map(lambda x: x.shape, time_zero_slice)
+  rngs = jax.random.split(rng, len(jax.tree.leaves(time_zero_slice)))
   # TODO(dkochkov) add `split_like` method to `array_utils.py`.
-  rngs = jax.tree_unflatten(jax.tree_structure(time_zero_slice), rngs)
+  rngs = jax.tree.unflatten(jax.tree.structure(time_zero_slice), rngs)
   noise_fn = lambda key, s: scale * jax.random.truncated_normal(key, -2., 2., s)
-  noise = jax.tree_map(noise_fn, rngs, shapes)
+  noise = jax.tree.map(noise_fn, rngs, shapes)
   add_noise_fn = lambda x, n: x.at[:, 0, ...].add(n)
-  return jax.tree_map(add_noise_fn, batch, noise)
+  return jax.tree.map(add_noise_fn, batch, noise)
 
 
 def preprocess(

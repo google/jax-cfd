@@ -184,7 +184,7 @@ class MirrorConvGeneral(hk.Module):
   def __call__(self, inputs):
     input_data = tuple(self._expand_var(var) for var in inputs)
     input_data = array_utils.concat_along_axis(
-        jax.tree_leaves(input_data), axis=-1)
+        jax.tree.leaves(input_data), axis=-1)
     outputs = self._conv_module(input_data)
     outputs = array_utils.split_axis(outputs, -1)
     outputs = tuple(

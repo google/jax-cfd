@@ -29,8 +29,8 @@ class GridArrayTest(test_util.TestCase):
 
   def test_tree_util(self):
     array = grids.GridArray(jnp.arange(3), offset=(0,), grid=grids.Grid((3,)))
-    flat, treedef = jax.tree_flatten(array)
-    roundtripped = jax.tree_unflatten(treedef, flat)
+    flat, treedef = jax.tree.flatten(array)
+    roundtripped = jax.tree.unflatten(treedef, flat)
     self.assertArrayEqual(array, roundtripped)
 
   def test_consistent_offset(self):

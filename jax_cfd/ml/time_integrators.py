@@ -28,7 +28,7 @@ def euler_integrator(
   """
   def _single_step(state, _):
     deriv = derivative_module(state)
-    next_state = jax.tree_map(lambda x, dxdt: x + dt * dxdt, state, deriv)
+    next_state = jax.tree.map(lambda x, dxdt: x + dt * dxdt, state, deriv)
     return next_state, next_state
 
   return hk.scan(_single_step, initial_state, None, num_steps)

@@ -134,16 +134,16 @@ class ArrayUtilsTest(test_util.TestCase):
     """Tests that split_along_axis, concat_along_axis return expected shapes."""
     split_a, split_b = array_utils.split_along_axis(pytree, idx, axis, False)
     with self.subTest('split_shape'):
-      self.assertEqual(jax.tree_leaves(split_a)[0].shape[axis], idx)
+      self.assertEqual(jax.tree.leaves(split_a)[0].shape[axis], idx)
 
     reconstruction = array_utils.concat_along_axis([split_a, split_b], axis)
     with self.subTest('split_concat_roundtrip_structure'):
-      actual_tree_def = jax.tree_structure(reconstruction)
-      expected_tree_def = jax.tree_structure(pytree)
+      actual_tree_def = jax.tree.structure(reconstruction)
+      expected_tree_def = jax.tree.structure(pytree)
       self.assertSameStructure(actual_tree_def, expected_tree_def)
 
-    actual_values = jax.tree_leaves(reconstruction)
-    expected_values = jax.tree_leaves(pytree)
+    actual_values = jax.tree.leaves(reconstruction)
+    expected_values = jax.tree.leaves(pytree)
     with self.subTest('split_concat_roundtrip_values'):
       for actual, expected in zip(actual_values, expected_values):
         self.assertAllClose(actual, expected)
@@ -157,8 +157,8 @@ class ArrayUtilsTest(test_util.TestCase):
     with self.subTest('multiple_concat_shape'):
       arrays = [split_a, split_a, split_b, split_b]
       double_concat = array_utils.concat_along_axis(arrays, axis)
-      actual_shape = jax.tree_leaves(double_concat)[0].shape[axis]
-      expected_shape = jax.tree_leaves(pytree)[0].shape[axis] * 2
+      actual_shape = jax.tree.leaves(double_concat)[0].shape[axis]
+      expected_shape = jax.tree.leaves(pytree)[0].shape[axis] * 2
       self.assertEqual(actual_shape, expected_shape)
 
   @parameterized.parameters(
@@ -171,17 +171,17 @@ class ArrayUtilsTest(test_util.TestCase):
     with self.subTest('with_keep_dims'):
       splits = array_utils.split_axis(pytree, axis, keep_dims=True)
       get_expected_shape = lambda x: x.shape[:axis] + (1,) + x.shape[axis + 1:]
-      expected_shapes = jax.tree_map(get_expected_shape, pytree)
+      expected_shapes = jax.tree.map(get_expected_shape, pytree)
       for split in splits:
-        actual = jax.tree_map(lambda x: x.shape, split)
+        actual = jax.tree.map(lambda x: x.shape, split)
         self.assertEqual(expected_shapes, actual)
 
     with self.subTest('without_keep_dims'):
       splits = array_utils.split_axis(pytree, axis, keep_dims=False)
       get_expected_shape = lambda x: x.shape[:axis] + x.shape[axis + 1:]
-      expected_shapes = jax.tree_map(get_expected_shape, pytree)
+      expected_shapes = jax.tree.map(get_expected_shape, pytree)
       for split in splits:
-        actual = jax.tree_map(lambda x: x.shape, split)
+        actual = jax.tree.map(lambda x: x.shape, split)
         self.assertEqual(expected_shapes, actual)
 
 

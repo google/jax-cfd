@@ -97,7 +97,7 @@ def learned_scalar_viscosity(
         for offset in unique_offsets}
     viscosities = [interpolated_viscosities[offset] for offset in s_ij_offsets]
     tree_def = jax.tree_util.tree_structure(s_ij)
-    return jax.tree_unflatten(tree_def, [x.data for x in viscosities])
+    return jax.tree.unflatten(tree_def, [x.data for x in viscosities])
 
   return hk.to_module(viscosity_fn)()
 
@@ -159,7 +159,7 @@ def learned_scalar_viscosity_from_gradients(
         for offset in unique_offsets}
     viscosities = [interpolated_viscosities[offset] for offset in s_ij_offsets]
     tree_def = jax.tree_util.tree_structure(s_ij)
-    return jax.tree_unflatten(tree_def, [x.data for x in viscosities])
+    return jax.tree.unflatten(tree_def, [x.data for x in viscosities])
 
   return hk.to_module(viscosity_fn)()
 
@@ -205,7 +205,7 @@ def learned_tensor_viscosity(
         for offset, visc in zip(unique_offsets, viscosities)}
     viscosities = [viscosities_dict[offset] for offset in s_ij_offsets]
     tree_def = jax.tree_util.tree_structure(s_ij)
-    return jax.tree_unflatten(tree_def, viscosities)
+    return jax.tree.unflatten(tree_def, viscosities)
 
   return hk.to_module(viscosity_fn)()
 

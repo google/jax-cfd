@@ -579,7 +579,7 @@ class Grid:
   def center(self, v: PyTree) -> PyTree:
     """Places all arrays in the pytree `v` at the `Grid`'s cell center."""
     offset = self.cell_center
-    return jax.tree_map(lambda u: GridArray(u, offset, self), v)
+    return jax.tree.map(lambda u: GridArray(u, offset, self), v)
 
   def axes(self, offset: Optional[Sequence[float]] = None) -> Tuple[Array, ...]:
     """Returns a tuple of arrays containing the grid points along each axis.

@@ -140,7 +140,7 @@ def stack_aligned_field_with_neighbors(
 
   def process(inputs):
     inputs = tuple(jnp.expand_dims(x.data, axis=-1) for x in inputs)
-    array = array_utils.concat_along_axis(jax.tree_leaves(inputs), axis=-1)
+    array = array_utils.concat_along_axis(jax.tree.leaves(inputs), axis=-1)
     arrays = tuple(
         jnp.roll(array, *shift_and_axis) for shift_and_axis in shifts_and_axis)
     return array_utils.concat_along_axis(arrays, axis=-1)
@@ -159,7 +159,7 @@ def stack_aligned_field(
 
   def process(inputs):
     inputs = tuple(jnp.expand_dims(x.data, axis=-1) for x in inputs)
-    return array_utils.concat_along_axis(jax.tree_leaves(inputs), axis=-1)
+    return array_utils.concat_along_axis(jax.tree.leaves(inputs), axis=-1)
 
   return hk.to_module(process)()
 

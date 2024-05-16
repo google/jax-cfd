@@ -102,7 +102,7 @@ def slice_last_n_state_encoder(
   del grid, dt, physics_specs  # unused.
   def encode_fn(inputs):
     init_slice = array_utils.slice_along_axis(inputs, 0, slice(-n, None))
-    return jax.tree_map(lambda x: jnp.moveaxis(x, time_axis, -1), init_slice)
+    return jax.tree.map(lambda x: jnp.moveaxis(x, time_axis, -1), init_slice)
   return encode_fn
 
 
@@ -118,8 +118,8 @@ def stack_last_n_state_encoder(
   del grid, dt, physics_specs  # unused.
   def encode_fn(inputs):
     inputs = array_utils.slice_along_axis(inputs, 0, slice(-n, None))
-    inputs = jax.tree_map(lambda x: jnp.moveaxis(x, time_axis, -1), inputs)
-    return array_utils.concat_along_axis(jax.tree_leaves(inputs), axis=-1)
+    inputs = jax.tree.map(lambda x: jnp.moveaxis(x, time_axis, -1), inputs)
+    return array_utils.concat_along_axis(jax.tree.leaves(inputs), axis=-1)
 
   return encode_fn
 

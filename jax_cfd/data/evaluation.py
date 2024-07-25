@@ -279,7 +279,7 @@ def compute_summary_dataset(
     else:
       # if the trajectory goes to nan, it just reports a large number
       u_t_corr_sum = [
-          xarray.ones_like(u_x_corr_sum[0]).rename('autocorrelation') * np.infty
+          xarray.ones_like(u_x_corr_sum[0]).rename('autocorrelation') * np.inf
           for threshold in [0.5]
       ]
     energy_sum = [

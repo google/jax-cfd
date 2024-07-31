@@ -165,6 +165,13 @@ def _hermitian_matmul_transform(
   return apply
 
 
+def _cast(x, dtype):
+  if (np.issubdtype(x.dtype, np.complexfloating)
+      and not np.issubdtype(dtype, np.complexfloating)):
+    x = x.real
+  return x.astype(dtype)
+
+
 def _circulant_fft_transform(
     func: Callable[[Array], Array],
     operators: Sequence[np.ndarray],
@@ -184,7 +191,7 @@ def _circulant_fft_transform(
   def apply(rhs: Array) -> Array:
     if rhs.shape != shape:
       raise ValueError(f'rhs.shape={rhs.shape} does not match shape={shape}')
-    return jnp.fft.ifftn(diagonals * jnp.fft.fftn(rhs)).astype(dtype)
+    return _cast(jnp.fft.ifftn(diagonals * jnp.fft.fftn(rhs)), dtype)
 
   return apply
 
@@ -213,7 +220,7 @@ def _circulant_rfft_transform(
   def apply(rhs: Array) -> Array:
     if rhs.dtype != dtype:
       raise ValueError(f'rhs.dtype={rhs.dtype} does not match dtype={dtype}')
-    return jnp.fft.irfftn(diagonals * jnp.fft.rfftn(rhs)).astype(dtype)
+    return _cast(jnp.fft.irfftn(diagonals * jnp.fft.rfftn(rhs)), dtype)
 
   return apply
 

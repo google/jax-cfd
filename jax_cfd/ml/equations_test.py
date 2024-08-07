@@ -293,7 +293,4 @@ class MLModulesTest(test_util.TestCase):
 
 
 if __name__ == '__main__':
-  # Temporarily disable async dispatch on JAX CPU due to tsan error.
-  jax.config.update('jax_cpu_enable_async_dispatch', False)
-
   absltest.main()

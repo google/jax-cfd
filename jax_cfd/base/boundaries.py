@@ -525,7 +525,7 @@ class HomogeneousBoundaryConditions(ConstantBoundaryConditions):
   Example usage:
     grid = Grid((10, 10))
     array = GridArray(np.zeros((10, 10)), offset=(0.5, 0.5), grid)
-    bc = ConstantBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
+    bc = HomogeneousBoundaryConditions(((BCType.PERIODIC, BCType.PERIODIC),
                                         (BCType.DIRICHLET, BCType.DIRICHLET)))
     u = GridVariable(array, bc)
 

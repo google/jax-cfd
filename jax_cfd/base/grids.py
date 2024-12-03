@@ -18,9 +18,8 @@ import dataclasses
 import numbers
 import operator
 from typing import Any, Callable, Optional, Sequence, Tuple, Union
-
-import jax
 from jax import core
+import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 import numpy as np
@@ -36,6 +35,74 @@ IntOrSequence = Union[int, Sequence[int]]
 # discussion of this issue.
 PyTree = Any
 
+
+@register_pytree_node_class
+@dataclasses.dataclass
+class BCArray(np.lib.mixins.NDArrayOperatorsMixin):
+  """Data with an alignment offset and an associated grid.
+
+  Offset values in the range [0, 1] fall within a single grid cell.
+
+  Examples:
+    offset=(0, 0) means that each point is at the bottom-left corner.
+    offset=(0.5, 0.5) is at the grid center.
+    offset=(1, 0.5) is centered on the right-side edge.
+
+  Attributes:
+    data: array values.
+    offset: alignment location of the data with respect to the grid.
+    grid: the Grid associated with the array data.
+    dtype: type of the array data.
+    shape: lengths of the array dimensions.
+  """
+  # Don't (yet) enforce any explicit consistency requirements between data.ndim
+  # and len(offset), e.g., so we can feel to add extra time/batch/channel
+  # dimensions. But in most cases they should probably match.
+  # Also don't enforce explicit consistency between data.shape and grid.shape,
+  # but similarly they should probably match.
+  data: Array
+
+
+  def tree_flatten(self):
+    """Returns flattening recipe for BCArray JAX pytree."""
+    children = (self.data,)
+    aux_data = None
+    return children, aux_data
+
+  @classmethod
+  def tree_unflatten(cls, aux_data, children):
+    """Returns unflattening recipe for BCArray JAX pytree."""
+    return cls(*children)
+
+  @property
+  def dtype(self):
+    return self.data.dtype
+
+  @property
+  def shape(self) -> Tuple[int, ...]:
+    return self.data.shape
+
+  _HANDLED_TYPES = (numbers.Number, np.ndarray, jax.Array,
+                    core.ShapedArray, jax.core.Tracer)
+
+  def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    """Define arithmetic on BCArray using NumPy's mixin."""
+    for x in inputs:
+      if not isinstance(x, self._HANDLED_TYPES + (BCArray,)):
+        return NotImplemented
+    if method != '__call__':
+      return NotImplemented
+    try:
+      # get the corresponding jax.np function to the NumPy ufunc
+      func = getattr(jnp, ufunc.__name__)
+    except AttributeError:
+      return NotImplemented
+    arrays = [x.data if isinstance(x, BCArray) else x for x in inputs]
+    result = func(*arrays)
+    if isinstance(result, tuple):
+      return tuple(BCArray(r) for r in result)
+    else:
+      return BCArray(result)
 
 @register_pytree_node_class
 @dataclasses.dataclass
@@ -84,7 +151,8 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
   def shape(self) -> Tuple[int, ...]:
     return self.data.shape
 
-  _HANDLED_TYPES = (numbers.Number, np.ndarray, jax.Array, core.ShapedArray)
+  _HANDLED_TYPES = (numbers.Number, np.ndarray, jax.Array,
+                    core.ShapedArray, jax.core.Tracer)
 
   def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     """Define arithmetic on GridArrays using NumPy's mixin."""
@@ -102,6 +170,7 @@ class GridArray(np.lib.mixins.NDArrayOperatorsMixin):
     result = func(*arrays)
     offset = consistent_offset(*[x for x in inputs if isinstance(x, GridArray)])
     grid = consistent_grid(*[x for x in inputs if isinstance(x, GridArray)])
+    #grid = inputs.grid#consistent_grid(*[x for x in inputs])
     if isinstance(result, tuple):
       return tuple(GridArray(r, offset, grid) for r in result)
     else:
@@ -137,7 +206,7 @@ jax.tree_util.register_pytree_node(
 )
 
 
-@dataclasses.dataclass(init=False, frozen=True)
+@dataclasses.dataclass(init=False, frozen=False)
 class BoundaryConditions:
   """Base class for boundary conditions on a PDE variable.
 
@@ -147,12 +216,14 @@ class BoundaryConditions:
   """
   types: Tuple[Tuple[str, str], ...]
 
+
+
+
   def shift(
       self,
       u: GridArray,
       offset: int,
       axis: int,
-      mode: Optional[str] = 'extend',
   ) -> GridArray:
     """Shift an GridArray by `offset`.
 
@@ -160,8 +231,6 @@ class BoundaryConditions:
       u: an `GridArray` object.
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
-      mode: specifies how to extend past the boundary/ghost cells.
-        Valid options contained in boundaries.Padding.
 
     Returns:
       A copy of `u`, shifted by `offset`. The returned `GridArray` has offset
@@ -193,7 +262,6 @@ class BoundaryConditions:
       u: GridArray,
       width: int,
       axis: int,
-      mode: Optional[str] = 'extend',
   ) -> GridArray:
     """Returns Arrays padded according to boundary condition.
 
@@ -202,8 +270,6 @@ class BoundaryConditions:
       width: number of elements to pad along axis. Use negative value for lower
         boundary or positive value for upper boundary.
       axis: axis to pad along.
-      mode: specifies how to extend past the boundary/ghost cells.
-        Valid options contained in boundaries.Padding.
 
     Returns:
       A GridArray that is elongated along axis with padded values.
@@ -299,14 +365,14 @@ class GridVariable:
 
   def tree_flatten(self):
     """Returns flattening recipe for GridVariable JAX pytree."""
-    children = (self.array,)
-    aux_data = (self.bc,)
+    children = (self.array,self.bc)
+    aux_data = None
     return children, aux_data
 
   @classmethod
   def tree_unflatten(cls, aux_data, children):
     """Returns unflattening recipe for GridVariable JAX pytree."""
-    return cls(*children, *aux_data)
+    return cls(*children)
 
   @property
   def dtype(self):
@@ -332,21 +398,18 @@ class GridVariable:
       self,
       offset: int,
       axis: int,
-      mode: Optional[str] = 'extend',
   ) -> GridArray:
     """Shift this GridVariable by `offset`.
 
     Args:
       offset: positive or negative integer offset to shift.
       axis: axis to shift along.
-      mode: specifies how to extend past the boundary/ghost cells.
-        Valid options contained in boundaries.Padding.
 
     Returns:
       A copy of the encapsulated GridArray, shifted by `offset`. The returned
       GridArray has offset `u.offset + offset`.
     """
-    return self.bc.shift(self.array, offset, axis, mode)
+    return self.bc.shift(self.array, offset, axis)
 
   def _interior_grid(self) -> Grid:
     """Returns only the interior grid points."""
@@ -480,13 +543,14 @@ def consistent_grid(*arrays: Union[GridArray, GridVariable]) -> Grid:
     raise InconsistentGridError(f'arrays do not have a unique grid: {grids}')
   grid, = grids
   return grid
+  #return arrays[0].grid 
 
 
 class InconsistentBoundaryConditionsError(Exception):
   """Raised for cases of inconsistent bc between GridVariables."""
 
 
-def unique_boundary_conditions(*arrays: GridVariable) -> BoundaryConditions:
+def consistent_boundary_conditions(*arrays: GridVariable) -> BoundaryConditions:
   """Returns the unique BCs, or raises InconsistentBoundaryConditionsError."""
   bcs = {array.bc for array in arrays}
   if len(bcs) != 1:
@@ -524,7 +588,7 @@ class Grid:
     object.__setattr__(self, 'shape', shape)
 
     if step is not None and domain is not None:
-      raise TypeError('cannot provide both step and domain')
+      raise TypeError('MODIFIED cannot provide both step and domain')
     elif domain is not None:
       if isinstance(domain, (int, float)):
         domain = ((0, domain),) * len(shape)
@@ -537,6 +601,7 @@ class Grid:
             raise ValueError(
                 f'domain is not sequence of pairs of numbers: {domain}')
       domain = tuple((float(lower), float(upper)) for lower, upper in domain)
+      
     else:
       if step is None:
         step = 1
@@ -579,7 +644,7 @@ class Grid:
   def center(self, v: PyTree) -> PyTree:
     """Places all arrays in the pytree `v` at the `Grid`'s cell center."""
     offset = self.cell_center
-    return jax.tree.map(lambda u: GridArray(u, offset, self), v)
+    return jax.tree_map(lambda u: GridArray(u, offset, self), v)
 
   def axes(self, offset: Optional[Sequence[float]] = None) -> Tuple[Array, ...]:
     """Returns a tuple of arrays containing the grid points along each axis.

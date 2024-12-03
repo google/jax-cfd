@@ -1,33 +1,16 @@
-# Copyright 2021 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+import jax_ib.base.IBM_Force
+import jax_ib.base.boundaries
+import jax_ib.base.convolution_functions
+import jax_ib.base.equations
+import jax_ib.base.grids
+import jax_ib.base.particle_class
+import jax_ib.base.particle_motion
+import jax_ib.base.pressure
+import jax_ib.base.time_stepping
 
-"""Non-learned "base" physics routines for JAX-CFD."""
-
-import jax_cfd.base.advection
-import jax_cfd.base.array_utils
-import jax_cfd.base.boundaries
-import jax_cfd.base.diffusion
-import jax_cfd.base.equations
-import jax_cfd.base.fast_diagonalization
-import jax_cfd.base.finite_differences
-import jax_cfd.base.forcings
-import jax_cfd.base.funcutils
-import jax_cfd.base.grids
-import jax_cfd.base.initial_conditions
-import jax_cfd.base.interpolation
-import jax_cfd.base.pressure
-import jax_cfd.base.resize
-import jax_cfd.base.subgrid_models
-import jax_cfd.base.time_stepping
-import jax_cfd.base.validation_problems
+import jax_ib.base.advection
+import jax_ib.base.interpolation
+import jax_ib.base.diffusion
+import jax_ib.base.finite_differences
+import jax_ib.base.kinematics
+import jax_ib.base.array_utils

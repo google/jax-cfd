@@ -18,8 +18,8 @@ from typing import Any, Callable, List, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from jax_cfd.base import boundaries
-from jax_cfd.base import grids
+from jax_ib.base import boundaries
+from jax_ib.base import grids
 import numpy as np
 import scipy.linalg
 
@@ -57,7 +57,7 @@ def slice_along_axis(
   Returns:
     Slice of `inputs` defined by `idx` along axis `axis`.
   """
-  arrays, tree_def = jax.tree.flatten(inputs)
+  arrays, tree_def = jax.tree_flatten(inputs)
   ndims = set(a.ndim for a in arrays)
   if expect_same_dims and len(ndims) != 1:
     raise ValueError('arrays in `inputs` expected to have same ndims, but have '
@@ -68,7 +68,7 @@ def slice_along_axis(
     slc = tuple(idx if j == _normalize_axis(axis, ndim) else slice(None)
                 for j in range(ndim))
     sliced.append(array[slc])
-  return jax.tree.unflatten(tree_def, sliced)
+  return jax.tree_unflatten(tree_def, sliced)
 
 
 def split_along_axis(
@@ -115,22 +115,22 @@ def split_axis(
   Raises:
     ValueError: if arrays in `inputs` don't have unique size along `axis`.
   """
-  arrays, tree_def = jax.tree.flatten(inputs)
+  arrays, tree_def = jax.tree_flatten(inputs)
   axis_shapes = set(a.shape[axis] for a in arrays)
   if len(axis_shapes) != 1:
     raise ValueError(f'Arrays must have equal sized axis but got {axis_shapes}')
   axis_shape, = axis_shapes
   splits = [jnp.split(a, axis_shape, axis=axis) for a in arrays]
   if not keep_dims:
-    splits = jax.tree.map(lambda a: jnp.squeeze(a, axis), splits)
+    splits = jax.tree_map(lambda a: jnp.squeeze(a, axis), splits)
   splits = zip(*splits)
-  return tuple(jax.tree.unflatten(tree_def, leaves) for leaves in splits)
+  return tuple(jax.tree_unflatten(tree_def, leaves) for leaves in splits)
 
 
 def concat_along_axis(pytrees, axis):
   """Concatenates `pytrees` along `axis`."""
   concat_leaves_fn = lambda *args: jnp.concatenate(args, axis)
-  return jax.tree.map(concat_leaves_fn, *pytrees)
+  return jax.tree_map(concat_leaves_fn, *pytrees)
 
 
 def block_reduce(
@@ -172,6 +172,14 @@ def laplacian_matrix(size: int, step: float) -> np.ndarray:
   column[1] = column[-1] = 1 / step**2
   return scipy.linalg.circulant(column)
 
+def laplacian_matrix_neumann(size: int, step: float) -> np.ndarray:
+  """Create 1D Laplacian operator matrix, with homogeneous Neumann BC."""
+  column = np.zeros(size)
+  column[0] = -2 / step ** 2
+  column[1] = 1 / step ** 2
+  matrix = scipy.linalg.toeplitz(column)
+  matrix[0, 0] = matrix[-1, -1] = -1 / step**2
+  return matrix
 
 def _laplacian_boundary_dirichlet_cell_centered(laplacians: List[Array],
                                                 grid: grids.Grid, axis: int,

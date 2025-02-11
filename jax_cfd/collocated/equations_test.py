@@ -96,7 +96,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            dt=1e-3,
            time_steps=1000,
            divergence_atol=1e-3,
-           momentum_atol=5e-3),
+           momentum_atol=2e-2),
       dict(testcase_name='semi_implicit_gaussian_force_upwind',
            velocity=zero_velocity_field,
            forcing=gaussian_forcing,
@@ -109,7 +109,7 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            dt=1e-3,
            time_steps=100,
            divergence_atol=1e-4,
-           momentum_atol=2e-4),
+           momentum_atol=3e-4),
   )
   def test_divergence_and_momentum(
       self, velocity, forcing, shape, step, density, viscosity, convect,

@@ -18,9 +18,10 @@ from typing import Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from jax_cfd.base import boundaries
-from jax_cfd.base import grids
+from jax_ib.base import boundaries
+from jax_ib.base import grids
 import numpy as np
+
 
 Array = Union[np.ndarray, jax.Array]
 GridArray = grids.GridArray

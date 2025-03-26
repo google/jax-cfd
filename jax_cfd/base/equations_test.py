@@ -18,7 +18,6 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 import jax.numpy as jnp
-
 from jax_cfd.base import advection
 from jax_cfd.base import boundaries
 from jax_cfd.base import diffusion

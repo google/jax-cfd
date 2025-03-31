@@ -67,6 +67,17 @@ class ConstantBoundaryConditions(BoundaryConditions):
     object.__setattr__(self, 'types', types)
     object.__setattr__(self, 'bc_values', values)
 
+  @property
+  def constant_values(self) -> Tuple[Tuple[float, float], ...]:
+    # None is not an array-like value, so we map all Nones to ``jnp.nan``.
+    return tuple(
+        (
+            x if x is not None else jnp.nan,
+            y if y is not None else jnp.nan,
+        )
+        for x, y in self.bc_values
+    )
+
   def shift(
       self,
       u: GridArray,
@@ -202,7 +213,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
               data,
               full_padding,
               mode='constant',
-              constant_values=self.bc_values) -
+              constant_values=self.constant_values) -
                   jnp.pad(data, full_padding, mode='symmetric'))
         elif mode == Padding.EXTEND:
           # computes the well-defined ghost cell and sets the rest of padding
@@ -211,7 +222,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
               data,
               full_padding,
               mode='constant',
-              constant_values=self.bc_values) -
+              constant_values=self.constant_values) -
                   jnp.pad(data, full_padding, mode='edge'))
         else:
           raise NotImplementedError(f'Mode {mode} is not implemented yet.')
@@ -228,7 +239,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
               data,
               full_padding,
               mode='constant',
-              constant_values=self.bc_values)
+              constant_values=self.constant_values)
         elif sum(full_padding[axis]) > 1:
           if mode == Padding.MIRROR:
             # make boundary-only padding
@@ -255,7 +266,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
                 data,
                 full_padding,
                 mode='constant',
-                constant_values=self.bc_values)
+                constant_values=self.constant_values)
           else:
             raise NotImplementedError(f'Mode {mode} is not implemented yet.')
       else:
@@ -290,7 +301,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
                 data,
                 full_padding,
                 mode='constant',
-                constant_values=self.bc_values)))
+                constant_values=self.constant_values)))
     else:
       raise ValueError('invalid boundary type')
 

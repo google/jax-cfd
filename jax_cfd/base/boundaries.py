@@ -75,6 +75,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
     object.__setattr__(self, 'bc_values', values)
     object.__setattr__(self, 'immersed_body_mask', mask)
     object.__setattr__(self, 'immersed_bc_value', immersed_bc_value)
+    object.__setattr__(self, 'mask', mask)
 
   def shift(
       self,

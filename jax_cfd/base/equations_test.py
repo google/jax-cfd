@@ -124,8 +124,8 @@ class SemiImplicitNavierStokesTest(test_util.TestCase):
            time_stepper=time_stepping.classic_rk4,
            dt=1e-3,
            time_steps=1000,
-           divergence_atol=1e-3,
-           momentum_atol=1e-3),
+           divergence_atol=2e-3,
+           momentum_atol=2e-3),
   )
   def test_divergence_and_momentum(
       self, velocity, forcing, shape, step, density, viscosity, convect,

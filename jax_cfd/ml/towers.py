@@ -137,7 +137,7 @@ class MlpTowerFactory(hk.Module):
 
   def __call__(self, inputs):
     """Applied Mlp tower to `inputs`."""
-    return self.output_scale_fn(self.mlp_tower(self.inputs_scale_fn(inputs)))
+    return self.output_scale_fn(self.mlp_tower(self.inputs_scale_fn(inputs)))  # pytype: disable=wrong-keyword-args
 
 
 @gin.register

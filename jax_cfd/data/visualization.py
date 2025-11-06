@@ -63,13 +63,19 @@ def trajectory_to_images(
     compute_norm_fn: NormFn = quantile_normalize_fn,
     cmap: mpl.colors.ListedColormap = sns.cm.icefire,  # pytype: disable=module-attr
     longest_side: Optional[int] = None,
+    rotation_angle: int = 0, # in degrees
 ) -> List[Image.Image]:
   """Converts scalar trajectory with leading time axis into a list of images."""
   images = []
+
   for i, image_data in enumerate(trajectory):
     norm = compute_norm_fn(image_data, i)
     mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
     img = Image.fromarray(mappable.to_rgba(image_data, bytes=True))
+
+    if rotation_angle != 0:
+      img = img.rotate(rotation_angle, expand=True)
+
     if longest_side is not None:
       img = resize_image(img, longest_side)
     images.append(img)

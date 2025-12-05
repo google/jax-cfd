@@ -237,7 +237,7 @@ class RescaleToRangeTest(test_util.TestCase):
     input_values = np.random.uniform(low=-5., high=5., size=num_elements)
     input_values[0] = -10.
     input_values[-1] = 10.
-    input_values = np.reshape(input_values, newshape=shape)
+    input_values = np.reshape(input_values, shape)
     rescale = functools.partial(
         layers.rescale_to_range, min_value=min_value, max_value=max_value,
         axes=axes)

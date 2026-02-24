@@ -1,5 +1,7 @@
 # JAX-CFD: Computational Fluid Dynamics in JAX
 
+**🚨 JAX-CFD is no longer maintained. For alternatives, consider [JAX-Fluids](https://github.com/tumaer/JAXFLUIDS), [Phi FLow](https://github.com/tum-pbs/PhiFlow/) or [Exponax](https://github.com/Ceyron/exponax).**
+
 Authors: Dmitrii Kochkov, Jamie A. Smith, Peter Norgaard, Gideon Dresdner, Ayya Alieva, Stephan Hoyer
 
 JAX-CFD is an experimental research project for exploring the potential of

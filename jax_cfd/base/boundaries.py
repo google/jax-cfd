@@ -254,7 +254,7 @@ class ConstantBoundaryConditions(BoundaryConditions):
             expanded_data = jnp.pad(
                 data, bc_padding, mode='constant', constant_values=(0, 0))
             padding_values = list(self.bc_values)
-            padding_values[axis] = [pad / 2 for pad in padding_values[axis]]
+            padding_values[axis] = [pad / 2 for pad in padding_values[axis]]  # pyrefly: ignore[unsupported-operation]
             data = 2 * jnp.pad(
                 data,
                 full_padding,
@@ -455,9 +455,9 @@ class ConstantBoundaryConditions(BoundaryConditions):
       return (None, None)
     bc_values = tuple(
         jnp.full(grid.shape[:axis] +
-                 grid.shape[axis + 1:], self.bc_values[axis][-i])
+                 grid.shape[axis + 1:], self.bc_values[axis][-i])  # pyrefly: ignore[bad-argument-type]
         for i in [0, 1])
-    return bc_values
+    return bc_values  # pyrefly: ignore[bad-return]
 
   def trim_boundary(self, u: grids.GridArray) -> grids.GridArray:
     """Returns GridArray without the grid points on the boundary.
@@ -805,7 +805,7 @@ def get_advection_flux_bc_from_velocity_and_scalar(
             raise NotImplementedError(
                 'Flux boundary condition is not implemented for scalar' +
                 f' with {c.bc}')
-          if not np.isclose(c.bc.bc_values[axis][i], 0.0):
+          if not np.isclose(c.bc.bc_values[axis][i], 0.0):  # pyrefly: ignore[no-matching-overload]
             raise NotImplementedError(
                 'Flux boundary condition is not implemented for scalar' +
                 f' with {c.bc}')

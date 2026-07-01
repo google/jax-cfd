@@ -91,7 +91,7 @@ class TaylorGreen(Problem):
     u = grids.GridVariable(
         array=grids.GridArray(
             data=scale * jnp.cos(self._kx * ux) * jnp.sin(self._ky * uy),
-            offset=offsets[0],
+            offset=offsets[0],  # pyrefly: ignore[bad-argument-type]
             grid=self.grid),
         bc=boundaries.periodic_boundary_conditions(self.grid.ndim))
 
@@ -99,7 +99,7 @@ class TaylorGreen(Problem):
     v = grids.GridVariable(
         array=grids.GridArray(
             data=-scale * jnp.sin(self._kx * vx) * jnp.cos(self._ky * vy),
-            offset=offsets[1],
+            offset=offsets[1],  # pyrefly: ignore[bad-argument-type]
             grid=self.grid),
         bc=boundaries.periodic_boundary_conditions(self.grid.ndim))
 

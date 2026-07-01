@@ -68,7 +68,7 @@ def mirror_convolution(
 @gin.register
 def fixed_scale(inputs: Array,
                 axes: Tuple[int, ...],
-                rescaled_one: float = gin.REQUIRED) -> Array:
+                rescaled_one: float = gin.REQUIRED) -> Array:  # pyrefly: ignore[bad-function-definition]
   """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
   del axes  # unused.
   return inputs * rescaled_one
@@ -78,7 +78,7 @@ def fixed_scale(inputs: Array,
 def fixed_scale_gridvar(
     inputs: Array,
     axes: Tuple[int, ...],
-    rescaled_one: float = gin.REQUIRED
+    rescaled_one: float = gin.REQUIRED  # pyrefly: ignore[bad-function-definition]
 ) ->Array:
   """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
   del axes  # unused.
@@ -89,8 +89,8 @@ def fixed_scale_gridvar(
 def scale_to_range(
     inputs: Array,
     axes: Tuple[int, ...],
-    min_value: float = gin.REQUIRED,
-    max_value: float = gin.REQUIRED,
+    min_value: float = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+    max_value: float = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
 ) -> Array:
   """Dynamically scales `inputs` to be in `[min_value, max_value]` range.
 
@@ -257,7 +257,7 @@ def forward_flex_tower_factory(
     for num_channels, kernel_shape, rate, stride in conv_args:
       components.append(conv_module(num_channels, kernel_shape, ndim, rate=rate,
                                     stride=stride))
-      components.append(nonlinearity)
+      components.append(nonlinearity)  # pyrefly: ignore[bad-argument-type]
     components.append(conv_module(num_output_channels, output_kernel_shape,
                                   ndim, rate=output_rate, stride=output_stride))
     components.append(functools.partial(output_scale_fn, axes=ndim_axes))

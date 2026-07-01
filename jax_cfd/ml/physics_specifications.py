@@ -19,7 +19,7 @@ ForcingModule = forcings.ForcingModule
 @gin.configurable
 def get_physics_specs(physics_specs_cls=gin.REQUIRED):
   """Returns an instance of `physics_specs_cls`, configured by gin."""
-  return physics_specs_cls()
+  return physics_specs_cls()  # pyrefly: ignore[not-callable]
 
 
 @gin.register

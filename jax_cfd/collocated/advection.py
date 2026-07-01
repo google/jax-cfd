@@ -64,7 +64,7 @@ def _velocities_to_flux(v: GridVariableVector) -> Tuple[GridVariableVector]:
         flux[i] += (bc.impose_bc(v[i].array * v[j].array),)
       else:
         flux[i] += (flux[j][i],)
-  return tuple(flux)
+  return tuple(flux)  # pyrefly: ignore[bad-return]
 
 
 def convect_linear(v: GridVariableVector) -> GridArrayVector:

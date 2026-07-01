@@ -73,7 +73,7 @@ class FusedLearnedInterpolation:
         for tag in tags:
           key = (u.offset, target_offset, tag)
           derivatives[key] = layers.SpatialDerivativeFromLogits(
-              stencil_size_fn(*key),
+              stencil_size_fn(*key),  # pyrefly: ignore[bad-argument-type]
               u.offset,
               target_offset,
               derivative_orders=derivative_orders,
@@ -114,7 +114,7 @@ class FusedLearnedInterpolation:
     if interpolator is None:
       raise KeyError(f'No interpolator for key {key}. '
                      f'Available keys: {list(self._interpolators.keys())}')
-    result = jnp.squeeze(interpolator(c.data), axis=-1)
+    result = jnp.squeeze(interpolator(c.data), axis=-1)  # pyrefly: ignore[bad-argument-type]
     return grids.GridVariable(
         grids.GridArray(result, offset, c.grid), c.bc)
 

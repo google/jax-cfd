@@ -149,7 +149,7 @@ def solve_fast_diag(
       rhs.grid, rhs.offset, pressure_bc)
   rhs_transformed = _rhs_transform(rhs, pressure_bc)
   pinv = fast_diagonalization.pseudoinverse(
-      laplacians,
+      laplacians,  # pyrefly: ignore[bad-argument-type]
       rhs_transformed.dtype,
       hermitian=True,
       circulant=circulant,

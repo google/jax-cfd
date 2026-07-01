@@ -96,7 +96,7 @@ class ForcedBurgersEquation(time_stepping.ImplicitExplicitODE):
     uhat, t = state
     dudx = self.two_pi_i_k * uhat
 
-    f = self._forcing_fn(t)
+    f = self._forcing_fn(t)  # pyrefly: ignore[not-callable]
     fhat = jnp.fft.rfft(f)
 
     advection = - self.rfft(self.irfft(uhat) * self.irfft(dudx))
@@ -175,7 +175,7 @@ class NavierStokes2D(time_stepping.ImplicitExplicitODE):
     terms = advection_hat
 
     if self.forcing_fn is not None:
-      fx, fy = self._forcing_fn_with_grid((_get_grid_variable(vx, self.grid),
+      fx, fy = self._forcing_fn_with_grid((_get_grid_variable(vx, self.grid),  # pyrefly: ignore[not-callable]
                                            _get_grid_variable(vy, self.grid)))
       fx_hat, fy_hat = jnp.fft.rfft2(fx.data), jnp.fft.rfft2(fy.data)
       terms += spectral_utils.spectral_curl_2d((self.kx, self.ky),

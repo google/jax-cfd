@@ -51,7 +51,7 @@ def stencil_sum(*arrays: GridArray) -> GridArray:
   #   Actually passed: (iterable: Generator[Union[jax.interpreters.xla.DeviceArray, numpy.ndarray], Any, None])
   result = sum(array.data for array in arrays)  # type: ignore
   grid = grids.consistent_grid(*arrays)
-  return grids.GridArray(result, offset, grid)
+  return grids.GridArray(result, offset, grid)  # pyrefly: ignore[bad-argument-type]
 
 
 # incompatible with typing.overload
@@ -140,7 +140,7 @@ def divergence(v: Sequence[GridVariable]) -> GridArray:
     raise ValueError('The length of `v` must be equal to `grid.ndim`.'
                      f'Expected length {grid.ndim}; got {len(v)}.')
   differences = [backward_difference(u, axis) for axis, u in enumerate(v)]
-  return sum(differences)
+  return sum(differences)  # pyrefly: ignore[bad-return]
 
 
 def centered_divergence(v: Sequence[GridVariable]) -> GridArray:
@@ -150,7 +150,7 @@ def centered_divergence(v: Sequence[GridVariable]) -> GridArray:
     raise ValueError('The length of `v` must be equal to `grid.ndim`.'
                      f'Expected length {grid.ndim}; got {len(v)}.')
   differences = [central_difference(u, axis) for axis, u in enumerate(v)]
-  return sum(differences)
+  return sum(differences)  # pyrefly: ignore[bad-return]
 
 
 @typing.overload

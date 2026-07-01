@@ -241,8 +241,8 @@ def imex_runge_kutta(
     g[0] = G(y0)
 
     for i in range(1, num_steps):
-      ex_terms = dt * sum(a_ex[i-1][j] * f[j] for j in range(i) if a_ex[i-1][j])
-      im_terms = dt * sum(a_im[i-1][j] * g[j] for j in range(i) if a_im[i-1][j])
+      ex_terms = dt * sum(a_ex[i-1][j] * f[j] for j in range(i) if a_ex[i-1][j])  # pyrefly: ignore[unsupported-operation]
+      im_terms = dt * sum(a_im[i-1][j] * g[j] for j in range(i) if a_im[i-1][j])  # pyrefly: ignore[unsupported-operation]
       Y_star = y0 + ex_terms + im_terms
       Y = G_inv(Y_star, dt * a_im[i-1][i])
       if any(a_ex[j][i] for j in range(i, num_steps - 1)) or b_ex[i]:
@@ -250,8 +250,8 @@ def imex_runge_kutta(
       if any(a_im[j][i] for j in range(i, num_steps - 1)) or b_im[i]:
         g[i] = G(Y)
 
-    ex_terms = dt * sum(b_ex[j] * f[j] for j in range(num_steps) if b_ex[j])
-    im_terms = dt * sum(b_im[j] * g[j] for j in range(num_steps) if b_im[j])
+    ex_terms = dt * sum(b_ex[j] * f[j] for j in range(num_steps) if b_ex[j])  # pyrefly: ignore[unsupported-operation]
+    im_terms = dt * sum(b_im[j] * g[j] for j in range(num_steps) if b_im[j])  # pyrefly: ignore[unsupported-operation]
     y_next = y0 + ex_terms + im_terms
 
     return y_next

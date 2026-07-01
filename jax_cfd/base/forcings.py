@@ -37,7 +37,7 @@ def taylor_green_forcing(
 ) -> ForcingFn:
   """Constant driving forced in the form of Taylor-Green vorcities."""
   u, v = validation_problems.TaylorGreen(
-      shape=grid.shape[:2], kx=k, ky=k).velocity()
+      shape=grid.shape[:2], kx=k, ky=k).velocity()  # pyrefly: ignore[bad-argument-type]
   # Put force on same offset, grid as velocity components
   if grid.ndim == 2:
     u = grids.GridArray(u.data * scale, u.offset, grid)
@@ -72,8 +72,8 @@ def kolmogorov_forcing(
     offsets = grid.cell_faces
 
   if swap_xy:
-    x = grid.mesh(offsets[1])[0]
-    v = scale * grids.GridArray(jnp.sin(k * x), offsets[1], grid)
+    x = grid.mesh(offsets[1])[0]  # pyrefly: ignore[bad-index]
+    v = scale * grids.GridArray(jnp.sin(k * x), offsets[1], grid)  # pyrefly: ignore[bad-index]
 
     if grid.ndim == 2:
       u = grids.GridArray(jnp.zeros_like(v.data), (1, 1/2), grid)

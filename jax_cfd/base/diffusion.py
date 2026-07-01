@@ -124,9 +124,9 @@ def _rhs_transform(
     for i, _ in enumerate(['lower', 'upper']):  # lower and upper boundary
       if bc.types[axis][i] == boundaries.BCType.DIRICHLET:
         bc_values = [0., 0.]
-        bc_values[i] = bc.bc_values[axis][i]
-        u_data = _subtract_linear_part_dirichlet(u_data, u.grid, axis, u.offset,
-                                                 bc_values)
+        bc_values[i] = bc.bc_values[axis][i]  # pyrefly: ignore[unsupported-operation]
+        u_data = _subtract_linear_part_dirichlet(u_data, u.grid, axis, u.offset,  # pyrefly: ignore[bad-argument-type]
+                                                 bc_values)  # pyrefly: ignore[bad-argument-type]
       elif bc.types[axis][i] == boundaries.BCType.NEUMANN:
         if any(bc.bc_values[axis]):
           raise NotImplementedError(
@@ -149,8 +149,8 @@ def solve_cg(v: GridVariableVector,
 
     def linear_op(u_new: GridArray) -> GridArray:
       """Linear operator for (1 - ν Δt ∇²) u_{t+1}."""
-      u_new = grids.GridVariable(u_new, u.bc)  # get boundary condition from u
-      return u_new.array - dt * nu * fd.laplacian(u_new)
+      u_new = grids.GridVariable(u_new, u.bc)  # get boundary condition from u  # pyrefly: ignore[bad-assignment]
+      return u_new.array - dt * nu * fd.laplacian(u_new)  # pyrefly: ignore[bad-argument-type, missing-attribute]
 
     def cg(b: GridArray, x0: GridArray) -> GridArray:
       """Iteratively solves Lx = b. with initial guess x0."""
@@ -197,7 +197,7 @@ def solve_fast_diag(
         u.grid, u.offset, u.bc)
     op = fast_diagonalization.transform(
         func,
-        laplacians,
+        laplacians,  # pyrefly: ignore[bad-argument-type]
         v[0].dtype,
         hermitian=True,
         circulant=circulant,

@@ -542,11 +542,12 @@ class Grid:
         step = 1
       if isinstance(step, numbers.Number):
         step = (step,) * self.ndim
-      elif len(step) != self.ndim:
+      elif len(step) != self.ndim:  # pyrefly: ignore[bad-argument-type]
+        # pyrefly: ignore[bad-argument-type]
         raise ValueError('length of step does not match ndim: '
                          f'{len(step)} != {self.ndim}')
       domain = tuple(
-          (0.0, float(step_ * size)) for step_, size in zip(step, shape))
+          (0.0, float(step_ * size)) for step_, size in zip(step, shape))  # pyrefly: ignore[bad-argument-type]
 
     object.__setattr__(self, 'domain', domain)
 
@@ -569,7 +570,7 @@ class Grid:
     """Returns the offsets at each of the 'forward' cell faces."""
     d = self.ndim
     offsets = (np.eye(d) + np.ones([d, d])) / 2.
-    return tuple(tuple(float(o) for o in offset) for offset in offsets)
+    return tuple(tuple(float(o) for o in offset) for offset in offsets)  # pyrefly: ignore[bad-return]
 
   def stagger(self, v: Tuple[Array, ...]) -> Tuple[GridArray, ...]:
     """Places the velocity components of `v` on the `Grid`'s cell faces."""
@@ -672,7 +673,7 @@ class Grid:
     """
     if offset is None:
       offset = self.cell_center
-    return GridArray(fn(*self.mesh(offset)), offset, self)
+    return GridArray(fn(*self.mesh(offset)), offset, self)  # pyrefly: ignore[bad-argument-type]
 
 
 def domain_interior_masks(grid: Grid):

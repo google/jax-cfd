@@ -117,7 +117,7 @@ def modular_navier_stokes_model(
   Returns:
     A function that performs `steps` steps of the Navier-Stokes time dynamics.
   """
-  active_forcing_fn = physics_specs.forcing_module(grid)
+  active_forcing_fn = physics_specs.forcing_module(grid)  # pyrefly: ignore[not-callable]
 
   def navier_stokes_step_fn(state):
     """Advances Navier-Stokes state forward in time."""

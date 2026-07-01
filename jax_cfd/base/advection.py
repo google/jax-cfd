@@ -109,9 +109,9 @@ def advect_general(
     raise NotImplementedError(
         'Non-periodic boundary conditions are not implemented.')
   target_offsets = grids.control_volume_offsets(c)
-  aligned_v = tuple(u_interpolation_fn(u, target_offset, v, dt)
+  aligned_v = tuple(u_interpolation_fn(u, target_offset, v, dt)  # pyrefly: ignore[bad-argument-type]
                     for u, target_offset in zip(v, target_offsets))
-  aligned_c = tuple(c_interpolation_fn(c, target_offset, aligned_v, dt)
+  aligned_c = tuple(c_interpolation_fn(c, target_offset, aligned_v, dt)  # pyrefly: ignore[bad-argument-type]
                     for target_offset in target_offsets)
   return _advect_aligned(aligned_c, aligned_v)
 
@@ -147,7 +147,7 @@ def _align_velocities(v: GridVariableVector) -> Tuple[GridVariableVector]:
       tuple(interpolation.linear(v[i], offsets[i][j])
             for j in range(grid.ndim))
       for i in range(grid.ndim))
-  return aligned_v
+  return aligned_v  # pyrefly: ignore[bad-return]
 
 
 def _velocities_to_flux(
@@ -178,7 +178,7 @@ def _velocities_to_flux(
                                  aligned_v[j][i].array),)
       else:
         flux[i] += (flux[j][i],)
-  return tuple(flux)
+  return tuple(flux)  # pyrefly: ignore[bad-return]
 
 
 def convect_linear(v: GridVariableVector) -> GridArrayVector:

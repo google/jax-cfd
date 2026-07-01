@@ -255,7 +255,7 @@ def pseudoinverse(
     A function that computes the pseudo-inverse of the indicated operator.
   """
   if cutoff is None:
-    cutoff = 10 * jnp.finfo(dtype).eps
+    cutoff = 10 * jnp.finfo(dtype).eps  # pyrefly: ignore[bad-assignment]
 
   def func(v):
     with np.errstate(divide='ignore', invalid='ignore'):

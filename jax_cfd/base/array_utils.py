@@ -272,10 +272,10 @@ def laplacian_matrix_w_boundaries(
       for i, side in enumerate(['lower', 'upper']):  # lower and upper boundary
         if bc.types[axis][i] == boundaries.BCType.NEUMANN:
           _laplacian_boundary_neumann_cell_centered(
-              laplacians, grid, axis, side)
+              laplacians, grid, axis, side)  # pyrefly: ignore[bad-argument-type]
         elif bc.types[axis][i] == boundaries.BCType.DIRICHLET:
           _laplacian_boundary_dirichlet_cell_centered(
-              laplacians, grid, axis, side)
+              laplacians, grid, axis, side)  # pyrefly: ignore[bad-argument-type]
     if np.isclose(offset[axis] % 1, 0.):
       if bc.types[axis][0] == boundaries.BCType.DIRICHLET and bc.types[
           axis][1] == boundaries.BCType.DIRICHLET:
@@ -287,7 +287,7 @@ def laplacian_matrix_w_boundaries(
       elif boundaries.BCType.NEUMANN in bc.types[axis]:
         raise NotImplementedError(
             'edge-aligned Neumann boundaries are not implemented.')
-  return laplacians
+  return laplacians  # pyrefly: ignore[bad-return]
 
 
 def unstack(array, axis):
@@ -348,7 +348,7 @@ def interp1d(  # pytype: disable=annotation-type-mismatch  # jnp-type
     x: Array,
     y: Array,
     axis: int = -1,
-    fill_value: Union[str, Array] = jnp.nan,
+    fill_value: Union[str, Array] = jnp.nan,  # pyrefly: ignore[bad-function-definition]
     assume_sorted: bool = True,
 ) -> Callable[[Array], jax.Array]:
   """Build an interpolation function to approximate `y = f(x)`.
@@ -464,4 +464,4 @@ def interp1d(  # pytype: disable=annotation-type-mismatch  # jnp-type
     return jnp.reshape(
         y_new, y_new.shape[:axis] + x_new_shape + y_new.shape[axis + 1:])
 
-  return interp_func
+  return interp_func  # pyrefly: ignore[bad-return]

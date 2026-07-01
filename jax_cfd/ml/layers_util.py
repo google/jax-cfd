@@ -325,7 +325,7 @@ def periodic_convolution(
                            padding='VALID',
                            dimension_numbers=dimension_numbers,
                            precision=precision)
-  return tiling.apply_convolution(conv, x, layout=tile_layout, padding=padding)
+  return tiling.apply_convolution(conv, x, layout=tile_layout, padding=padding)  # pyrefly: ignore[bad-argument-type]
 
 
 # Caching the result of _patch_kernel() ensures that only one constant value is
@@ -335,11 +335,11 @@ def periodic_convolution(
 @functools.lru_cache()
 def _patch_kernel(  # pytype: disable=annotation-type-mismatch  # numpy-scalars
     patch_shape: Tuple[int, ...],
-    dtype: np.dtype = np.float32
+    dtype: np.dtype = np.float32  # pyrefly: ignore[bad-function-definition]
 ) -> np.ndarray:
   """Returns a convolutional kernel that extracts patches."""
   patch_size = np.prod(patch_shape)
-  kernel_2d = np.eye(patch_size, dtype=dtype)
+  kernel_2d = np.eye(patch_size, dtype=dtype)  # pyrefly: ignore[no-matching-overload]
   kernel_shape = (patch_size, 1) + patch_shape
   kernel_nd = kernel_2d.reshape(kernel_shape)
   return np.moveaxis(kernel_nd, (0, 1), (-1, -2))

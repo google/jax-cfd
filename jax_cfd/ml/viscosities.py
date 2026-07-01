@@ -63,7 +63,7 @@ def learned_scalar_viscosity(
     bc = boundaries.periodic_boundary_conditions(grid.ndim)
     c_bc = grids.GridVariable(c, bc)
     interp_var = interpolate_module(grid, dt, physics_specs)(
-        c_bc, offset, v, dt)
+        c_bc, offset, v, dt)  # pyrefly: ignore[bad-argument-type]
     return interp_var.array
 
   def viscosity_fn(
@@ -122,7 +122,7 @@ def learned_scalar_viscosity_from_gradients(
     bc = boundaries.periodic_boundary_conditions(grid.ndim)
     c_bc = grids.GridVariable(c, bc)
     interp_var = interpolate_module(grid, dt, physics_specs)(
-        c_bc, offset, v, dt)
+        c_bc, offset, v, dt)  # pyrefly: ignore[bad-argument-type]
     return interp_var.array
 
   def viscosity_fn(

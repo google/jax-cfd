@@ -63,7 +63,7 @@ class PeriodicConvGeneral(hk.Module):
 
   def __call__(self, inputs):
     return tiling.apply_convolution(
-        self._conv_module, inputs, self._tile_layout, self._padding)
+        self._conv_module, inputs, self._tile_layout, self._padding)  # pyrefly: ignore[bad-argument-type]
 
 
 class PeriodicConv1D(PeriodicConvGeneral):
@@ -292,7 +292,7 @@ class PeriodicConvTransposeGeneral(hk.Module):
       output_slice.append(slice(output_start, output_end))
     output_slice.append(slice(None, None))
     output = tiling.apply_convolution(
-        self._conv_module, inputs, self._tile_layout, self._padding)
+        self._conv_module, inputs, self._tile_layout, self._padding)  # pyrefly: ignore[bad-argument-type]
     sliced_output = output[tuple(output_slice)]
     return jnp.roll(sliced_output, self._roll_shifts, list(range(ndim)))
 
@@ -674,7 +674,7 @@ def fuse_spatial_derivative_layers(
   tile_layout, = {deriv.tile_layout for deriv in derivatives.values()}
 
   if constrain_with_conv:
-    ndim = len(tile_layout)
+    ndim = len(tile_layout)  # pyrefly: ignore[bad-argument-type]
     kernel = jnp.expand_dims(
         joint_nullspace.astype(np.float32), axis=tuple(range(ndim)))
     all_coefficients = joint_bias + layers_util.periodic_convolution(

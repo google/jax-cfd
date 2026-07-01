@@ -67,7 +67,7 @@ def dynamic_time_step(v: GridVariableVector,
   """Pick a dynamic time-step for Navier-Stokes based on stable advection."""
   v_max = jnp.sqrt(jnp.max(sum(u.data ** 2 for u in v)))
   return stable_time_step(  # pytype: disable=wrong-arg-types  # jax-types
-      v_max, max_courant_number, viscosity, grid, implicit_diffusion)
+      v_max, max_courant_number, viscosity, grid, implicit_diffusion)  # pyrefly: ignore[bad-argument-type]
 
 
 def _wrap_term_as_vector(fun, *, name):

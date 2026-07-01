@@ -202,12 +202,12 @@ def lax_wendroff(
         f'for Lax-Wendroff interpolation `c.offset` and `offset` must differ at'
         f' most in one entry, but got: {c.offset} and {offset}.')
   axis, = interpolation_axes
-  u = v[axis]
+  u = v[axis]  # pyrefly: ignore[unsupported-operation]
   offset_delta = u.offset[axis] - c.offset[axis]
   floor = int(np.floor(offset_delta))  # used for positive velocity
   ceil = int(np.ceil(offset_delta))  # used for negative velocity
   grid = grids.consistent_grid(c, u)
-  courant_numbers = (dt / grid.step[axis]) * u.data
+  courant_numbers = (dt / grid.step[axis]) * u.data  # pyrefly: ignore[unsupported-operation]
   positive_u_case = (
       c.shift(floor, axis).data + 0.5 * (1 - courant_numbers) *
       (c.shift(ceil, axis).data - c.shift(floor, axis).data))
@@ -356,4 +356,4 @@ def point_interpolation(
            (domain_upper - domain_lower))
 
   return jax.scipy.ndimage.map_coordinates(
-      c.data, coordinates=index, order=order, mode=mode, cval=cval)
+      c.data, coordinates=index, order=order, mode=mode, cval=cval)  # pyrefly: ignore[bad-argument-type]

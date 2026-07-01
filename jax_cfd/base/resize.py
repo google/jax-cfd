@@ -110,19 +110,19 @@ def top_hat_downsample(
       dx / dx_source
       for dx, dx_source in zip(destination_grid.step, source_grid.step))
   if filter_size is None:
-    filter_size = factor
+    filter_size = factor  # pyrefly: ignore[bad-assignment]
   if isinstance(filter_size, int):
     filter_size = tuple(filter_size for _ in range(source_grid.ndim))
   assert destination_grid.domain == source_grid.domain
   assert all([round(f) == f for f in factor])
-  assert all([round(f) == f for f in filter_size])  # this can be relaxed
+  assert all([round(f) == f for f in filter_size])  # this can be relaxed  # pyrefly: ignore[not-iterable]
   acceptable_filter = lambda f: f % 2 == 0 or f == 1
   assert all(map(acceptable_filter,
-                 filter_size))  # only even filters are implemented
+                 filter_size))  # only even filters are implemented  # pyrefly: ignore[bad-argument-type]
   assert all(list(map(acceptable_filter,
                       factor)))  # only even factors are implemented
   # filter has to be at least as large as the factor.
-  assert all(filt >= f for f, filt in zip(factor, filter_size))
+  assert all(filt >= f for f, filt in zip(factor, filter_size))  # pyrefly: ignore[bad-argument-type]
   result = []
   for c in variables:
     if c.grid != source_grid:
@@ -132,23 +132,23 @@ def top_hat_downsample(
     bc = c.bc
     offset = c.offset
     center_offset = tuple(
-        0.5 if f > 1 else o for o, f in zip(offset, filter_size))
+        0.5 if f > 1 else o for o, f in zip(offset, filter_size))  # pyrefly: ignore[bad-argument-type]
     c_centered = interpolation.linear(c, center_offset).array
     center_offset = np.array(center_offset)
     grid_shape = np.array(source_grid.shape)
     for axis in range(c.grid.ndim):
       c_centered = bc.pad(
           c_centered,
-          round(filter_size[axis]) // 2,
+          round(filter_size[axis]) // 2,  # pyrefly: ignore[unsupported-operation]
           axis=axis,
           mode=boundaries.Padding.MIRROR)
       c_centered = bc.pad(
           c_centered,
-          -(round(filter_size[axis]) // 2),
+          -(round(filter_size[axis]) // 2),  # pyrefly: ignore[unsupported-operation]
           axis=axis,
           mode=boundaries.Padding.MIRROR)
       convolution_filter = jnp.ones(round(
-          filter_size[axis])) / filter_size[axis]
+          filter_size[axis])) / filter_size[axis]  # pyrefly: ignore[unsupported-operation]
       convolve_1d = lambda arr, convolution_filter=convolution_filter: jnp.convolve(  # pylint: disable=g-long-lambda
           arr, convolution_filter, 'valid')
       axes = list(range(source_grid.ndim))
@@ -156,7 +156,7 @@ def top_hat_downsample(
       for ax in axes:
         convolve_1d = jax.vmap(convolve_1d, in_axes=ax, out_axes=ax)
       c_centered = convolve_1d(c_centered.data)
-      if filter_size[axis] > 1:
+      if filter_size[axis] > 1:  # pyrefly: ignore[unsupported-operation]
         if np.isclose(offset[axis], 0):
           start = 0
           end = c_centered.shape[axis] - 1
@@ -217,7 +217,7 @@ def downsample_staggered_velocity(
         return GridArray(array, offset=u.offset, grid=destination_grid)
     else:
       downsample = downsample_staggered_velocity_component
-    result.append(downsample(u, j, round(factor)))
+    result.append(downsample(u, j, round(factor)))  # pyrefly: ignore[bad-argument-type]
   return tuple(result)
 
 
@@ -228,7 +228,7 @@ def downsample_spectral(_: grids.Grid, destination_grid: grids.Grid,
   kx, ky = destination_grid.rfft_axes()
   (num_x,), (num_y,) = kx.shape, ky.shape
 
-  input_num_x, _ = signal_hat.shape
+  input_num_x, _ = signal_hat.shape  # pyrefly: ignore[bad-assignment]
 
   downed = jnp.concatenate(
       [signal_hat[:num_x // 2, :num_y], signal_hat[-num_x // 2:, :num_y]])

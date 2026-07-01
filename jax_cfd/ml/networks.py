@@ -43,12 +43,12 @@ def split_to_aligned_field(
     boundary_conditions = tuple(
         boundaries.periodic_boundary_conditions(grid.ndim)
         for _ in range(grid.ndim))
-  network_offsets = network_offsets or data_offsets
+  network_offsets = network_offsets or data_offsets  # pyrefly: ignore[bad-assignment]
   def process(inputs):
     split_inputs = array_utils.split_axis(inputs, -1)
     output = tuple(
         grids.GridVariable(grids.GridArray(x, offset, grid), bc) for x, offset,
-        bc in zip(split_inputs, network_offsets, boundary_conditions))
+        bc in zip(split_inputs, network_offsets, boundary_conditions))  # pyrefly: ignore[bad-argument-type]
     output = tuple(
         interpolation.linear(x, offset)
         for x, offset in zip(output, data_offsets))
@@ -70,13 +70,13 @@ def interpolate_gridvar(
     data_offsets = physics_specs.combo_offsets()
   else:
     data_offsets = grid.cell_faces
-  final_offsets = final_offsets or data_offsets
+  final_offsets = final_offsets or data_offsets  # pyrefly: ignore[bad-assignment]
 
   def process(inputs):
-    inputs = process_fn(inputs)
+    inputs = process_fn(inputs)  # pyrefly: ignore[not-callable]
     inputs = tuple(
         interpolation.linear(x, offset)
-        for x, offset in zip(inputs, final_offsets))
+        for x, offset in zip(inputs, final_offsets))  # pyrefly: ignore[bad-argument-type]
     return inputs
 
   return hk.to_module(process)()
@@ -136,7 +136,7 @@ def stack_aligned_field_with_neighbors(
   del dt, physics_specs  # unused.
   shifts = [i for i in np.arange(-n_neighbors, n_neighbors + 1) if i != 0]
   shifts_and_axis = list(itertools.product(shifts, np.arange(grid.ndim)))
-  shifts_and_axis.append([0, 0])
+  shifts_and_axis.append([0, 0])  # pyrefly: ignore[bad-argument-type]
 
   def process(inputs):
     inputs = tuple(jnp.expand_dims(x.data, axis=-1) for x in inputs)

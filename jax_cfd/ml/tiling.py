@@ -165,7 +165,7 @@ def apply_convolution(
     # TODO(shoyer): replace this with some sensible heuristic
     layout = (1,) * len(padding)
   tiled = space_to_batch(inputs, layout)
-  padded = halo_exchange_pad(tiled, layout, padding)
+  padded = halo_exchange_pad(tiled, layout, padding)  # pyrefly: ignore[bad-argument-type]
   convolved = conv(padded)
   output = batch_to_space(convolved, layout)
   return output

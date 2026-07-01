@@ -94,11 +94,11 @@ def navier_stokes_rk(
     k[0] = F(u0)
 
     for i in range(1, num_steps):
-      u_star = u0 + dt * sum(a[i-1][j] * k[j] for j in range(i) if a[i-1][j])
+      u_star = u0 + dt * sum(a[i-1][j] * k[j] for j in range(i) if a[i-1][j])  # pyrefly: ignore[unsupported-operation]
       u[i] = P(u_star)
       k[i] = F(u[i])
 
-    u_star = u0 + dt * sum(b[j] * k[j] for j in range(num_steps) if b[j])
+    u_star = u0 + dt * sum(b[j] * k[j] for j in range(num_steps) if b[j])  # pyrefly: ignore[unsupported-operation]
     u_final = P(u_star)
 
     return u_final

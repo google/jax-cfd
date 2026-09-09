@@ -322,7 +322,7 @@ def gram_schmidt_qr(
     if not others:
       return vector / jnp.linalg.norm(vector)
     orthogonalize_step = lambda c, x: tuple([c - jnp.dot(c, x) * x, None])
-    vector, _ = jax.lax.scan(orthogonalize_step, vector, jnp.stack(others))
+    vector, _ = jax.lax.scan(orthogonalize_step, vector, jnp.stack(others))  # pyrefly: ignore[bad-argument-type]
     return vector / jnp.linalg.norm(vector)
 
   num_columns = matrix.shape[1]

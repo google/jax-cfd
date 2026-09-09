@@ -320,7 +320,7 @@ def periodic_convolution(
   strides = [1] * num_spatial_dims
   dimension_numbers = _DIMENSION_NUMBERS[num_spatial_dims]
   conv = functools.partial(jax.lax.conv_general_dilated,
-                           rhs=kernel,
+                           rhs=kernel,  # pyrefly: ignore[bad-argument-type]
                            window_strides=strides,
                            padding='VALID',
                            dimension_numbers=dimension_numbers,

@@ -245,5 +245,5 @@ def eddy_viscosity_model(
     viscosity_scale = physics_specs.viscosity
   viscosity = viscosity_model(
       grid, dt, physics_specs, viscosity_scale=viscosity_scale)
-  evm_fn = functools.partial(subgrid_models.evm_model, viscosity_fn=viscosity)
+  evm_fn = functools.partial(subgrid_models.evm_model, viscosity_fn=viscosity)  # pyrefly: ignore[bad-argument-type]
   return hk.to_module(evm_fn)(name='eddy_viscosity_model')

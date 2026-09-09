@@ -56,8 +56,8 @@ def modular_self_advection(
   # TODO(jamieas): Replace this entire function once
   # `single_tower_navier_stokes` is in place.
   interpolate_fn = interpolation_module(grid, dt, physics_specs, **kwargs)
-  c_interpolate_fn = functools.partial(interpolate_fn, tag='c')
-  u_interpolate_fn = functools.partial(interpolate_fn, tag='u')
+  c_interpolate_fn = functools.partial(interpolate_fn, tag='c')  # pyrefly: ignore[unexpected-keyword]
+  u_interpolate_fn = functools.partial(interpolate_fn, tag='u')  # pyrefly: ignore[unexpected-keyword]
 
   def advect(
       c: GridVariable,

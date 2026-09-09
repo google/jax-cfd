@@ -131,8 +131,8 @@ class MlpTowerFactory(hk.Module):
     for _ in range(ndim):
       mlp_net = hk.vmap(mlp_net, split_rng=False)
     ndim_axes = list(range(ndim))
-    self.inputs_scale_fn = functools.partial(inputs_scale_fn, axes=ndim_axes)
-    self.output_scale_fn = functools.partial(output_scale_fn, axes=ndim_axes)
+    self.inputs_scale_fn = functools.partial(inputs_scale_fn, axes=ndim_axes)  # pyrefly: ignore[unexpected-keyword]
+    self.output_scale_fn = functools.partial(output_scale_fn, axes=ndim_axes)  # pyrefly: ignore[unexpected-keyword]
     self.mlp_tower = mlp_net
 
   def __call__(self, inputs):
@@ -252,7 +252,7 @@ def forward_flex_tower_factory(
     raise ValueError('conflicting lengths for channels/kernels/rates/strides: '
                      f'{channels} / {kernel_shapes} / {rates} / {strides}')
   def forward_pass(inputs):
-    components = [functools.partial(inputs_scale_fn, axes=ndim_axes)]
+    components = [functools.partial(inputs_scale_fn, axes=ndim_axes)]  # pyrefly: ignore[unexpected-keyword]
     conv_args = zip(channels, kernel_shapes, rates, strides)
     for num_channels, kernel_shape, rate, stride in conv_args:
       components.append(conv_module(num_channels, kernel_shape, ndim, rate=rate,
@@ -260,7 +260,7 @@ def forward_flex_tower_factory(
       components.append(nonlinearity)  # pyrefly: ignore[bad-argument-type]
     components.append(conv_module(num_output_channels, output_kernel_shape,
                                   ndim, rate=output_rate, stride=output_stride))
-    components.append(functools.partial(output_scale_fn, axes=ndim_axes))
+    components.append(functools.partial(output_scale_fn, axes=ndim_axes))  # pyrefly: ignore[unexpected-keyword]
     return hk.Sequential(components)(inputs)
 
   module = hk.to_module(forward_pass)(name=name)

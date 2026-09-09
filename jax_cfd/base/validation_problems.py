@@ -85,7 +85,7 @@ class TaylorGreen(Problem):
     if offsets is None:
       offsets = self.grid.cell_faces
 
-    scale = jnp.exp(-2 * self.viscosity * t)
+    scale = jnp.exp(-(self._kx**2 + self._ky**2) * self.viscosity * t)
 
     ux, uy = self.grid.mesh(offsets[0])
     u = grids.GridVariable(

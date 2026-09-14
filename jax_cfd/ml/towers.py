@@ -68,7 +68,7 @@ def mirror_convolution(
 @gin.register
 def fixed_scale(inputs: Array,
                 axes: Tuple[int, ...],
-                rescaled_one: float = gin.REQUIRED) -> Array:  # pyrefly: ignore[bad-function-definition]
+                rescaled_one: float = gin.REQUIRED) -> Array:
   """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
   del axes  # unused.
   return inputs * rescaled_one
@@ -78,7 +78,7 @@ def fixed_scale(inputs: Array,
 def fixed_scale_gridvar(
     inputs: Array,
     axes: Tuple[int, ...],
-    rescaled_one: float = gin.REQUIRED  # pyrefly: ignore[bad-function-definition]
+    rescaled_one: float = gin.REQUIRED
 ) ->Array:
   """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
   del axes  # unused.
@@ -89,8 +89,8 @@ def fixed_scale_gridvar(
 def scale_to_range(
     inputs: Array,
     axes: Tuple[int, ...],
-    min_value: float = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
-    max_value: float = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+    min_value: float = gin.REQUIRED,
+    max_value: float = gin.REQUIRED,
 ) -> Array:
   """Dynamically scales `inputs` to be in `[min_value, max_value]` range.
 

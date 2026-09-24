@@ -45,7 +45,7 @@ GridVariable = grids.GridVariable
 #
 
 XR_VELOCITY_NAMES = ('u', 'v', 'w')
-XR_SCALAR_NAMES = ('c')
+XR_SCALAR_NAMES = ('c',)
 XR_SPATIAL_DIMS = ('x', 'y', 'z')
 XR_WAVENUMBER_DIMS = ('kx', 'ky', 'kz')
 XR_SAMPLE_NAME = 'sample'

@@ -33,15 +33,15 @@ class Problem(metaclass=abc.ABCMeta):
 
   @property
   def grid(self):
-    return self._grid  # pytype: disable=attribute-error  # bind-properties
+    return self._grid  # pyrefly: ignore[missing-attribute]
 
   @property
   def density(self):
-    return self._density  # pytype: disable=attribute-error  # bind-properties
+    return self._density  # pyrefly: ignore[missing-attribute]
 
   @property
   def viscosity(self):
-    return self._viscosity  # pytype: disable=attribute-error  # bind-properties
+    return self._viscosity  # pyrefly: ignore[missing-attribute]
 
   def force(self,
             offsets: Optional[Offsets] = None) -> Optional[GridArrayVector]:

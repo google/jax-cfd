@@ -344,7 +344,7 @@ def gram_schmidt_qr(
   return q, r
 
 
-def interp1d(  # pytype: disable=annotation-type-mismatch  # jnp-type
+def interp1d(
     x: Array,
     y: Array,
     axis: int = -1,

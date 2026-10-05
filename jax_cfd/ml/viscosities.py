@@ -93,7 +93,7 @@ def learned_scalar_viscosity(
         data=jnp.squeeze(predicted_viscosity, -1),
         offset=grid.cell_center, grid=grid)
     interpolated_viscosities = {
-        offset: interpolate(predicted_viscosity, offset, v, dt)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
+        offset: interpolate(predicted_viscosity, offset, v, dt)  # pyrefly: ignore[bad-argument-type]
         for offset in unique_offsets}
     viscosities = [interpolated_viscosities[offset] for offset in s_ij_offsets]
     tree_def = jax.tree_util.tree_structure(s_ij)
@@ -147,7 +147,7 @@ def learned_scalar_viscosity_from_gradients(
     unique_offsets = list(set(s_ij_offsets))
     viscosity_net = tower_factory(1, grid.ndim)
     cell_center = grid.cell_center
-    interpolate_to_center = lambda x: interpolate(x, cell_center, v, dt)  # pytype: disable=wrong-arg-types
+    interpolate_to_center = lambda x: interpolate(x, cell_center, v, dt)  # pyrefly: ignore[bad-argument-type]
     centered_s_ij = np.vectorize(interpolate_to_center)(s_ij)
     inputs = jnp.stack([array.data for array in centered_s_ij.ravel()], axis=-1)
     predicted_viscosity = (viscosity_scale + 1e-6) * viscosity_net(inputs)
@@ -155,7 +155,7 @@ def learned_scalar_viscosity_from_gradients(
         data=jnp.squeeze(predicted_viscosity, -1),
         offset=grid.cell_center, grid=grid)
     interpolated_viscosities = {
-        offset: interpolate(predicted_viscosity, offset, v, dt)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
+        offset: interpolate(predicted_viscosity, offset, v, dt)  # pyrefly: ignore[bad-argument-type]
         for offset in unique_offsets}
     viscosities = [interpolated_viscosities[offset] for offset in s_ij_offsets]
     tree_def = jax.tree_util.tree_structure(s_ij)

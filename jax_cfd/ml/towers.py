@@ -82,7 +82,7 @@ def fixed_scale_gridvar(
 ) ->Array:
   """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
   del axes  # unused.
-  return tuple(x.bc.impose_bc(x.array * rescaled_one) for x in inputs)  # pytype: disable=bad-return-type  # jax-devicearray
+  return tuple(x.bc.impose_bc(x.array * rescaled_one) for x in inputs)  # pyrefly: ignore[bad-return]
 
 
 @gin.register
@@ -137,7 +137,7 @@ class MlpTowerFactory(hk.Module):
 
   def __call__(self, inputs):
     """Applied Mlp tower to `inputs`."""
-    return self.output_scale_fn(self.mlp_tower(self.inputs_scale_fn(inputs)))  # pytype: disable=wrong-keyword-args
+    return self.output_scale_fn(self.mlp_tower(self.inputs_scale_fn(inputs)))
 
 
 @gin.register

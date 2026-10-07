@@ -82,7 +82,7 @@ def fixed_scale_gridvar(
 ) ->Array:
   """Linearly scales `inputs` such that `1` maps to `rescaled_one`."""
   del axes  # unused.
-  return tuple(x.bc.impose_bc(x.array * rescaled_one) for x in inputs)  # pyrefly: ignore[bad-return]
+  return tuple(x.bc.impose_bc(x.array * rescaled_one) for x in inputs)  # pyrefly: ignore[bad-return, missing-attribute]
 
 
 @gin.register

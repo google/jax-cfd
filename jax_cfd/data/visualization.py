@@ -55,7 +55,7 @@ def resize_image(
   """Resize an image, preserving its aspect ratio."""
   resize_factor = longest_side / max(image.size)
   new_size = tuple(round(s * resize_factor) for s in image.size)
-  return image.resize(new_size, resample)
+  return image.resize(new_size, resample)  # pyrefly: ignore[bad-argument-type]
 
 
 def trajectory_to_images(

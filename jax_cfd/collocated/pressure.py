@@ -64,18 +64,23 @@ def solve_cg(
   """
   rhs = fd.centered_divergence(v)
 
-  def laplacian_with_bcs(array: GridArray) -> GridArray:
+  def neg_laplacian_with_bcs(array: GridArray) -> GridArray:
     if not boundaries.has_all_periodic_boundary_conditions(q0):
       raise ValueError(
           'Laplacian operator implementation requires periodic bc.')
     variable = grids.GridVariable(array, q0.bc)
     gradient = fd.central_difference(variable, axis=None)
     gradient = tuple(grids.GridVariable(g, q0.bc) for g in gradient)
-    return fd.centered_divergence(gradient)
+    return -fd.centered_divergence(gradient)
 
+  # Solve -∇²q = -∇·v rather than ∇²q = ∇·v because the discrete Laplacian ∇² is
+  # negative semi-definite (p^T ∇² p <= 0), whereas jax.scipy.sparse.linalg.cg
+  # requires a positive semi-definite operator (in JAX, _cg_solve guards against
+  # underflow with `pAp.real > 0`, which zeroes out the step and terminates
+  # immediately when p^T A p < 0; see JAX issue #40254).
   q, _ = jax.scipy.sparse.linalg.cg(
-      laplacian_with_bcs,
-      rhs,
+      neg_laplacian_with_bcs,
+      -rhs,
       x0=q0.array,
       tol=rtol,
       atol=atol,

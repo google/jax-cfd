@@ -98,13 +98,18 @@ def solve_cg(
   if pressure_bc is None:
     pressure_bc = boundaries.get_pressure_bc_from_velocity(v)
 
-  def laplacian_with_bcs(array: GridArray) -> GridArray:
+  def neg_laplacian_with_bcs(array: GridArray) -> GridArray:
     variable = pressure_bc.impose_bc(array)
-    return fd.laplacian(variable)
+    return -fd.laplacian(variable)
 
+  # Solve -∇²q = -∇·v rather than ∇²q = ∇·v because the discrete Laplacian ∇² is
+  # negative semi-definite (p^T ∇² p <= 0), whereas jax.scipy.sparse.linalg.cg
+  # requires a positive semi-definite operator (in JAX, _cg_solve guards against
+  # underflow with `pAp.real > 0`, which zeroes out the step and terminates
+  # immediately when p^T A p < 0; see JAX issue #40254).
   q, _ = jax.scipy.sparse.linalg.cg(
-      laplacian_with_bcs,
-      rhs,
+      neg_laplacian_with_bcs,
+      -rhs,
       x0=q0.array,
       tol=rtol,
       atol=atol,
